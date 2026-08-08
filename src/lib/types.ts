@@ -68,6 +68,19 @@ export interface Gasto {
   estornado?: boolean; // true no lançamento original, depois que foi estornado
   estornadoEm?: number;
   estornoDeId?: string; // presente só na entrada de estorno — aponta pro gasto original
+  ajusteConciliacaoId?: string; // presente só em gasto criado por ajuste de conciliação
+}
+
+export interface Conciliacao {
+  id: string;
+  dataISO: string;
+  saldoInformado: number;
+  saldoEsperado: number;
+  diferenca: number;
+  ajusteCriado: boolean;
+  responsavelUid: string;
+  responsavelEmail?: string;
+  criadoEm: number;
 }
 
 export function mesAtual(): string {

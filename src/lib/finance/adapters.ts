@@ -176,7 +176,9 @@ export function gastosParaEntries(gastos: Gasto[], mes: string): FinancialEntry[
       competenceMonth: mes,
       description: g.descricao,
       categoryId: g.categoria,
-      source: "manual" as const,
+      source: g.ajusteConciliacaoId
+        ? ("adjustment" as const)
+        : ("manual" as const),
       createdAt: g.criadoEm,
       updatedAt: g.criadoEm,
     }));
