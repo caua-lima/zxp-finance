@@ -19,7 +19,15 @@ export interface ContaFixa {
   valor: number;
   categoria: string;
   ativa: boolean;
+  diaVencimento?: number; // 1-31, opcional — sem isso o app assume fim do mês
   criadoEm: number;
+}
+
+export function diaVencimentoNoMes(mes: string, diaVencimento: number): string {
+  const [ano, m] = mes.split("-").map(Number);
+  const ultimoDia = new Date(ano, m, 0).getDate();
+  const dia = Math.min(Math.max(1, diaVencimento), ultimoDia);
+  return `${mes}-${String(dia).padStart(2, "0")}`;
 }
 
 export type TipoParcela = "cartao" | "financiamento";

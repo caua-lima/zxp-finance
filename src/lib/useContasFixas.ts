@@ -45,7 +45,12 @@ export function useContasFixas() {
     [todas]
   );
 
-  async function adicionar(nome: string, valor: number, categoria: string) {
+  async function adicionar(
+    nome: string,
+    valor: number,
+    categoria: string,
+    diaVencimento?: number
+  ) {
     if (!user) return;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "contasFixas"), {
@@ -53,6 +58,7 @@ export function useContasFixas() {
         valor,
         categoria,
         ativa: true,
+        ...(diaVencimento ? { diaVencimento } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);
@@ -63,11 +69,16 @@ export function useContasFixas() {
 
   async function editar(
     id: string,
-    dados: { nome: string; valor: number; categoria: string }
+    dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) {
     if (!user) return;
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "contasFixas", id), dados);
+      await updateDoc(doc(db, "usuarios", user.uid, "contasFixas", id), {
+        nome: dados.nome,
+        valor: dados.valor,
+        categoria: dados.categoria,
+        diaVencimento: dados.diaVencimento ?? null,
+      });
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));

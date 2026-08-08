@@ -8,6 +8,7 @@ import {
   FinancialEntry,
   parcelasRestantesEm,
   valorMinhaParte,
+  diaVencimentoNoMes,
 } from "@/lib/types";
 import { ultimoDiaMes } from "./calculations";
 
@@ -79,7 +80,9 @@ export function contasFixasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: c.valor,
-        dueDate: ultimoDiaMes(mes),
+        dueDate: c.diaVencimento
+          ? diaVencimentoNoMes(mes, c.diaVencimento)
+          : ultimoDiaMes(mes),
         competenceMonth: mes,
         description: c.nome,
         categoryId: c.categoria,

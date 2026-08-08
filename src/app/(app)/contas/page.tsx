@@ -42,6 +42,7 @@ export default function ContasPage() {
   const [valor, setValor] = useState(0);
   const [categoria, setCategoria] = useState<string>(CATEGORIAS_CONTAS[0]);
   const [categoriaCustom, setCategoriaCustom] = useState("");
+  const [diaVencimento, setDiaVencimento] = useState("");
 
   const grupos = useMemo(() => agruparPorCategoria(contas), [contas]);
 
@@ -53,10 +54,12 @@ export default function ContasPage() {
       categoria === "Outros" && categoriaCustom.trim()
         ? categoriaCustom.trim()
         : categoria;
+    const dia = diaVencimento ? parseInt(diaVencimento, 10) : undefined;
     setNome("");
     setValor(0);
     setCategoriaCustom("");
-    adicionar(nomeAparado, valor, cat).catch(console.error);
+    setDiaVencimento("");
+    adicionar(nomeAparado, valor, cat, dia).catch(console.error);
   }
 
   return (
@@ -68,7 +71,7 @@ export default function ContasPage() {
         onSubmit={handleSubmit}
         className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-[9.5rem_1fr_8rem_auto] gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-[9.5rem_1fr_8rem_6rem_auto] gap-2">
           <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
@@ -89,6 +92,14 @@ export default function ContasPage() {
           <MoneyInput
             value={valor}
             onChange={setValor}
+            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+          <input
+            placeholder="Dia venc."
+            inputMode="numeric"
+            value={diaVencimento}
+            onChange={(e) => setDiaVencimento(e.target.value)}
+            title="Dia do vencimento (1-31), opcional"
             className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
           />
           <button
@@ -150,7 +161,7 @@ function GrupoCategoria({
   itens: ContaFixa[];
   onEditar: (
     id: string,
-    dados: { nome: string; valor: number; categoria: string }
+    dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtiva: (id: string, ativa: boolean) => void;
@@ -194,7 +205,7 @@ function ItemConta({
   conta: ContaFixa;
   onEditar: (
     id: string,
-    dados: { nome: string; valor: number; categoria: string }
+    dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtiva: (id: string, ativa: boolean) => void;
@@ -204,6 +215,9 @@ function ItemConta({
   const [nome, setNome] = useState(conta.nome);
   const [valor, setValor] = useState(conta.valor);
   const [categoria, setCategoria] = useState(conta.categoria);
+  const [diaVencimento, setDiaVencimento] = useState(
+    conta.diaVencimento ? String(conta.diaVencimento) : ""
+  );
 
   function salvar() {
     const nomeAparado = nome.trim();
@@ -212,6 +226,7 @@ function ItemConta({
       nome: nomeAparado,
       valor,
       categoria: categoria.trim() || "Outros",
+      diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
     });
     setEditando(false);
   }
@@ -244,6 +259,13 @@ function ItemConta({
           onChange={setValor}
           className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
         />
+        <input
+          placeholder="Dia venc."
+          inputMode="numeric"
+          value={diaVencimento}
+          onChange={(e) => setDiaVencimento(e.target.value)}
+          className="w-full sm:w-24 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+        />
         <div className="flex gap-2 shrink-0">
           <button
             onClick={salvar}
@@ -275,7 +297,12 @@ function ItemConta({
           onChange={(e) => onAlternarAtiva(conta.id, e.target.checked)}
           className="h-4 w-4 shrink-0 accent-brand"
         />
-        <span className="text-sm truncate">{conta.nome}</span>
+        <span className="text-sm truncate">
+          {conta.nome}
+          {conta.diaVencimento && (
+            <span className="text-text-faint"> · vence dia {conta.diaVencimento}</span>
+          )}
+        </span>
       </label>
       <div className="flex items-center gap-3 shrink-0">
         <span className="text-sm font-medium text-gold">
