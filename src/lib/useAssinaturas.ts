@@ -10,7 +10,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Assinatura } from "./types";
+import { Assinatura, UsoPercebidoAssinatura } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
@@ -49,7 +49,8 @@ export function useAssinaturas() {
     nome: string,
     valor: number,
     cartao?: string,
-    naFatura?: boolean
+    naFatura?: boolean,
+    diaRenovacao?: number
   ) {
     if (!user) return;
     try {
@@ -59,6 +60,7 @@ export function useAssinaturas() {
         ativa: true,
         ...(cartao ? { cartao } : {}),
         naFatura: !!naFatura,
+        ...(diaRenovacao ? { diaRenovacao } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);
@@ -74,6 +76,8 @@ export function useAssinaturas() {
       valor: number;
       cartao?: string;
       naFatura?: boolean;
+      diaRenovacao?: number;
+      usoPercebido?: UsoPercebidoAssinatura;
     }
   ) {
     if (!user) return;
@@ -83,6 +87,8 @@ export function useAssinaturas() {
         valor: dados.valor,
         cartao: dados.cartao || null,
         naFatura: !!dados.naFatura,
+        diaRenovacao: dados.diaRenovacao ?? null,
+        usoPercebido: dados.usoPercebido ?? null,
       });
       setErro(null);
     } catch (e) {

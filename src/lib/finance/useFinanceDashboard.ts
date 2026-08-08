@@ -113,6 +113,14 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     [parcelas.parcelas, mes]
   );
 
+  const assinaturasParaRevisar = useMemo(
+    () =>
+      assinaturas.assinaturas
+        .filter((a) => a.ativa && a.usoPercebido === "revisar")
+        .map((a) => ({ id: a.id, nome: a.nome })),
+    [assinaturas.assinaturas]
+  );
+
   const alertas: FinanceAlert[] = useMemo(() => {
     if (loading) return [];
     return gerarAlertas({
@@ -122,8 +130,17 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       mes,
       saldoAtualizadoEm: saldoHook.saldo ? saldoHook.saldo.atualizadoEm : null,
       parcelasTerminando,
+      assinaturasParaRevisar,
     });
-  }, [loading, entries, saldoProjetado, mes, saldoHook.saldo, parcelasTerminando]);
+  }, [
+    loading,
+    entries,
+    saldoProjetado,
+    mes,
+    saldoHook.saldo,
+    parcelasTerminando,
+    assinaturasParaRevisar,
+  ]);
 
   const fluxoDiario = useMemo(() => {
     if (loading || saldoReal === null) return [];

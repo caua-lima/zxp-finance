@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { formatarMoeda, Assinatura } from "@/lib/types";
+import { formatarMoeda, Assinatura, UsoPercebidoAssinatura } from "@/lib/types";
 import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 import { useAssinaturas } from "@/lib/useAssinaturas";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -40,6 +40,7 @@ export default function AssinaturasPage() {
   const [valor, setValor] = useState(0);
   const [cartao, setCartao] = useState("");
   const [naFatura, setNaFatura] = useState(false);
+  const [diaRenovacao, setDiaRenovacao] = useState("");
 
   const grupos = useMemo(() => agruparPorCartao(assinaturas), [assinaturas]);
 
@@ -47,10 +48,12 @@ export default function AssinaturasPage() {
     e.preventDefault();
     const nomeAparado = nome.trim();
     if (!nomeAparado || !valor) return;
+    const dia = diaRenovacao ? parseInt(diaRenovacao, 10) : undefined;
     setNome("");
     setValor(0);
     setNaFatura(false);
-    adicionar(nomeAparado, valor, cartao || undefined, naFatura).catch(
+    setDiaRenovacao("");
+    adicionar(nomeAparado, valor, cartao || undefined, naFatura, dia).catch(
       console.error
     );
   }
@@ -64,7 +67,7 @@ export default function AssinaturasPage() {
         onSubmit={handleSubmit}
         className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <input
             placeholder="Nome (ex: Netflix)"
             value={nome}
@@ -88,6 +91,14 @@ export default function AssinaturasPage() {
               </option>
             ))}
           </select>
+          <input
+            placeholder="Dia renov."
+            inputMode="numeric"
+            value={diaRenovacao}
+            onChange={(e) => setDiaRenovacao(e.target.value)}
+            title="Dia da renovação (1-31), opcional"
+            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
           <button
             type="submit"
             className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
@@ -188,6 +199,8 @@ function ItemAssinatura({
       valor: number;
       cartao?: string;
       naFatura?: boolean;
+      diaRenovacao?: number;
+      usoPercebido?: UsoPercebidoAssinatura;
     }
   ) => void;
   onRemover: (id: string, motivo: string) => void;
@@ -199,6 +212,12 @@ function ItemAssinatura({
   const [valor, setValor] = useState(assinatura.valor);
   const [cartao, setCartao] = useState(assinatura.cartao ?? "");
   const [naFatura, setNaFatura] = useState(!!assinatura.naFatura);
+  const [diaRenovacao, setDiaRenovacao] = useState(
+    assinatura.diaRenovacao ? String(assinatura.diaRenovacao) : ""
+  );
+  const [usoPercebido, setUsoPercebido] = useState<UsoPercebidoAssinatura | "">(
+    assinatura.usoPercebido ?? ""
+  );
 
   function salvar() {
     const nomeAparado = nome.trim();
@@ -208,6 +227,8 @@ function ItemAssinatura({
       valor,
       cartao: cartao || undefined,
       naFatura,
+      diaRenovacao: diaRenovacao ? parseInt(diaRenovacao, 10) : undefined,
+      usoPercebido: usoPercebido || undefined,
     });
     setEditando(false);
   }
@@ -237,6 +258,25 @@ function ItemAssinatura({
                 {c}
               </option>
             ))}
+          </select>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            placeholder="Dia renov."
+            inputMode="numeric"
+            value={diaRenovacao}
+            onChange={(e) => setDiaRenovacao(e.target.value)}
+            className="w-full sm:w-28 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          />
+          <select
+            value={usoPercebido}
+            onChange={(e) => setUsoPercebido(e.target.value as UsoPercebidoAssinatura | "")}
+            className="w-full sm:w-40 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          >
+            <option value="">Uso: não avaliado</option>
+            <option value="essencial">Uso: essencial</option>
+            <option value="util">Uso: útil</option>
+            <option value="revisar">Uso: revisar</option>
           </select>
         </div>
         <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
@@ -280,10 +320,20 @@ function ItemAssinatura({
           className="h-4 w-4 shrink-0 accent-brand"
         />
         <div className="min-w-0">
-          <p className="text-sm truncate">{assinatura.nome}</p>
-          {assinatura.naFatura && (
-            <p className="text-xs text-text-faint">já na fatura do cartão</p>
-          )}
+          <p className="text-sm truncate">
+            {assinatura.nome}
+            {assinatura.diaRenovacao && (
+              <span className="text-text-faint"> · renova dia {assinatura.diaRenovacao}</span>
+            )}
+          </p>
+          <div className="flex gap-2">
+            {assinatura.naFatura && (
+              <p className="text-xs text-text-faint">já na fatura do cartão</p>
+            )}
+            {assinatura.usoPercebido === "revisar" && (
+              <p className="text-xs text-gold">revisar assinatura</p>
+            )}
+          </div>
         </div>
       </label>
       <div className="flex items-center gap-3 shrink-0">

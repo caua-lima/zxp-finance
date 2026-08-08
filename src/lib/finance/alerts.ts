@@ -29,6 +29,7 @@ export interface DadosAlertas {
   saldoAtualizadoEm: number | null; // timestamp da última conferência de saldo, ou null se nunca foi definido
   reservaMinima?: number;
   parcelasTerminando: { id: string; nome: string }[]; // parcelasRestantesEm(p, mes) === 1
+  assinaturasParaRevisar: { id: string; nome: string }[]; // usoPercebido === "revisar"
 }
 
 export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
@@ -107,6 +108,18 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       impacto: "",
       cta: "Ver parcela",
       href: "/parcelas",
+    });
+  }
+
+  for (const a of dados.assinaturasParaRevisar) {
+    alertas.push({
+      key: `revisar-assinatura__${a.id}`,
+      severidade: "opportunity",
+      titulo: `Revisar assinatura "${a.nome}"`,
+      contexto: "Você marcou essa assinatura como pouco usada — vale reavaliar se compensa manter.",
+      impacto: "",
+      cta: "Ver assinatura",
+      href: "/assinaturas",
     });
   }
 

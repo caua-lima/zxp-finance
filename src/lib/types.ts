@@ -50,6 +50,8 @@ export function valorMinhaParte(parcela: Parcela): number {
   return parcela.dividida ? parcela.valorParcela / 2 : parcela.valorParcela;
 }
 
+export type UsoPercebidoAssinatura = "essencial" | "util" | "revisar";
+
 export interface Assinatura {
   id: string;
   nome: string;
@@ -57,6 +59,8 @@ export interface Assinatura {
   ativa: boolean;
   cartao?: string; // qual dos CARTOES_PREDEFINIDOS ela é cobrada
   naFatura?: boolean; // já contabilizada dentro do valor lançado em "Fatura do cartão" — não soma de novo
+  diaRenovacao?: number; // 1-31, opcional — sem isso o app assume fim do mês
+  usoPercebido?: UsoPercebidoAssinatura;
   criadoEm: number;
 }
 

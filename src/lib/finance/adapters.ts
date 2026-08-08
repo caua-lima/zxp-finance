@@ -108,7 +108,9 @@ export function assinaturasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: a.valor,
-        dueDate: ultimoDiaMes(mes),
+        dueDate: a.diaRenovacao
+          ? diaVencimentoNoMes(mes, a.diaRenovacao)
+          : ultimoDiaMes(mes),
         competenceMonth: mes,
         description: a.nome,
         categoryId: "assinaturas",
