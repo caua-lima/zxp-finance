@@ -15,6 +15,7 @@ import { useParcelas } from "@/lib/useParcelas";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 export default function ParcelasPage() {
   const {
@@ -253,7 +254,7 @@ function GrupoParcelas({
   itens: Parcela[];
   mes: string;
   onEditar: (id: string, dados: DadosEdicaoParcela) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
   onDarBaixa: (id: string) => void;
 }) {
   if (itens.length === 0) return null;
@@ -281,7 +282,6 @@ function GrupoParcelas({
               parcela={p}
               mes={mes}
               onEditar={onEditar}
-              onRemover={onRemover}
               onDarBaixa={onDarBaixa}
             />
           ))}
@@ -315,8 +315,10 @@ function ItemParcelaQuitada({
 }: {
   parcela: Parcela;
   onEditar: (id: string, dados: DadosEdicaoParcela) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
 }) {
+  const [confirmando, setConfirmando] = useState(false);
+
   return (
     <li className="flex items-center justify-between gap-2 rounded-xl border border-line-soft bg-surface-2/40 px-4 py-2.5 opacity-60">
       <div className="min-w-0">
@@ -347,13 +349,26 @@ function ItemParcelaQuitada({
           reabrir
         </button>
         <button
-          onClick={() => onRemover(parcela.id)}
-          className="text-text-faint hover:text-negative text-sm"
-          aria-label="Remover"
+          onClick={() => setConfirmando(true)}
+          className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
         >
-          ✕
+          Excluir def.
         </button>
       </div>
+
+      <ConfirmModal
+        aberto={confirmando}
+        titulo="Excluir definitivamente"
+        descricao={`"${parcela.nome}" já está quitada e será apagada de vez — isso não pode ser desfeito.`}
+        textoConfirmar="Excluir"
+        perigo
+        pedirMotivo
+        onConfirmar={(motivo) => {
+          onRemover(parcela.id, motivo ?? "");
+          setConfirmando(false);
+        }}
+        onCancelar={() => setConfirmando(false)}
+      />
     </li>
   );
 }
@@ -362,13 +377,11 @@ function ItemParcela({
   parcela,
   mes,
   onEditar,
-  onRemover,
   onDarBaixa,
 }: {
   parcela: Parcela;
   mes: string;
   onEditar: (id: string, dados: DadosEdicaoParcela) => void;
-  onRemover: (id: string) => void;
   onDarBaixa: (id: string) => void;
 }) {
   const [editando, setEditando] = useState(false);
@@ -559,13 +572,6 @@ function ItemParcela({
             aria-label="Editar"
           >
             ✎
-          </button>
-          <button
-            onClick={() => onRemover(parcela.id)}
-            className="text-text-faint hover:text-negative text-sm"
-            aria-label="Remover"
-          >
-            ✕
           </button>
         </div>
       </div>

@@ -5,14 +5,15 @@ import {
   collection,
   onSnapshot,
   addDoc,
-  deleteDoc,
   doc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Parcela, TipoParcela, mesPadrao, valorMinhaParte } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
+import { anexarAuditLog } from "./auditoria";
 
 export function useParcelas() {
   const { user } = useAuth();
@@ -105,10 +106,33 @@ export function useParcelas() {
     }
   }
 
-  async function remover(id: string) {
+  /**
+   * Parcela ativa nunca pode ser excluída direto — regra explícita do
+   * briefing, porque apagar uma parcela em andamento derruba o
+   * compromisso mensal sem deixar rastro. Só dá pra excluir depois de
+   * quitada (parcelasRestantes === 0), e mesmo assim com motivo e
+   * snapshot completo gravado em audit log antes do delete.
+   */
+  async function remover(id: string, motivo: string) {
     if (!user) return;
+    const parcela = parcelas.find((p) => p.id === id);
+    if (!parcela) return;
+    if (parcela.parcelasRestantes > 0) {
+      setErro("Parcela ativa não pode ser excluída — espere ela ficar quitada.");
+      return;
+    }
     try {
-      await deleteDoc(doc(db, "usuarios", user.uid, "parcelas", id));
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "parcelas", id);
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "archived",
+        entityType: "parcela",
+        entityId: id,
+        summary: `Exclusão definitiva de "${parcela.nome}" (quitada): ${motivo}`,
+        before: { ...parcela },
+      });
+      batch.delete(ref);
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -121,10 +145,18 @@ export function useParcelas() {
     if (!p) return;
     const novoValor = Math.max(0, p.parcelasRestantes - 1);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "parcelas", id), {
-        parcelasRestantes: novoValor,
-        mesReferencia: mesPadrao(),
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "parcelas", id);
+      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: mesPadrao() });
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "paid",
+        entityType: "parcela",
+        entityId: id,
+        summary: `Baixa em "${p.nome}"`,
+        before: { parcelasRestantes: p.parcelasRestantes },
+        after: { parcelasRestantes: novoValor },
       });
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -137,10 +169,18 @@ export function useParcelas() {
     if (!p) return;
     const novoValor = Math.min(p.totalParcelas, p.parcelasRestantes + 1);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "parcelas", id), {
-        parcelasRestantes: novoValor,
-        mesReferencia: mesPadrao(),
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "parcelas", id);
+      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: mesPadrao() });
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "reversed",
+        entityType: "parcela",
+        entityId: id,
+        summary: `Baixa revertida em "${p.nome}"`,
+        before: { parcelasRestantes: p.parcelasRestantes },
+        after: { parcelasRestantes: novoValor },
       });
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
