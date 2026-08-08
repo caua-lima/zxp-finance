@@ -155,6 +155,30 @@ export function useGanhos(mes: string) {
     }
   }
 
+  async function marcarRecebidoPontual(id: string, recebido: boolean) {
+    if (!user) return;
+    const ganho = todos.find((g) => g.id === id);
+    try {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      batch.update(ref, { recebido, recebidoEm: recebido ? Date.now() : null });
+      if (ganho) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: recebido ? "received" : "updated",
+          entityType: "ganho",
+          entityId: id,
+          summary: recebido ? `"${ganho.descricao}" marcado como recebido` : `"${ganho.descricao}" marcado como não recebido`,
+          before: { recebido: !!ganho.recebido },
+          after: { recebido },
+        });
+      }
+      await batch.commit();
+      setErro(null);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
   async function alternarArquivadoPontual(id: string, ativo: boolean) {
     if (!user) return;
     const arquivado = !ativo;
@@ -204,5 +228,6 @@ export function useGanhos(mes: string) {
     remover,
     alternarAtivo,
     alternarArquivadoPontual,
+    marcarRecebidoPontual,
   };
 }

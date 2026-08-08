@@ -134,6 +134,27 @@ export function calculateOverdueEntries(
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
+/**
+ * Receita prevista cuja data esperada já passou e ainda não foi marcada
+ * como recebida — só existe pra ganhos, porque é o único tipo de entry
+ * com rastreamento real de recebido/previsto (ver Ganho.recebido).
+ */
+export function calculateOverdueIncome(
+  entries: FinancialEntry[],
+  hojeISO: string
+): FinancialEntry[] {
+  const hoje = new Date(hojeISO);
+  return entries
+    .filter(
+      (e) =>
+        e.type === "income" &&
+        isEntryPending(e) &&
+        isEntryActive(e) &&
+        new Date(e.dueDate) < hoje
+    )
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
 export interface PontoFluxoDiario {
   data: string; // "YYYY-MM-DD"
   entradas: number;

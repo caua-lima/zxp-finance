@@ -11,7 +11,7 @@ import { mensagemErro } from "./erroFirebase";
  * "<mes>__<origem>__<idDoItem>", então marcar/desmarcar é sempre uma
  * operação direta, sem precisar procurar nada antes.
  */
-export type OrigemItem = "conta" | "assinatura" | "parcela" | "fatura";
+export type OrigemItem = "conta" | "assinatura" | "parcela" | "fatura" | "ganho";
 
 function chave(mes: string, origem: OrigemItem, itemId: string) {
   return `${mes}__${origem}__${itemId}`;

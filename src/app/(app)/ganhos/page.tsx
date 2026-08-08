@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { mesPadrao, formatarMoeda, TAXA_IMPOSTO, Ganho } from "@/lib/types";
 import { useGanhos } from "@/lib/useGanhos";
+import { usePagamentos } from "@/lib/usePagamentos";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -26,11 +27,25 @@ export default function GanhosPage() {
     remover,
     alternarAtivo,
     alternarArquivadoPontual,
+    marcarRecebidoPontual,
   } = useGanhos(mes);
+  const pagamentos = usePagamentos(mes);
 
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState(0);
   const [tipo, setTipo] = useState<Tipo>("pontual");
+
+  function estaRecebido(g: Ganho): boolean {
+    return g.tipo === "recorrente" ? pagamentos.estaPago("ganho", g.id) : !!g.recebido;
+  }
+
+  function alternarRecebido(g: Ganho, recebido: boolean) {
+    if (g.tipo === "recorrente") {
+      pagamentos.marcar("ganho", g.id, recebido, { nome: g.descricao, valor: g.valor });
+    } else {
+      marcarRecebidoPontual(g.id, recebido);
+    }
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -131,6 +146,8 @@ export default function GanhosPage() {
             onEditar={editar}
             onRemover={remover}
             onAlternarAtivo={alternarAtivo}
+            estaRecebido={estaRecebido}
+            onAlternarRecebido={alternarRecebido}
           />
           <Secao
             titulo="Só este mês"
@@ -140,6 +157,8 @@ export default function GanhosPage() {
             onEditar={editar}
             onRemover={remover}
             onAlternarAtivo={alternarArquivadoPontual}
+            estaRecebido={estaRecebido}
+            onAlternarRecebido={alternarRecebido}
           />
         </div>
       )}
@@ -155,6 +174,8 @@ function Secao({
   onEditar,
   onRemover,
   onAlternarAtivo,
+  estaRecebido,
+  onAlternarRecebido,
 }: {
   titulo: string;
   vazio: string;
@@ -163,6 +184,8 @@ function Secao({
   onEditar: (id: string, dados: { descricao: string; valor: number }) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
+  estaRecebido: (g: Ganho) => boolean;
+  onAlternarRecebido: (g: Ganho, recebido: boolean) => void;
 }) {
   return (
     <div>
@@ -179,6 +202,8 @@ function Secao({
               onEditar={onEditar}
               onRemover={onRemover}
               onAlternarAtivo={onAlternarAtivo}
+              recebido={estaRecebido(g)}
+              onAlternarRecebido={(recebido) => onAlternarRecebido(g, recebido)}
             />
           ))}
         </ul>
@@ -193,12 +218,16 @@ function ItemGanho({
   onEditar,
   onRemover,
   onAlternarAtivo,
+  recebido,
+  onAlternarRecebido,
 }: {
   ganho: Ganho;
   comAtivo?: boolean;
   onEditar: (id: string, dados: { descricao: string; valor: number }) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
+  recebido: boolean;
+  onAlternarRecebido: (recebido: boolean) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -265,6 +294,16 @@ function ItemGanho({
         <span className="text-sm">{ganho.descricao}</span>
       </div>
       <div className="flex items-center gap-3">
+        <button
+          onClick={() => onAlternarRecebido(!recebido)}
+          className={`rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors whitespace-nowrap ${
+            recebido
+              ? "border-positive/30 bg-positive-soft text-positive"
+              : "border-info/30 bg-info/10 text-info"
+          }`}
+        >
+          {recebido ? "✓ Recebido" : "◌ Previsto"}
+        </button>
         <span className="text-sm font-medium text-positive">
           {formatarMoeda(ganho.valor)}
         </span>

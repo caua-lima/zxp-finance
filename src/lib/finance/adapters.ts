@@ -28,21 +28,31 @@ import { ultimoDiaMes } from "./calculations";
  */
 
 export type EstaPago = (
-  origem: "conta" | "assinatura" | "parcela" | "fatura",
+  origem: "conta" | "assinatura" | "parcela" | "fatura" | "ganho",
   itemId: string
 ) => boolean;
 
-export function ganhosParaEntries(ganhos: Ganho[], mes: string): FinancialEntry[] {
+export function ganhosParaEntries(
+  ganhos: Ganho[],
+  mes: string,
+  estaPago: EstaPago
+): FinancialEntry[] {
   const entries: FinancialEntry[] = [];
   for (const g of ganhos) {
     if (g.tipo === "recorrente" && g.ativo === false) continue;
     if (g.tipo === "pontual" && (g.mes !== mes || g.arquivado)) continue;
+    const recebido =
+      g.tipo === "recorrente" ? estaPago("ganho", g.id) : !!g.recebido;
     entries.push({
       id: `ganho__${g.id}__${mes}`,
       type: "income",
-      status: "planned",
+      status: recebido ? "received" : "planned",
       amount: g.valor,
       dueDate: `${mes}-01`,
+      paidAt:
+        g.tipo === "pontual" && g.recebido && g.recebidoEm
+          ? new Date(g.recebidoEm).toISOString()
+          : undefined,
       competenceMonth: mes,
       description: g.descricao,
       categoryId: g.tipo === "recorrente" ? "renda-recorrente" : "renda-pontual",
@@ -197,7 +207,7 @@ export interface DadosFinanceiros {
 
 export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEntry[] {
   return [
-    ...ganhosParaEntries(dados.ganhos, dados.mes),
+    ...ganhosParaEntries(dados.ganhos, dados.mes, dados.estaPago),
     ...contasFixasParaEntries(dados.contas, dados.mes, dados.estaPago),
     ...assinaturasParaEntries(dados.assinaturas, dados.mes, dados.estaPago),
     ...parcelasParaEntries(dados.parcelas, dados.mes, dados.estaPago),
