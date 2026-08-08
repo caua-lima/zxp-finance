@@ -10,9 +10,12 @@ import {
 import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
+import { useConciliacoes } from "@/lib/useConciliacoes";
+import { useFinanceDashboard } from "@/lib/finance/useFinanceDashboard";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 
 function agruparPorCategoria(gastos: Gasto[]) {
   const grupos = new Map<string, Gasto[]>();
@@ -37,16 +40,19 @@ export default function SaldoPage() {
     editar,
     estornar,
   } = useGastos();
+  const conciliacoes = useConciliacoes();
+  const dash = useFinanceDashboard(mesPadrao());
 
   const [texto, setTexto] = useState("");
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
   const [avisoParcial, setAvisoParcial] = useState<string | null>(null);
-  const [editandoSaldo, setEditandoSaldo] = useState(false);
-  const [novoSaldo, setNovoSaldo] = useState(0);
+  const [definindoInicial, setDefinindoInicial] = useState(false);
+  const [saldoInicial, setSaldoInicial] = useState(0);
+  const [conferindo, setConferindo] = useState(false);
 
   const mes = mesPadrao();
   const loading = loadingSaldo || loadingGastos;
-  const erro = erroSaldo || erroGastos;
+  const erro = erroSaldo || erroGastos || conciliacoes.erro;
 
   const gastosDoMes = useMemo(
     () => gastos.filter((g) => g.mes === mes),
@@ -87,14 +93,9 @@ export default function SaldoPage() {
     );
   }
 
-  function abrirEdicaoSaldo() {
-    setNovoSaldo(saldoAtual ?? 0);
-    setEditandoSaldo(true);
-  }
-
-  function salvarSaldo() {
-    definir(novoSaldo);
-    setEditandoSaldo(false);
+  function salvarSaldoInicial() {
+    definir(saldoInicial);
+    setDefinindoInicial(false);
   }
 
   return (
@@ -106,50 +107,92 @@ export default function SaldoPage() {
       <ErroBanner mensagem={erro} />
 
       {/* SALDO */}
-      <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-6 mb-6 text-center">
-        <p className="text-sm text-text-muted">Saldo atual</p>
-        {editandoSaldo ? (
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <MoneyInput
-              value={novoSaldo}
-              onChange={setNovoSaldo}
-              className="w-40 rounded-lg border border-line bg-surface-2 px-3 py-2 text-lg text-center outline-none focus:border-brand"
-            />
+      {saldo === null ? (
+        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-6 mb-6 text-center">
+          <p className="text-sm text-text-muted mb-2">Saldo ainda não definido</p>
+          {definindoInicial ? (
+            <div className="flex items-center justify-center gap-2">
+              <MoneyInput
+                value={saldoInicial}
+                onChange={setSaldoInicial}
+                className="w-40 rounded-lg border border-line bg-surface-2 px-3 py-2 text-lg text-center outline-none focus:border-brand"
+              />
+              <button
+                onClick={salvarSaldoInicial}
+                className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
+              >
+                Salvar
+              </button>
+              <button
+                onClick={() => setDefinindoInicial(false)}
+                className="rounded-lg border border-line px-3 py-2 text-sm text-text-muted"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={salvarSaldo}
-              className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
+              onClick={() => setDefinindoInicial(true)}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
             >
-              Salvar
+              Definir saldo inicial
             </button>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-6 mb-6">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="text-xs text-text-faint">Real informado</p>
+              <p className="text-base font-semibold mt-1">{formatarMoeda(saldo.valor)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-text-faint">Calculado agora</p>
+              <p
+                className={`text-lg font-bold mt-1 ${
+                  saldoAtual !== null && saldoAtual >= 0 ? "text-brand" : "text-negative"
+                }`}
+              >
+                {saldoAtual === null ? "—" : formatarMoeda(saldoAtual)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-faint">Projetado (fim do mês)</p>
+              <p
+                className={`text-base font-semibold mt-1 ${
+                  dash.saldoProjetado !== null && dash.saldoProjetado >= 0
+                    ? "text-positive"
+                    : "text-negative"
+                }`}
+              >
+                {dash.loading || dash.saldoProjetado === null
+                  ? "—"
+                  : formatarMoeda(dash.saldoProjetado)}
+              </p>
+            </div>
+          </div>
+          <p className="text-[11px] text-text-faint text-center mt-3">
+            Última conferência: {new Date(saldo.atualizadoEm).toLocaleString("pt-BR")}
+          </p>
+          <div className="text-center mt-3">
             <button
-              onClick={() => setEditandoSaldo(false)}
-              className="rounded-lg border border-line px-3 py-2 text-sm text-text-muted"
+              onClick={() => setConferindo(true)}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
             >
-              Cancelar
+              Conferir saldo
             </button>
           </div>
-        ) : (
-          <>
-            <p
-              className={`text-3xl font-bold mt-1 ${
-                saldoAtual === null
-                  ? "text-text-faint"
-                  : saldoAtual >= 0
-                  ? "text-brand"
-                  : "text-negative"
-              }`}
-            >
-              {saldoAtual === null ? "não definido" : formatarMoeda(saldoAtual)}
-            </p>
-            <button
-              onClick={abrirEdicaoSaldo}
-              className="mt-3 text-xs text-text-muted hover:text-brand"
-            >
-              {saldoAtual === null ? "Definir saldo" : "Atualizar saldo"}
-            </button>
-          </>
-        )}
-      </div>
+        </div>
+      )}
+
+      {saldo !== null && saldoAtual !== null && (
+        <ConferirSaldoModal
+          aberto={conferindo}
+          saldoEsperado={saldoAtual}
+          onRegistrar={(params) => conciliacoes.registrar(params)}
+          onFechar={() => setConferindo(false)}
+        />
+      )}
 
       {/* REGISTRO RÁPIDO */}
       <form
@@ -220,6 +263,47 @@ export default function SaldoPage() {
               </ul>
             </div>
           ))}
+        </div>
+      )}
+
+      {conciliacoes.historico.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-medium text-text-muted mb-2">
+            Histórico de conciliações
+          </h2>
+          <ul className="space-y-2">
+            {conciliacoes.historico.slice(0, 10).map((c) => (
+              <li
+                key={c.id}
+                className="rounded-xl border border-line bg-surface px-4 py-3 text-sm"
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-text-muted">
+                    {new Date(c.criadoEm).toLocaleDateString("pt-BR")}
+                  </span>
+                  <span
+                    className={
+                      c.diferenca === 0
+                        ? "text-positive"
+                        : c.diferenca > 0
+                        ? "text-positive"
+                        : "text-negative"
+                    }
+                  >
+                    {c.diferenca === 0
+                      ? "sem diferença"
+                      : `${c.diferenca > 0 ? "+" : ""}${formatarMoeda(c.diferenca)}`}
+                  </span>
+                </div>
+                <p className="text-xs text-text-faint mt-1">
+                  informado {formatarMoeda(c.saldoInformado)} · esperado{" "}
+                  {formatarMoeda(c.saldoEsperado)}
+                  {c.ajusteCriado && " · ajuste criado"}
+                  {c.responsavelEmail && ` · ${c.responsavelEmail}`}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
