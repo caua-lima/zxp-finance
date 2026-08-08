@@ -6,6 +6,7 @@ import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 import { useAssinaturas } from "@/lib/useAssinaturas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 function agruparPorCartao(assinaturas: Assinatura[]) {
   const grupos = new Map<string, Assinatura[]>();
@@ -189,10 +190,11 @@ function ItemAssinatura({
       naFatura?: boolean;
     }
   ) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
   onAlternarAtiva: (id: string, ativa: boolean) => void;
 }) {
   const [editando, setEditando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [nome, setNome] = useState(assinatura.nome);
   const [valor, setValor] = useState(assinatura.valor);
   const [cartao, setCartao] = useState(assinatura.cartao ?? "");
@@ -299,14 +301,29 @@ function ItemAssinatura({
         >
           ✎
         </button>
-        <button
-          onClick={() => onRemover(assinatura.id)}
-          className="text-text-faint hover:text-negative text-sm"
-          aria-label="Remover"
-        >
-          ✕
-        </button>
+        {!assinatura.ativa && (
+          <button
+            onClick={() => setConfirmando(true)}
+            className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+          >
+            Excluir def.
+          </button>
+        )}
       </div>
+
+      <ConfirmModal
+        aberto={confirmando}
+        titulo="Excluir definitivamente"
+        descricao={`"${assinatura.nome}" será apagada de vez — isso não pode ser desfeito. Se é só pra parar de contar no mês, desmarque a caixinha em vez de excluir.`}
+        textoConfirmar="Excluir"
+        perigo
+        pedirMotivo
+        onConfirmar={(motivo) => {
+          onRemover(assinatura.id, motivo ?? "");
+          setConfirmando(false);
+        }}
+        onCancelar={() => setConfirmando(false)}
+      />
     </li>
   );
 }

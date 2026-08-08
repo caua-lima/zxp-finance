@@ -5,14 +5,15 @@ import {
   collection,
   onSnapshot,
   addDoc,
-  deleteDoc,
   doc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Assinatura } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
+import { anexarAuditLog } from "./auditoria";
 
 export function useAssinaturas() {
   const { user } = useAuth();
@@ -89,10 +90,31 @@ export function useAssinaturas() {
     }
   }
 
-  async function remover(id: string) {
+  /**
+   * Exclusão definitiva só depois de já arquivada (ativa:false) — o
+   * checkbox já é o caminho normal e não destrutivo. Snapshot completo vai
+   * pro audit log antes de apagar.
+   */
+  async function remover(id: string, motivo: string) {
     if (!user) return;
+    const assinatura = assinaturas.find((a) => a.id === id);
+    if (!assinatura) return;
+    if (assinatura.ativa) {
+      setErro("Arquive a assinatura antes de excluir definitivamente.");
+      return;
+    }
     try {
-      await deleteDoc(doc(db, "usuarios", user.uid, "assinaturas", id));
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "assinaturas", id);
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "archived",
+        entityType: "assinatura",
+        entityId: id,
+        summary: `Exclusão definitiva de "${assinatura.nome}": ${motivo}`,
+        before: { ...assinatura },
+      });
+      batch.delete(ref);
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -101,10 +123,24 @@ export function useAssinaturas() {
 
   async function alternarAtiva(id: string, ativa: boolean) {
     if (!user) return;
+    const assinatura = assinaturas.find((a) => a.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "assinaturas", id), {
-        ativa,
-      });
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "assinaturas", id);
+      batch.update(ref, { ativa });
+      if (assinatura) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: ativa ? "updated" : "archived",
+          entityType: "assinatura",
+          entityId: id,
+          summary: ativa
+            ? `"${assinatura.nome}" reativada`
+            : `"${assinatura.nome}" arquivada`,
+          before: { ativa: assinatura.ativa },
+          after: { ativa },
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
