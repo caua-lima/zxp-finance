@@ -6,6 +6,7 @@ import { CATEGORIAS_CONTAS, iconeCategoria } from "@/lib/categorias";
 import { useContasFixas } from "@/lib/useContasFixas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 function agruparPorCategoria(contas: ContaFixa[]) {
   const grupos = new Map<string, ContaFixa[]>();
@@ -151,7 +152,7 @@ function GrupoCategoria({
     id: string,
     dados: { nome: string; valor: number; categoria: string }
   ) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
   onAlternarAtiva: (id: string, ativa: boolean) => void;
 }) {
   const subtotal = itens
@@ -195,10 +196,11 @@ function ItemConta({
     id: string,
     dados: { nome: string; valor: number; categoria: string }
   ) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
   onAlternarAtiva: (id: string, ativa: boolean) => void;
 }) {
   const [editando, setEditando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [nome, setNome] = useState(conta.nome);
   const [valor, setValor] = useState(conta.valor);
   const [categoria, setCategoria] = useState(conta.categoria);
@@ -286,14 +288,29 @@ function ItemConta({
         >
           ✎
         </button>
-        <button
-          onClick={() => onRemover(conta.id)}
-          className="text-text-faint hover:text-negative text-sm"
-          aria-label="Remover"
-        >
-          ✕
-        </button>
+        {!conta.ativa && (
+          <button
+            onClick={() => setConfirmando(true)}
+            className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+          >
+            Excluir def.
+          </button>
+        )}
       </div>
+
+      <ConfirmModal
+        aberto={confirmando}
+        titulo="Excluir definitivamente"
+        descricao={`"${conta.nome}" será apagada de vez — isso não pode ser desfeito. Se é só pra parar de contar no mês, desmarque a caixinha em vez de excluir.`}
+        textoConfirmar="Excluir"
+        perigo
+        pedirMotivo
+        onConfirmar={(motivo) => {
+          onRemover(conta.id, motivo ?? "");
+          setConfirmando(false);
+        }}
+        onCancelar={() => setConfirmando(false)}
+      />
     </li>
   );
 }

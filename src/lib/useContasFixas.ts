@@ -5,14 +5,15 @@ import {
   collection,
   onSnapshot,
   addDoc,
-  deleteDoc,
   doc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { ContaFixa } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
+import { anexarAuditLog } from "./auditoria";
 
 export function useContasFixas() {
   const { user } = useAuth();
@@ -73,10 +74,32 @@ export function useContasFixas() {
     }
   }
 
-  async function remover(id: string) {
+  /**
+   * Exclusão definitiva. Só é permitida depois de já arquivada (ativa:false)
+   * — o próprio checkbox "arquivar" é o caminho normal e não destrutivo.
+   * O snapshot completo vai pro audit log antes de apagar, então o dado
+   * sobrevive na trilha de auditoria mesmo depois do documento sumir.
+   */
+  async function remover(id: string, motivo: string) {
     if (!user) return;
+    const conta = contas.find((c) => c.id === id);
+    if (!conta) return;
+    if (conta.ativa) {
+      setErro("Arquive a conta antes de excluir definitivamente.");
+      return;
+    }
     try {
-      await deleteDoc(doc(db, "usuarios", user.uid, "contasFixas", id));
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "contasFixas", id);
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "archived",
+        entityType: "contaFixa",
+        entityId: id,
+        summary: `Exclusão definitiva de "${conta.nome}": ${motivo}`,
+        before: { ...conta },
+      });
+      batch.delete(ref);
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -85,10 +108,24 @@ export function useContasFixas() {
 
   async function alternarAtiva(id: string, ativa: boolean) {
     if (!user) return;
+    const conta = contas.find((c) => c.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "contasFixas", id), {
-        ativa,
-      });
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "contasFixas", id);
+      batch.update(ref, { ativa });
+      if (conta) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: ativa ? "updated" : "archived",
+          entityType: "contaFixa",
+          entityId: id,
+          summary: ativa
+            ? `"${conta.nome}" reativada`
+            : `"${conta.nome}" arquivada`,
+          before: { ativa: conta.ativa },
+          after: { ativa },
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
