@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Logo } from "./Logo";
 import {
   IconResumo,
+  IconAgenda,
   IconSaldo,
   IconGanhos,
   IconContas,
@@ -21,7 +22,10 @@ import {
 const secoes = [
   {
     titulo: "Visão geral",
-    itens: [{ href: "/", label: "Resumo", Icon: IconResumo }],
+    itens: [
+      { href: "/", label: "Resumo", Icon: IconResumo },
+      { href: "/agenda", label: "Agenda", Icon: IconAgenda },
+    ],
   },
   {
     titulo: "Movimentações",
