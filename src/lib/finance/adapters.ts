@@ -36,7 +36,7 @@ export function ganhosParaEntries(ganhos: Ganho[], mes: string): FinancialEntry[
   const entries: FinancialEntry[] = [];
   for (const g of ganhos) {
     if (g.tipo === "recorrente" && g.ativo === false) continue;
-    if (g.tipo === "pontual" && g.mes !== mes) continue;
+    if (g.tipo === "pontual" && (g.mes !== mes || g.arquivado)) continue;
     entries.push({
       id: `ganho__${g.id}__${mes}`,
       type: "income",

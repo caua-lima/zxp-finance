@@ -6,6 +6,7 @@ import { useGanhos } from "@/lib/useGanhos";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 type Tipo = "recorrente" | "pontual";
 
@@ -24,6 +25,7 @@ export default function GanhosPage() {
     editar,
     remover,
     alternarAtivo,
+    alternarArquivadoPontual,
   } = useGanhos(mes);
 
   const [descricao, setDescricao] = useState("");
@@ -134,8 +136,10 @@ export default function GanhosPage() {
             titulo="Só este mês"
             vazio="Nenhum ganho avulso neste mês."
             itens={pontuais}
+            comAtivo
             onEditar={editar}
             onRemover={remover}
+            onAlternarAtivo={alternarArquivadoPontual}
           />
         </div>
       )}
@@ -157,7 +161,7 @@ function Secao({
   itens: Ganho[];
   comAtivo?: boolean;
   onEditar: (id: string, dados: { descricao: string; valor: number }) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
 }) {
   return (
@@ -193,12 +197,17 @@ function ItemGanho({
   ganho: Ganho;
   comAtivo?: boolean;
   onEditar: (id: string, dados: { descricao: string; valor: number }) => void;
-  onRemover: (id: string) => void;
+  onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
 }) {
   const [editando, setEditando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [descricao, setDescricao] = useState(ganho.descricao);
   const [valor, setValor] = useState(ganho.valor);
+
+  const estaAtivo =
+    ganho.tipo === "recorrente" ? ganho.ativo !== false : !ganho.arquivado;
+  const podeExcluir = comAtivo ? !estaAtivo : true;
 
   function salvar() {
     const desc = descricao.trim();
@@ -241,14 +250,14 @@ function ItemGanho({
   return (
     <li
       className={`flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 ${
-        comAtivo && ganho.ativo === false ? "opacity-50" : ""
+        comAtivo && !estaAtivo ? "opacity-50" : ""
       }`}
     >
       <div className="flex items-center gap-3">
         {comAtivo && onAlternarAtivo && (
           <input
             type="checkbox"
-            checked={ganho.ativo !== false}
+            checked={estaAtivo}
             onChange={(e) => onAlternarAtivo(ganho.id, e.target.checked)}
             className="h-4 w-4 accent-brand"
           />
@@ -266,14 +275,29 @@ function ItemGanho({
         >
           ✎
         </button>
-        <button
-          onClick={() => onRemover(ganho.id)}
-          className="text-text-faint hover:text-negative text-sm"
-          aria-label="Remover"
-        >
-          ✕
-        </button>
+        {podeExcluir && (
+          <button
+            onClick={() => setConfirmando(true)}
+            className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+          >
+            Excluir def.
+          </button>
+        )}
       </div>
+
+      <ConfirmModal
+        aberto={confirmando}
+        titulo="Excluir definitivamente"
+        descricao={`"${ganho.descricao}" será apagado de vez — isso não pode ser desfeito. Se é só pra parar de contar, desmarque a caixinha em vez de excluir.`}
+        textoConfirmar="Excluir"
+        perigo
+        pedirMotivo
+        onConfirmar={(motivo) => {
+          onRemover(ganho.id, motivo ?? "");
+          setConfirmando(false);
+        }}
+        onCancelar={() => setConfirmando(false)}
+      />
     </li>
   );
 }

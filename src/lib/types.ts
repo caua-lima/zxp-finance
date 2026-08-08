@@ -5,6 +5,7 @@ export interface Ganho {
   tipo: TipoGanho;
   mes?: string; // "2026-07" — só existe quando tipo === "pontual"
   ativo?: boolean; // só relevante quando tipo === "recorrente"
+  arquivado?: boolean; // só relevante quando tipo === "pontual"
   descricao: string;
   valor: number;
   criadoEm: number;

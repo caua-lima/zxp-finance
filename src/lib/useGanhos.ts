@@ -5,14 +5,15 @@ import {
   collection,
   onSnapshot,
   addDoc,
-  deleteDoc,
   doc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Ganho, calcularImposto } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
+import { anexarAuditLog } from "./auditoria";
 
 export function useGanhos(mes: string) {
   const { user } = useAuth();
@@ -98,10 +99,32 @@ export function useGanhos(mes: string) {
     }
   }
 
-  async function remover(id: string) {
+  /**
+   * Exclusão definitiva só depois de arquivado: recorrente precisa estar
+   * com ativo:false, pontual precisa estar com arquivado:true. Snapshot
+   * completo vai pro audit log antes de apagar.
+   */
+  async function remover(id: string, motivo: string) {
     if (!user) return;
+    const ganho = todos.find((g) => g.id === id);
+    if (!ganho) return;
+    const arquivadoPara = ganho.tipo === "recorrente" ? ganho.ativo === false : !!ganho.arquivado;
+    if (!arquivadoPara) {
+      setErro("Arquive o ganho antes de excluir definitivamente.");
+      return;
+    }
     try {
-      await deleteDoc(doc(db, "usuarios", user.uid, "ganhos", id));
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "archived",
+        entityType: "ganho",
+        entityId: id,
+        summary: `Exclusão definitiva de "${ganho.descricao}": ${motivo}`,
+        before: { ...ganho },
+      });
+      batch.delete(ref);
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -110,8 +133,47 @@ export function useGanhos(mes: string) {
 
   async function alternarAtivo(id: string, ativo: boolean) {
     if (!user) return;
+    const ganho = todos.find((g) => g.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "ganhos", id), { ativo });
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      batch.update(ref, { ativo });
+      if (ganho) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: ativo ? "updated" : "archived",
+          entityType: "ganho",
+          entityId: id,
+          summary: ativo ? `"${ganho.descricao}" reativado` : `"${ganho.descricao}" arquivado`,
+          before: { ativo: ganho.ativo },
+          after: { ativo },
+        });
+      }
+      await batch.commit();
+      setErro(null);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
+  async function alternarArquivadoPontual(id: string, ativo: boolean) {
+    if (!user) return;
+    const arquivado = !ativo;
+    const ganho = todos.find((g) => g.id === id);
+    try {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      batch.update(ref, { arquivado });
+      if (ganho) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: arquivado ? "archived" : "updated",
+          entityType: "ganho",
+          entityId: id,
+          summary: arquivado ? `"${ganho.descricao}" arquivado` : `"${ganho.descricao}" reativado`,
+          before: { arquivado: !!ganho.arquivado },
+          after: { arquivado },
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -121,7 +183,9 @@ export function useGanhos(mes: string) {
   const totalRecorrentes = recorrentes
     .filter((g) => g.ativo !== false)
     .reduce((acc, g) => acc + g.valor, 0);
-  const totalPontuais = pontuais.reduce((acc, g) => acc + g.valor, 0);
+  const totalPontuais = pontuais
+    .filter((g) => !g.arquivado)
+    .reduce((acc, g) => acc + g.valor, 0);
   const total = totalRecorrentes + totalPontuais;
   const imposto = calcularImposto(total);
   const totalLiquido = total - imposto;
@@ -139,5 +203,6 @@ export function useGanhos(mes: string) {
     editar,
     remover,
     alternarAtivo,
+    alternarArquivadoPontual,
   };
 }
