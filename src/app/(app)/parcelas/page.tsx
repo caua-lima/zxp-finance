@@ -575,6 +575,22 @@ function ItemParcela({
           </button>
         </div>
       </div>
+      {/* linha do tempo */}
+      <div className="flex gap-[3px] mt-2" aria-hidden="true">
+        {Array.from({ length: parcela.totalParcelas }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 flex-1 rounded-full ${
+              i < parcela.totalParcelas - parcela.parcelasRestantes
+                ? "bg-positive"
+                : "bg-surface-2"
+            }`}
+          />
+        ))}
+      </div>
+      <p className="text-xs text-text-faint mt-1">
+        Comprometido até quitar: {formatarMoeda(valorMinhaParte(parcela) * parcela.parcelasRestantes)}
+      </p>
       <div className="flex items-center justify-between mt-2">
         <p className="text-xs text-text-faint">
           Faltam {parcela.parcelasRestantes} de {parcela.totalParcelas} ·{" "}

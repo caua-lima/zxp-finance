@@ -30,7 +30,12 @@ export interface DadosAlertas {
   reservaMinima?: number;
   parcelasTerminando: { id: string; nome: string }[]; // parcelasRestantesEm(p, mes) === 1
   assinaturasParaRevisar: { id: string; nome: string }[]; // usoPercebido === "revisar"
+  totalFatura: number;
+  rendaLiquidaMensal: number;
+  limitePercentualFatura?: number; // padrão 60% se não informado
 }
+
+const LIMITE_PADRAO_PERCENTUAL_FATURA = 60;
 
 export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
   const alertas: FinanceAlert[] = [];
@@ -121,6 +126,22 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       cta: "Ver assinatura",
       href: "/assinaturas",
     });
+  }
+
+  if (dados.rendaLiquidaMensal > 0 && dados.totalFatura > 0) {
+    const percentual = (dados.totalFatura / dados.rendaLiquidaMensal) * 100;
+    const limite = dados.limitePercentualFatura ?? LIMITE_PADRAO_PERCENTUAL_FATURA;
+    if (percentual >= limite) {
+      alertas.push({
+        key: `fatura-alta__${dados.mes}`,
+        severidade: "warning",
+        titulo: "Fatura do cartão está pesada em relação à renda",
+        contexto: `${percentual.toFixed(0)}% da renda líquida do mês está comprometida com fatura de cartão (limite configurado: ${limite}%).`,
+        impacto: formatarMoeda(dados.totalFatura),
+        cta: "Ver fatura",
+        href: "/fatura",
+      });
+    }
   }
 
   const ordemSeveridade: Record<Severidade, number> = {

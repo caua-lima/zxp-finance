@@ -7,6 +7,7 @@ import { useContasFixas } from "@/lib/useContasFixas";
 import { useAssinaturas } from "@/lib/useAssinaturas";
 import { useParcelas } from "@/lib/useParcelas";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
+import { useCartoesConfig } from "@/lib/useCartoesConfig";
 import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { useSaldo } from "@/lib/useSaldo";
@@ -38,6 +39,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
   const assinaturas = useAssinaturas();
   const parcelas = useParcelas();
   const faturas = useFaturasCartao(mes);
+  const cartoesConfig = useCartoesConfig();
   const gastosHook = useGastos();
   const pagamentos = usePagamentos(mes);
   const saldoHook = useSaldo();
@@ -48,6 +50,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     assinaturas.loading ||
     parcelas.loading ||
     faturas.loading ||
+    cartoesConfig.loading ||
     gastosHook.loading ||
     pagamentos.loading ||
     saldoHook.loading;
@@ -58,9 +61,18 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     assinaturas.erro ||
     parcelas.erro ||
     faturas.erro ||
+    cartoesConfig.erro ||
     gastosHook.erro ||
     pagamentos.erro ||
     saldoHook.erro;
+
+  const diaVencimentoPorCartao = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    for (const c of cartoesConfig.configs) {
+      if (c.diaVencimento) mapa[c.nome] = c.diaVencimento;
+    }
+    return mapa;
+  }, [cartoesConfig.configs]);
 
   const entries: FinancialEntry[] = useMemo(() => {
     if (loading) return [];
@@ -73,6 +85,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       gastos: gastosHook.gastos,
       estaPago: pagamentos.estaPago,
       mes,
+      diaVencimentoPorCartao,
     });
   }, [
     loading,
@@ -85,6 +98,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     gastosHook.gastos,
     pagamentos.estaPago,
     mes,
+    diaVencimentoPorCartao,
   ]);
 
   const saldoReal = saldoHook.saldo ? saldoHook.saldo.valor : null;
@@ -131,6 +145,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       saldoAtualizadoEm: saldoHook.saldo ? saldoHook.saldo.atualizadoEm : null,
       parcelasTerminando,
       assinaturasParaRevisar,
+      totalFatura: faturas.total,
+      rendaLiquidaMensal: ganhos.totalLiquido,
     });
   }, [
     loading,
@@ -140,6 +156,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     saldoHook.saldo,
     parcelasTerminando,
     assinaturasParaRevisar,
+    faturas.total,
+    ganhos.totalLiquido,
   ]);
 
   const fluxoDiario = useMemo(() => {

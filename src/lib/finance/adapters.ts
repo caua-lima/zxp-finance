@@ -155,18 +155,20 @@ export function parcelasParaEntries(
 export function faturasParaEntries(
   faturas: FaturaCartao[],
   mes: string,
-  estaPago: EstaPago
+  estaPago: EstaPago,
+  diaVencimentoPorCartao: Record<string, number> = {}
 ): FinancialEntry[] {
   return faturas
     .filter((f) => f.valor > 0)
     .map((f) => {
       const pago = estaPago("fatura", f.id);
+      const dia = diaVencimentoPorCartao[f.nome];
       return {
         id: `fatura__${f.id}__${mes}`,
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: f.valor,
-        dueDate: ultimoDiaMes(mes),
+        dueDate: dia ? diaVencimentoNoMes(mes, dia) : ultimoDiaMes(mes),
         competenceMonth: mes,
         description: `Fatura ${f.nome}`,
         categoryId: "cartao",
@@ -208,6 +210,7 @@ export interface DadosFinanceiros {
   gastos: Gasto[];
   estaPago: EstaPago;
   mes: string;
+  diaVencimentoPorCartao?: Record<string, number>;
 }
 
 export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEntry[] {
@@ -216,7 +219,12 @@ export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEnt
     ...contasFixasParaEntries(dados.contas, dados.mes, dados.estaPago),
     ...assinaturasParaEntries(dados.assinaturas, dados.mes, dados.estaPago),
     ...parcelasParaEntries(dados.parcelas, dados.mes, dados.estaPago),
-    ...faturasParaEntries(dados.faturas, dados.mes, dados.estaPago),
+    ...faturasParaEntries(
+      dados.faturas,
+      dados.mes,
+      dados.estaPago,
+      dados.diaVencimentoPorCartao
+    ),
     ...gastosParaEntries(dados.gastos, dados.mes),
   ];
 }
