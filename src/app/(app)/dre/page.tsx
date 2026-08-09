@@ -23,8 +23,10 @@ import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { useDreComparativo } from "@/lib/finance/useDreComparativo";
 import { groupByCategory } from "@/lib/finance/entries";
 import { formatPercent } from "@/lib/finance/calculations";
+import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 function agruparPorChave<T>(itens: T[], chave: (item: T) => string) {
   const grupos = new Map<string, T[]>();
@@ -45,6 +47,9 @@ export default function DrePage() {
   const parcelas = useParcelas();
   const faturas = useFaturasCartao(mes);
   const dre = useDreComparativo(mes);
+  const monthClose = useMonthClose(mes);
+  const [confirmandoFechar, setConfirmandoFechar] = useState(false);
+  const [confirmandoReabrir, setConfirmandoReabrir] = useState(false);
 
   const loading =
     ganhos.loading ||
@@ -124,12 +129,73 @@ export default function DrePage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">DRE do mês</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Demonstrativo detalhado de receitas e despesas
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+        <div>
+          <h1 className="text-lg font-semibold">DRE do mês</h1>
+          <p className="text-xs text-text-faint">
+            Demonstrativo detalhado de receitas e despesas
+          </p>
+        </div>
+        {!monthClose.loading &&
+          (monthClose.fechado ? (
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-line-soft bg-surface-2 px-2.5 py-1 text-[11px] text-text-faint">
+                🔒 Mês fechado
+              </span>
+              <button
+                onClick={() => setConfirmandoReabrir(true)}
+                className="text-xs text-brand hover:text-brand-dark"
+              >
+                Reabrir
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmandoFechar(true)}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text-muted hover:border-brand/40 hover:text-text transition-colors"
+            >
+              Fechar mês
+            </button>
+          ))}
+      </div>
       <MonthSelector mes={mes} onChange={setMes} />
-      <ErroBanner mensagem={erro} />
+      <ErroBanner mensagem={erro || monthClose.erro} />
+
+      {monthClose.fechado && (
+        <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
+          Este mês está fechado. Marcar pago/recebido no checklist e lançar
+          fatura ficam bloqueados até reabrir.
+        </div>
+      )}
+
+      <ConfirmModal
+        aberto={confirmandoFechar}
+        titulo="Fechar mês"
+        descricao={`Trava marcar pago/recebido e lançar fatura pra ${mes}. Dá pra reabrir depois, com motivo.`}
+        textoConfirmar="Fechar"
+        onConfirmar={() => {
+          monthClose.fechar({
+            income: dre.atual.receitaOperacional,
+            expenses: totalDespesasEntries,
+            result: resultadoOperacionalLiquido,
+          });
+          setConfirmandoFechar(false);
+        }}
+        onCancelar={() => setConfirmandoFechar(false)}
+      />
+      <ConfirmModal
+        aberto={confirmandoReabrir}
+        titulo="Reabrir mês"
+        descricao="Volta a permitir marcar pago/recebido e lançar fatura pra este mês. Explique o motivo."
+        textoConfirmar="Reabrir"
+        perigo
+        pedirMotivo
+        onConfirmar={(motivo) => {
+          monthClose.reabrir(motivo ?? "");
+          setConfirmandoReabrir(false);
+        }}
+        onCancelar={() => setConfirmandoReabrir(false)}
+      />
 
       {loading ? (
         <p className="text-sm text-text-faint">Carregando...</p>

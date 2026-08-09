@@ -4,6 +4,7 @@ import { useState } from "react";
 import { mesPadrao, formatarMoeda, FaturaCartao } from "@/lib/types";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { useCartoesConfig, CartaoConfig } from "@/lib/useCartoesConfig";
+import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -12,6 +13,7 @@ export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
   const { faturas, loading, erro, total, salvar } = useFaturasCartao(mes);
   const cartoesConfig = useCartoesConfig();
+  const monthClose = useMonthClose(mes);
 
   return (
     <div>
@@ -21,7 +23,13 @@ export default function FaturaPage() {
         zerado enquanto não lançar
       </p>
       <MonthSelector mes={mes} onChange={setMes} />
-      <ErroBanner mensagem={erro || cartoesConfig.erro} />
+      <ErroBanner mensagem={erro || cartoesConfig.erro || monthClose.erro} />
+      {monthClose.fechado && (
+        <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
+          🔒 Mês fechado — lançar fatura fica bloqueado. Reabra na aba DRE
+          pra corrigir algo.
+        </div>
+      )}
 
       <div className="rounded-2xl border border-line bg-surface p-4 mb-6 flex justify-between items-center">
         <span className="text-sm text-text-muted">Total em faturas do mês</span>
@@ -41,6 +49,7 @@ export default function FaturaPage() {
               config={cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome }}
               onSalvar={salvar}
               onSalvarConfig={cartoesConfig.salvar}
+              bloqueado={monthClose.fechado}
             />
           ))}
         </ul>
@@ -54,6 +63,7 @@ function ItemFatura({
   config,
   onSalvar,
   onSalvarConfig,
+  bloqueado,
 }: {
   fatura: FaturaCartao;
   config: CartaoConfig;
@@ -62,6 +72,7 @@ function ItemFatura({
     cartao: string,
     dados: { limite?: number; diaFechamento?: number; diaVencimento?: number }
   ) => void;
+  bloqueado?: boolean;
 }) {
   const [valor, setValor] = useState(fatura.valor);
   const alterado = valor !== fatura.valor;
@@ -97,7 +108,7 @@ function ItemFatura({
           />
           <button
             onClick={() => onSalvar(fatura.nome, valor)}
-            disabled={!alterado}
+            disabled={!alterado || bloqueado}
             className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
             Salvar

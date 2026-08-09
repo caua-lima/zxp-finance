@@ -13,6 +13,7 @@ import { useAssinaturas } from "@/lib/useAssinaturas";
 import { useParcelas } from "@/lib/useParcelas";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { usePagamentos, OrigemItem } from "@/lib/usePagamentos";
+import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 
@@ -31,6 +32,7 @@ export default function ChecklistPage() {
   const parcelas = useParcelas();
   const faturas = useFaturasCartao(mes);
   const pagamentos = usePagamentos(mes);
+  const monthClose = useMonthClose(mes);
 
   const loading =
     contas.loading ||
@@ -43,7 +45,8 @@ export default function ChecklistPage() {
     assinaturas.erro ||
     parcelas.erro ||
     faturas.erro ||
-    pagamentos.erro;
+    pagamentos.erro ||
+    monthClose.erro;
 
   const grupos = useMemo(() => {
     const itensContas: ItemChecklist[] = contas.contas
@@ -116,6 +119,7 @@ export default function ChecklistPage() {
   ]);
 
   function alternarPago(item: ItemChecklist, marcado: boolean) {
+    if (monthClose.fechado) return;
     pagamentos.marcar(item.origem, item.id, marcado, {
       nome: item.nome,
       valor: item.valor,
@@ -155,6 +159,12 @@ export default function ChecklistPage() {
       </p>
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro} />
+      {monthClose.fechado && (
+        <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
+          🔒 Mês fechado — marcar pago fica bloqueado. Reabra na aba DRE pra
+          corrigir algo.
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-text-faint">Carregando...</p>
@@ -247,10 +257,11 @@ export default function ChecklistPage() {
                               <input
                                 type="checkbox"
                                 checked={pago}
+                                disabled={monthClose.fechado}
                                 onChange={(e) =>
                                   alternarPago(item, e.target.checked)
                                 }
-                                className="h-5 w-5 shrink-0 accent-brand"
+                                className="h-5 w-5 shrink-0 accent-brand disabled:opacity-40 disabled:cursor-not-allowed"
                               />
                               <div className="min-w-0">
                                 <p

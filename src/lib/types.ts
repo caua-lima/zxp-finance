@@ -86,6 +86,19 @@ export interface Gasto {
   ajusteConciliacaoId?: string; // presente só em gasto criado por ajuste de conciliação
 }
 
+export interface MonthClose {
+  month: string;
+  status: "open" | "closed";
+  closedAt?: number;
+  closedBy?: string;
+  notes?: string;
+  snapshot?: {
+    income: number;
+    expenses: number;
+    result: number;
+  };
+}
+
 export interface Conciliacao {
   id: string;
   dataISO: string;
