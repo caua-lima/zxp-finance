@@ -44,6 +44,12 @@ export async function DELETE(
     }
 
     const { uid } = await params;
+    if (uid === chamador.uid) {
+      return NextResponse.json(
+        { erro: "Você não pode excluir sua própria conta." },
+        { status: 400 }
+      );
+    }
     await excluirUsuario(uid);
     return NextResponse.json({ ok: true });
   } catch (e) {
