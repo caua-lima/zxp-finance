@@ -28,6 +28,7 @@ import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
+import { SkeletonLista } from "@/components/Skeleton";
 
 function agruparPorChave<T>(itens: T[], chave: (item: T) => string) {
   const grupos = new Map<string, T[]>();
@@ -202,7 +203,7 @@ export default function DrePage() {
       />
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={5} />
       ) : (
         <div className="space-y-5">
           <div

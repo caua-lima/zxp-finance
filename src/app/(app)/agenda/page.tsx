@@ -8,6 +8,7 @@ import { isEntryActive, deriveDisplayStatus, labelOrigem } from "@/lib/finance/c
 import { groupByUrgency } from "@/lib/finance/entries";
 import { ErroBanner } from "@/components/ErroBanner";
 import { StatusBadge, StatusBadgeValor } from "@/components/StatusBadge";
+import { SkeletonLista } from "@/components/Skeleton";
 
 type FiltroPeriodo = "7" | "15" | "30" | "mes" | "todos";
 type FiltroTipo = "todos" | "income" | "expense";
@@ -161,7 +162,7 @@ export default function AgendaPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={6} />
       ) : grupos.length === 0 ? (
         <p className="text-sm text-text-faint">Nada encontrado com esses filtros.</p>
       ) : (

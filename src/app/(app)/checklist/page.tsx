@@ -16,6 +16,7 @@ import { usePagamentos, OrigemItem } from "@/lib/usePagamentos";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
+import { SkeletonLista } from "@/components/Skeleton";
 
 interface ItemChecklist {
   id: string;
@@ -167,7 +168,7 @@ export default function ChecklistPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={5} />
       ) : todosItens.length === 0 ? (
         <p className="text-sm text-text-faint">
           Nada a pagar neste mês. Cadastre contas fixas, assinaturas ou

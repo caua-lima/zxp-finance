@@ -10,6 +10,7 @@ import { FinanceActionCenter } from "@/components/FinanceActionCenter";
 import { CashFlowChart } from "@/components/CashFlowChart";
 import { UpcomingList } from "@/components/UpcomingList";
 import { CategoryDonut } from "@/components/CategoryDonut";
+import { SkeletonHome } from "@/components/Skeleton";
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -67,7 +68,7 @@ export default function DashboardPage() {
       <ErroBanner mensagem={dash.erro} />
 
       {dash.loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonHome />
       ) : (
         <>
           {/* B. KPIs principais */}
