@@ -27,6 +27,7 @@ import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
 
 function agruparPorChave<T>(itens: T[], chave: (item: T) => string) {
   const grupos = new Map<string, T[]>();
@@ -48,6 +49,7 @@ export default function DrePage() {
   const faturas = useFaturasCartao(mes);
   const dre = useDreComparativo(mes);
   const monthClose = useMonthClose(mes);
+  const toast = useToast();
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
   const [confirmandoReabrir, setConfirmandoReabrir] = useState(false);
 
@@ -179,6 +181,7 @@ export default function DrePage() {
             expenses: totalDespesasEntries,
             result: resultadoOperacionalLiquido,
           });
+          toast.sucesso(`Mês de ${mes} fechado.`);
           setConfirmandoFechar(false);
         }}
         onCancelar={() => setConfirmandoFechar(false)}
@@ -192,6 +195,7 @@ export default function DrePage() {
         pedirMotivo
         onConfirmar={(motivo) => {
           monthClose.reabrir(motivo ?? "");
+          toast.sucesso(`Mês de ${mes} reaberto.`);
           setConfirmandoReabrir(false);
         }}
         onCancelar={() => setConfirmandoReabrir(false)}

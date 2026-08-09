@@ -16,6 +16,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
+import { useToast } from "@/components/Toast";
 
 function agruparPorCategoria(gastos: Gasto[]) {
   const grupos = new Map<string, Gasto[]>();
@@ -42,6 +43,7 @@ export default function SaldoPage() {
   } = useGastos();
   const conciliacoes = useConciliacoes();
   const dash = useFinanceDashboard(mesPadrao());
+  const toast = useToast();
 
   const [texto, setTexto] = useState("");
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
@@ -189,7 +191,13 @@ export default function SaldoPage() {
         <ConferirSaldoModal
           aberto={conferindo}
           saldoEsperado={saldoAtual}
-          onRegistrar={(params) => conciliacoes.registrar(params)}
+          onRegistrar={async (params) => {
+            const resultado = await conciliacoes.registrar(params);
+            if (!resultado) return;
+            if (resultado.diferenca === 0) toast.sucesso("Saldo conferido — bate certinho.");
+            else if (resultado.ajusteCriado) toast.sucesso("Ajuste de conciliação registrado.");
+            else toast.sucesso("Conferência adiada — nada foi alterado.");
+          }}
           onFechar={() => setConferindo(false)}
         />
       )}
@@ -322,6 +330,7 @@ function ItemGasto({
   ) => void;
   onEstornar: (id: string, motivo: string) => void;
 }) {
+  const toast = useToast();
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [descricao, setDescricao] = useState(gasto.descricao);
@@ -440,6 +449,7 @@ function ItemGasto({
         pedirMotivo
         onConfirmar={(motivo) => {
           onEstornar(gasto.id, motivo ?? "");
+          toast.sucesso("Gasto estornado.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

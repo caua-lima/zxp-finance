@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { ErroBanner } from "@/components/ErroBanner";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 interface UsuarioApi {
   uid: string;
@@ -92,8 +93,6 @@ export default function AcessoPage() {
   }
 
   async function excluir(uid: string) {
-    if (!confirm("Excluir este login? Essa ação não pode ser desfeita."))
-      return;
     const { ok, dados } = await chamarApi(`/api/usuarios/${uid}`, {
       method: "DELETE",
     });
@@ -184,6 +183,7 @@ function ItemUsuario({
   const [email, setEmail] = useState(usuario.email ?? "");
   const [novaSenha, setNovaSenha] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
   async function salvar() {
     setSalvando(true);
@@ -278,7 +278,7 @@ function ItemUsuario({
           ✎
         </button>
         <button
-          onClick={() => onExcluir(usuario.uid)}
+          onClick={() => setConfirmandoExclusao(true)}
           disabled={souEu}
           className="text-text-faint hover:text-negative text-sm disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Excluir"
@@ -287,6 +287,19 @@ function ItemUsuario({
           ✕
         </button>
       </div>
+
+      <ConfirmModal
+        aberto={confirmandoExclusao}
+        titulo="Excluir login"
+        descricao={`"${usuario.email}" não vai conseguir mais entrar no app. Essa ação não pode ser desfeita.`}
+        textoConfirmar="Excluir"
+        perigo
+        onConfirmar={() => {
+          onExcluir(usuario.uid);
+          setConfirmandoExclusao(false);
+        }}
+        onCancelar={() => setConfirmandoExclusao(false)}
+      />
     </li>
   );
 }

@@ -90,3 +90,16 @@ select {
   background-size: 1rem;
   padding-right: 2rem;
 }
+
+/*
+ * Foco visível global. Vários componentes usam `outline-none` pra
+ * trocar o outline nativo do navegador por `focus:border-brand`, mas
+ * isso sozinho não é contraste suficiente pra navegação por teclado —
+ * então todo elemento focável ganha um anel consistente por cima,
+ * independente do componente individual ter pensado nisso ou não.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
