@@ -56,7 +56,9 @@ export function ganhosParaEntries(
           : undefined,
       competenceMonth: mes,
       description: g.descricao,
-      categoryId: g.tipo === "recorrente" ? "renda-recorrente" : "renda-pontual",
+      categoryId:
+        g.categoriaReceita ??
+        (g.tipo === "recorrente" ? "renda-recorrente" : "renda-pontual"),
       recurrenceId: g.tipo === "recorrente" ? g.id : undefined,
       source: "income",
       createdAt: g.criadoEm,

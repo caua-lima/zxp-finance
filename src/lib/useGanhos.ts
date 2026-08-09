@@ -54,7 +54,11 @@ export function useGanhos(mes: string) {
     [todos, mes]
   );
 
-  async function adicionarRecorrente(descricao: string, valor: number) {
+  async function adicionarRecorrente(
+    descricao: string,
+    valor: number,
+    categoriaReceita?: string
+  ) {
     if (!user) return;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "ganhos"), {
@@ -62,6 +66,7 @@ export function useGanhos(mes: string) {
         ativo: true,
         descricao,
         valor,
+        ...(categoriaReceita ? { categoriaReceita } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);
@@ -70,7 +75,11 @@ export function useGanhos(mes: string) {
     }
   }
 
-  async function adicionarPontual(descricao: string, valor: number) {
+  async function adicionarPontual(
+    descricao: string,
+    valor: number,
+    categoriaReceita?: string
+  ) {
     if (!user) return;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "ganhos"), {
@@ -78,6 +87,7 @@ export function useGanhos(mes: string) {
         mes,
         descricao,
         valor,
+        ...(categoriaReceita ? { categoriaReceita } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);
@@ -88,11 +98,15 @@ export function useGanhos(mes: string) {
 
   async function editar(
     id: string,
-    dados: { descricao: string; valor: number }
+    dados: { descricao: string; valor: number; categoriaReceita?: string }
   ) {
     if (!user) return;
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "ganhos", id), dados);
+      await updateDoc(doc(db, "usuarios", user.uid, "ganhos", id), {
+        descricao: dados.descricao,
+        valor: dados.valor,
+        categoriaReceita: dados.categoriaReceita ?? null,
+      });
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));

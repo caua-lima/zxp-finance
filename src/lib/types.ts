@@ -8,6 +8,7 @@ export interface Ganho {
   arquivado?: boolean; // só relevante quando tipo === "pontual"
   recebido?: boolean; // só relevante quando tipo === "pontual" (já é mês-específico)
   recebidoEm?: number;
+  categoriaReceita?: string; // ver CATEGORIAS_RECEITA em categoriasFinanceiras.ts
   descricao: string;
   valor: number;
   criadoEm: number;

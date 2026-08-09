@@ -232,6 +232,56 @@ export function labelOrigem(source: FinancialEntry["source"]): string {
   return LABEL_ORIGEM[source];
 }
 
+export interface DreBreakdown {
+  receitaOperacional: number;
+  reembolsos: number; // separado da receita operacional, regra da Fase 7
+  despesasVariaveis: number; // gastos do dia a dia + ajustes de conciliação
+  despesasRecorrentes: number; // contas fixas + assinaturas
+  parcelasCartao: number; // parcelas + fatura do cartão, já sem duplicidade (naFatura fica de fora no adapter)
+  resultadoOperacional: number;
+}
+
+/**
+ * Quebra do DRE a partir do FinancialEntry[] já filtrado por competência.
+ * "Resultado operacional pessoal" = receita operacional (sem reembolso)
+ * menos as três categorias de despesa. O app não modela transações de
+ * investimento/retirada separadamente, então não existe uma linha de
+ * "variação financeira" abaixo disso — seria inventar dado que não existe.
+ */
+export function calculateDreBreakdown(entries: FinancialEntry[]): DreBreakdown {
+  const ativos = entries.filter(isEntryActive);
+  const receitas = ativos.filter((e) => e.type === "income");
+  const despesas = ativos.filter((e) => e.type === "expense");
+
+  const reembolsos = receitas
+    .filter((e) => e.categoryId === "Reembolsos")
+    .reduce((acc, e) => acc + e.amount, 0);
+  const receitaOperacional =
+    receitas.reduce((acc, e) => acc + e.amount, 0) - reembolsos;
+
+  const despesasVariaveis = despesas
+    .filter((e) => e.source === "manual" || e.source === "adjustment")
+    .reduce((acc, e) => acc + e.amount, 0);
+  const despesasRecorrentes = despesas
+    .filter((e) => e.source === "fixed_cost" || e.source === "subscription")
+    .reduce((acc, e) => acc + e.amount, 0);
+  const parcelasCartao = despesas
+    .filter((e) => e.source === "installment" || e.source === "card_bill")
+    .reduce((acc, e) => acc + e.amount, 0);
+
+  const resultadoOperacional =
+    receitaOperacional - despesasVariaveis - despesasRecorrentes - parcelasCartao;
+
+  return {
+    receitaOperacional,
+    reembolsos,
+    despesasVariaveis,
+    despesasRecorrentes,
+    parcelasCartao,
+    resultadoOperacional,
+  };
+}
+
 export function formatMoney(valor: number): string {
   return formatarMoeda(valor);
 }

@@ -7,6 +7,7 @@ import {
   parcelasRestantesEm,
   valorMinhaParte,
   TAXA_IMPOSTO,
+  calcularImposto,
   Ganho,
   ContaFixa,
   Assinatura,
@@ -19,6 +20,9 @@ import { useContasFixas } from "@/lib/useContasFixas";
 import { useAssinaturas } from "@/lib/useAssinaturas";
 import { useParcelas } from "@/lib/useParcelas";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
+import { useDreComparativo } from "@/lib/finance/useDreComparativo";
+import { groupByCategory } from "@/lib/finance/entries";
+import { formatPercent } from "@/lib/finance/calculations";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 
@@ -40,19 +44,49 @@ export default function DrePage() {
   const assinaturas = useAssinaturas();
   const parcelas = useParcelas();
   const faturas = useFaturasCartao(mes);
+  const dre = useDreComparativo(mes);
 
   const loading =
     ganhos.loading ||
     contas.loading ||
     assinaturas.loading ||
     parcelas.loading ||
-    faturas.loading;
+    faturas.loading ||
+    dre.loading;
   const erro =
     ganhos.erro ||
     contas.erro ||
     assinaturas.erro ||
     parcelas.erro ||
-    faturas.erro;
+    faturas.erro ||
+    dre.erro;
+
+  const despesasPorCategoria = useMemo(
+    () => groupByCategory(dre.entriesAtual.filter((e) => e.type === "expense")),
+    [dre.entriesAtual]
+  );
+  const totalDespesasEntries =
+    dre.atual.despesasVariaveis + dre.atual.despesasRecorrentes + dre.atual.parcelasCartao;
+
+  // A quebra de FinancialEntry não conhece a regra de imposto (é específica
+  // de Ganho) — aplica aqui em cima da receita operacional já sem reembolso.
+  function resultadoLiquido(breakdown: typeof dre.atual): number {
+    const receitaLiquida = breakdown.receitaOperacional - calcularImposto(breakdown.receitaOperacional);
+    return (
+      receitaLiquida -
+      breakdown.despesasVariaveis -
+      breakdown.despesasRecorrentes -
+      breakdown.parcelasCartao
+    );
+  }
+  const resultadoOperacionalLiquido = resultadoLiquido(dre.atual);
+  const resultadoOperacionalLiquidoAnterior = resultadoLiquido(dre.anterior);
+
+  function variacao(atualValor: number, anteriorValor: number): string | null {
+    if (anteriorValor === 0) return null;
+    const pct = ((atualValor - anteriorValor) / Math.abs(anteriorValor)) * 100;
+    return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs mês anterior`;
+  }
 
   const contasPorCategoria = useMemo(() => {
     const grupos = agruparPorChave(contas.contas, (c) => c.categoria);
@@ -87,9 +121,6 @@ export default function DrePage() {
     0
   );
   const totalFaturas = faturas.total;
-  const totalDespesas =
-    totalContas + totalAssinaturas + totalParcelas + totalFaturas;
-  const resultado = ganhos.totalLiquido - totalDespesas;
 
   return (
     <div>
@@ -106,20 +137,91 @@ export default function DrePage() {
         <div className="space-y-5">
           <div
             className={`rounded-2xl border p-6 text-center ${
-              resultado >= 0
+              resultadoOperacionalLiquido >= 0
                 ? "border-brand/25 bg-positive-soft"
                 : "border-negative/40 bg-negative-soft"
             }`}
+            title={`Receita operacional sem reembolso (− imposto de ${(TAXA_IMPOSTO * 100).toFixed(0)}%) − despesas variáveis − despesas recorrentes − parcelas e cartão`}
           >
-            <p className="text-sm text-text-muted">Resultado do mês</p>
+            <p className="text-sm text-text-muted">Resultado operacional pessoal</p>
             <p
               className={`text-3xl font-bold mt-1 ${
-                resultado >= 0 ? "text-positive" : "text-negative"
+                resultadoOperacionalLiquido >= 0 ? "text-positive" : "text-negative"
               }`}
             >
-              {formatarMoeda(resultado)}
+              {formatarMoeda(resultadoOperacionalLiquido)}
             </p>
+            {variacao(resultadoOperacionalLiquido, resultadoOperacionalLiquidoAnterior) && (
+              <p className="text-xs text-text-faint mt-1">
+                {variacao(resultadoOperacionalLiquido, resultadoOperacionalLiquidoAnterior)}
+              </p>
+            )}
+            {dre.atual.reembolsos > 0 && (
+              <p className="text-xs text-info mt-2">
+                + {formatarMoeda(dre.atual.reembolsos)} em reembolsos (fora do operacional)
+              </p>
+            )}
           </div>
+
+          {/* 3 CATEGORIAS DE DESPESA, COMPARADAS COM O MÊS ANTERIOR */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <CardComparativo
+              titulo="Despesas variáveis"
+              tooltip="Gastos do dia a dia + ajustes de conciliação"
+              valor={dre.atual.despesasVariaveis}
+              valorAnterior={dre.anterior.despesasVariaveis}
+              percentual={totalDespesasEntries ? dre.atual.despesasVariaveis / totalDespesasEntries : 0}
+            />
+            <CardComparativo
+              titulo="Despesas recorrentes"
+              tooltip="Contas fixas ativas + assinaturas ativas"
+              valor={dre.atual.despesasRecorrentes}
+              valorAnterior={dre.anterior.despesasRecorrentes}
+              percentual={
+                totalDespesasEntries ? dre.atual.despesasRecorrentes / totalDespesasEntries : 0
+              }
+            />
+            <CardComparativo
+              titulo="Parcelas e cartão"
+              tooltip="Parcelas ativas + fatura do cartão, sem contar duas vezes o que já está na fatura"
+              valor={dre.atual.parcelasCartao}
+              valorAnterior={dre.anterior.parcelasCartao}
+              percentual={totalDespesasEntries ? dre.atual.parcelasCartao / totalDespesasEntries : 0}
+            />
+          </div>
+
+          {despesasPorCategoria.length > 0 && (
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <h2 className="text-sm font-medium text-text-muted mb-3">
+                Despesas por categoria
+              </h2>
+              <div className="space-y-2">
+                {despesasPorCategoria.map((g) => (
+                  <div key={g.categoryId} className="flex items-center gap-3">
+                    <span className="text-xs text-text-muted w-28 truncate capitalize">
+                      {g.categoryId}
+                    </span>
+                    <div className="flex-1 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                      <div
+                        className="h-full bg-gold"
+                        style={{
+                          width: `${
+                            totalDespesasEntries ? (g.total / totalDespesasEntries) * 100 : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs text-text-faint w-28 text-right shrink-0">
+                      {formatarMoeda(g.total)} ·{" "}
+                      {formatPercent(
+                        totalDespesasEntries ? (g.total / totalDespesasEntries) * 100 : 0
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* RECEITAS */}
           <Secao titulo="Receitas" total={ganhos.total} corTotal="text-positive">
@@ -285,14 +387,46 @@ export default function DrePage() {
               <LinhaResumo label="Fatura do cartão" valor={totalFaturas} sinal="-" />
               <div className="border-t border-line pt-2 flex justify-between font-semibold">
                 <span>Resultado do mês</span>
-                <span className={resultado >= 0 ? "text-positive" : "text-negative"}>
-                  {formatarMoeda(resultado)}
+                <span className={resultadoOperacionalLiquido >= 0 ? "text-positive" : "text-negative"}>
+                  {formatarMoeda(resultadoOperacionalLiquido)}
                 </span>
               </div>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CardComparativo({
+  titulo,
+  tooltip,
+  valor,
+  valorAnterior,
+  percentual,
+}: {
+  titulo: string;
+  tooltip: string;
+  valor: number;
+  valorAnterior: number;
+  percentual: number;
+}) {
+  const delta = valorAnterior !== 0 ? ((valor - valorAnterior) / valorAnterior) * 100 : null;
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4" title={tooltip}>
+      <p className="text-xs text-text-faint">{titulo}</p>
+      <p className="text-lg font-semibold text-gold mt-1">{formatarMoeda(valor)}</p>
+      <p className="text-[11px] text-text-faint mt-1">
+        {(percentual * 100).toFixed(0)}% das despesas
+        {delta !== null && (
+          <span className={delta > 0 ? "text-negative" : "text-positive"}>
+            {" "}
+            · {delta > 0 ? "+" : ""}
+            {delta.toFixed(0)}% vs mês ant.
+          </span>
+        )}
+      </p>
     </div>
   );
 }

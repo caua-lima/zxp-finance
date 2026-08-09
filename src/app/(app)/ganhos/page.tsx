@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { mesPadrao, formatarMoeda, TAXA_IMPOSTO, Ganho } from "@/lib/types";
+import { CATEGORIAS_RECEITA, iconeCategoriaReceita } from "@/lib/categoriasFinanceiras";
 import { useGanhos } from "@/lib/useGanhos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -34,6 +35,7 @@ export default function GanhosPage() {
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState(0);
   const [tipo, setTipo] = useState<Tipo>("pontual");
+  const [categoriaReceita, setCategoriaReceita] = useState("");
 
   function estaRecebido(g: Ganho): boolean {
     return g.tipo === "recorrente" ? pagamentos.estaPago("ganho", g.id) : !!g.recebido;
@@ -54,9 +56,9 @@ export default function GanhosPage() {
     setDescricao("");
     setValor(0);
     if (tipo === "recorrente") {
-      adicionarRecorrente(desc, valor).catch(console.error);
+      adicionarRecorrente(desc, valor, categoriaReceita || undefined).catch(console.error);
     } else {
-      adicionarPontual(desc, valor).catch(console.error);
+      adicionarPontual(desc, valor, categoriaReceita || undefined).catch(console.error);
     }
   }
 
@@ -78,6 +80,18 @@ export default function GanhosPage() {
             onChange={setValor}
             className="w-full sm:w-36 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
           />
+          <select
+            value={categoriaReceita}
+            onChange={(e) => setCategoriaReceita(e.target.value)}
+            className="w-full sm:w-40 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
+          >
+            <option value="">Categoria</option>
+            {CATEGORIAS_RECEITA.map((c) => (
+              <option key={c} value={c}>
+                {iconeCategoriaReceita(c)} {c}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
@@ -181,7 +195,10 @@ function Secao({
   vazio: string;
   itens: Ganho[];
   comAtivo?: boolean;
-  onEditar: (id: string, dados: { descricao: string; valor: number }) => void;
+  onEditar: (
+    id: string,
+    dados: { descricao: string; valor: number; categoriaReceita?: string }
+  ) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
   estaRecebido: (g: Ganho) => boolean;
@@ -223,7 +240,10 @@ function ItemGanho({
 }: {
   ganho: Ganho;
   comAtivo?: boolean;
-  onEditar: (id: string, dados: { descricao: string; valor: number }) => void;
+  onEditar: (
+    id: string,
+    dados: { descricao: string; valor: number; categoriaReceita?: string }
+  ) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
   recebido: boolean;
@@ -233,6 +253,7 @@ function ItemGanho({
   const [confirmando, setConfirmando] = useState(false);
   const [descricao, setDescricao] = useState(ganho.descricao);
   const [valor, setValor] = useState(ganho.valor);
+  const [categoriaReceita, setCategoriaReceita] = useState(ganho.categoriaReceita ?? "");
 
   const estaAtivo =
     ganho.tipo === "recorrente" ? ganho.ativo !== false : !ganho.arquivado;
@@ -241,7 +262,7 @@ function ItemGanho({
   function salvar() {
     const desc = descricao.trim();
     if (!desc || !valor) return;
-    onEditar(ganho.id, { descricao: desc, valor });
+    onEditar(ganho.id, { descricao: desc, valor, categoriaReceita: categoriaReceita || undefined });
     setEditando(false);
   }
 
@@ -258,6 +279,18 @@ function ItemGanho({
           onChange={setValor}
           className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
         />
+        <select
+          value={categoriaReceita}
+          onChange={(e) => setCategoriaReceita(e.target.value)}
+          className="w-full sm:w-36 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+        >
+          <option value="">Categoria</option>
+          {CATEGORIAS_RECEITA.map((c) => (
+            <option key={c} value={c}>
+              {iconeCategoriaReceita(c)} {c}
+            </option>
+          ))}
+        </select>
         <div className="flex gap-2 shrink-0">
           <button
             onClick={salvar}
@@ -291,7 +324,10 @@ function ItemGanho({
             className="h-4 w-4 accent-brand"
           />
         )}
-        <span className="text-sm">{ganho.descricao}</span>
+        <span className="text-sm">
+          {ganho.categoriaReceita && `${iconeCategoriaReceita(ganho.categoriaReceita)} `}
+          {ganho.descricao}
+        </span>
       </div>
       <div className="flex items-center gap-3">
         <button
