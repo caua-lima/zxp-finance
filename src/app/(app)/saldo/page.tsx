@@ -17,6 +17,7 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 import { useToast } from "@/components/Toast";
+import { diasRestantesNoMes, calculateGastavelPorDia } from "@/lib/finance/calculations";
 
 function agruparPorCategoria(gastos: Gasto[]) {
   const grupos = new Map<string, Gasto[]>();
@@ -32,7 +33,13 @@ function agruparPorCategoria(gastos: Gasto[]) {
 }
 
 export default function SaldoPage() {
-  const { saldo, loading: loadingSaldo, erro: erroSaldo, definir } = useSaldo();
+  const {
+    saldo,
+    loading: loadingSaldo,
+    erro: erroSaldo,
+    definir,
+    definirReservaMeta,
+  } = useSaldo();
   const {
     gastos,
     loading: loadingGastos,
@@ -51,6 +58,8 @@ export default function SaldoPage() {
   const [definindoInicial, setDefinindoInicial] = useState(false);
   const [saldoInicial, setSaldoInicial] = useState(0);
   const [conferindo, setConferindo] = useState(false);
+  const [editandoReserva, setEditandoReserva] = useState(false);
+  const [novaReserva, setNovaReserva] = useState(0);
 
   const mes = mesPadrao();
   const loading = loadingSaldo || loadingGastos;
@@ -69,6 +78,16 @@ export default function SaldoPage() {
   const saldoAtual = saldo
     ? saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.valor, 0)
     : null;
+
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const reservaMeta = saldo?.reservaMeta ?? 0;
+  const diasRestantes = diasRestantesNoMes(hojeISO);
+  const gastavelPorDia = calculateGastavelPorDia(saldoAtual, reservaMeta, diasRestantes);
+
+  const totalGastoHoje = gastos
+    .filter((g) => new Date(g.criadoEm).toISOString().slice(0, 10) === hojeISO)
+    .reduce((acc, g) => acc + g.valor, 0);
+  const aindaPodeGastarHoje = gastavelPorDia === null ? null : gastavelPorDia - totalGastoHoje;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -93,6 +112,17 @@ export default function SaldoPage() {
     setUltimoRegistro(
       `${formatarMoeda(interpretado.valor)} · ${interpretado.descricao} · ${iconeCategoriaGasto(categoria)} ${categoria}`
     );
+  }
+
+  function abrirEdicaoReserva() {
+    setNovaReserva(reservaMeta);
+    setEditandoReserva(true);
+  }
+
+  function salvarReserva() {
+    definirReservaMeta(novaReserva);
+    setEditandoReserva(false);
+    toast.sucesso("Meta de reserva atualizada.");
   }
 
   function salvarSaldoInicial() {
@@ -200,6 +230,67 @@ export default function SaldoPage() {
           }}
           onFechar={() => setConferindo(false)}
         />
+      )}
+
+      {/* QUANTO POSSO GASTAR POR DIA */}
+      {saldo !== null && (
+        <div className="rounded-2xl border border-line bg-surface p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-text-muted">Posso gastar por dia</p>
+            <button
+              onClick={editandoReserva ? salvarReserva : abrirEdicaoReserva}
+              className="text-xs text-brand hover:text-brand-dark"
+            >
+              {editandoReserva ? "Salvar" : "Ajustar meta"}
+            </button>
+          </div>
+
+          {editandoReserva ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-faint whitespace-nowrap">
+                Quero que sobre até o fim do mês:
+              </span>
+              <MoneyInput
+                value={novaReserva}
+                onChange={setNovaReserva}
+                className="w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+              />
+            </div>
+          ) : (
+            <>
+              <p
+                className={`text-3xl font-bold ${
+                  gastavelPorDia === null
+                    ? "text-text-faint"
+                    : gastavelPorDia >= 0
+                    ? "text-brand"
+                    : "text-negative"
+                }`}
+              >
+                {gastavelPorDia === null ? "—" : formatarMoeda(gastavelPorDia)}
+              </p>
+              <p className="text-xs text-text-faint mt-1">
+                ({formatarMoeda(saldoAtual ?? 0)} − {formatarMoeda(reservaMeta)} de reserva) ÷{" "}
+                {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} restante
+                {diasRestantes === 1 ? "" : "s"} no mês
+              </p>
+              {gastavelPorDia !== null && (
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-line-soft">
+                  <span className="text-xs text-text-muted">Ainda pode gastar hoje</span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      aindaPodeGastarHoje !== null && aindaPodeGastarHoje >= 0
+                        ? "text-positive"
+                        : "text-negative"
+                    }`}
+                  >
+                    {formatarMoeda(aindaPodeGastarHoje ?? 0)}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {/* REGISTRO RÁPIDO */}

@@ -282,6 +282,32 @@ export function calculateDreBreakdown(entries: FinancialEntry[]): DreBreakdown {
   };
 }
 
+/**
+ * Dias restantes no mês de `hojeISO`, contando hoje. Dia 31 de um mês de
+ * 31 dias devolve 1, não 0 — hoje ainda é um dia pra gastar.
+ */
+export function diasRestantesNoMes(hojeISO: string): number {
+  const [ano, mes, dia] = hojeISO.split("-").map(Number);
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  return ultimoDia - dia + 1;
+}
+
+/**
+ * Quanto dá pra gastar por dia até o fim do mês, mantendo a reserva
+ * desejada. Recalcula sozinho a cada gasto novo: o saldo atual desce (já
+ * descontando o gasto) e os dias restantes também encolhem dia a dia —
+ * as duas coisas puxam o número pra baixo com o tempo, do jeito que a
+ * pessoa realmente vai gastando o mês.
+ */
+export function calculateGastavelPorDia(
+  saldoAtual: number | null,
+  reservaMeta: number,
+  diasRestantes: number
+): number | null {
+  if (saldoAtual === null || diasRestantes <= 0) return null;
+  return (saldoAtual - reservaMeta) / diasRestantes;
+}
+
 export function formatMoney(valor: number): string {
   return formatarMoeda(valor);
 }

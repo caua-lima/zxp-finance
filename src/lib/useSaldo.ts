@@ -9,6 +9,7 @@ import { mensagemErro } from "./erroFirebase";
 export interface Saldo {
   valor: number;
   atualizadoEm: number;
+  reservaMeta?: number; // quanto você quer que sobre até o fim do mês
 }
 
 /**
@@ -42,15 +43,30 @@ export function useSaldo() {
   async function definir(valor: number) {
     if (!user) return;
     try {
-      await setDoc(doc(db, "usuarios", user.uid, "saldo", "atual"), {
-        valor,
-        atualizadoEm: Date.now(),
-      });
+      await setDoc(
+        doc(db, "usuarios", user.uid, "saldo", "atual"),
+        { valor, atualizadoEm: Date.now() },
+        { merge: true }
+      );
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
     }
   }
 
-  return { saldo, loading, erro, definir };
+  async function definirReservaMeta(reservaMeta: number) {
+    if (!user) return;
+    try {
+      await setDoc(
+        doc(db, "usuarios", user.uid, "saldo", "atual"),
+        { reservaMeta },
+        { merge: true }
+      );
+      setErro(null);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
+  return { saldo, loading, erro, definir, definirReservaMeta };
 }

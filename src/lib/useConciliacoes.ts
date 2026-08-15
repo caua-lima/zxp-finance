@@ -87,7 +87,11 @@ export function useConciliacoes() {
           ajusteConciliacaoId: refConciliacao.id,
         });
         const refSaldo = doc(db, "usuarios", user.uid, "saldo", "atual");
-        batch.set(refSaldo, { valor: params.saldoInformado, atualizadoEm: Date.now() });
+        batch.set(
+          refSaldo,
+          { valor: params.saldoInformado, atualizadoEm: Date.now() },
+          { merge: true }
+        );
         anexarAuditLog(batch, user.uid, user.email, {
           action: "reconciled",
           entityType: "saldo",
@@ -98,7 +102,11 @@ export function useConciliacoes() {
         });
       } else if (diferenca === 0) {
         const refSaldo = doc(db, "usuarios", user.uid, "saldo", "atual");
-        batch.set(refSaldo, { valor: params.saldoInformado, atualizadoEm: Date.now() });
+        batch.set(
+          refSaldo,
+          { valor: params.saldoInformado, atualizadoEm: Date.now() },
+          { merge: true }
+        );
         anexarAuditLog(batch, user.uid, user.email, {
           action: "reconciled",
           entityType: "saldo",

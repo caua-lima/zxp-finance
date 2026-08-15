@@ -7,6 +7,8 @@ import {
   calculateUpcomingCommitments,
   deriveDisplayStatus,
   calculateDreBreakdown,
+  calculateGastavelPorDia,
+  diasRestantesNoMes,
 } from "./calculations";
 import {
   parcelasParaEntries,
@@ -155,6 +157,29 @@ describe("parcela — projeção mês a mês", () => {
 
   test("nunca fica negativa", () => {
     assert.equal(parcelasRestantesEm(parcela, "2027-06"), 0);
+  });
+});
+
+describe("gastável por dia", () => {
+  test("exemplo: saldo 4000, reserva 1000, mês de 30 dias → 100/dia", () => {
+    assert.equal(calculateGastavelPorDia(4000, 1000, 30), 100);
+  });
+
+  test("cai conforme o saldo cai (gasto novo registrado)", () => {
+    const antes = calculateGastavelPorDia(4000, 1000, 30);
+    const depoisDeGastar500 = calculateGastavelPorDia(3500, 1000, 30);
+    assert.equal(antes, 100);
+    assert.equal(depoisDeGastar500, (3500 - 1000) / 30);
+    assert.ok(depoisDeGastar500! < antes!);
+  });
+
+  test("sem saldo definido, retorna null", () => {
+    assert.equal(calculateGastavelPorDia(null, 1000, 30), null);
+  });
+
+  test("diasRestantesNoMes conta hoje: dia 31 de um mês de 31 dias ainda é 1 dia", () => {
+    assert.equal(diasRestantesNoMes("2026-08-31"), 1);
+    assert.equal(diasRestantesNoMes("2026-08-01"), 31);
   });
 });
 
