@@ -18,6 +18,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 import { useToast } from "@/components/Toast";
 import { diasRestantesNoMes, calculateGastavelPorDia } from "@/lib/finance/calculations";
+import { usePushNotifications } from "@/lib/usePushNotifications";
 
 function agruparPorCategoria(gastos: Gasto[]) {
   const grupos = new Map<string, Gasto[]>();
@@ -51,6 +52,7 @@ export default function SaldoPage() {
   const conciliacoes = useConciliacoes();
   const dash = useFinanceDashboard(mesPadrao());
   const toast = useToast();
+  const push = usePushNotifications();
 
   const [texto, setTexto] = useState("");
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
@@ -288,6 +290,32 @@ export default function SaldoPage() {
                   </span>
                 </div>
               )}
+              {push.suportado && (
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-line-soft">
+                  <span className="text-xs text-text-muted">
+                    Notificação diária às 8h
+                    {push.permissao === "denied" && " · bloqueada no navegador"}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (push.ativo) {
+                        push.desativar().then(() => toast.sucesso("Notificação desativada."));
+                      } else {
+                        push.ativar().then(() => {
+                          if (push.permissao !== "denied") toast.sucesso("Notificação diária ativada.");
+                        });
+                      }
+                    }}
+                    disabled={push.carregando || push.permissao === "denied"}
+                    className={`text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                      push.ativo ? "text-negative hover:text-negative/80" : "text-brand hover:text-brand-dark"
+                    }`}
+                  >
+                    {push.carregando ? "..." : push.ativo ? "Desativar" : "Ativar"}
+                  </button>
+                </div>
+              )}
+              {push.erro && <p className="text-xs text-negative mt-2">{push.erro}</p>}
             </>
           )}
         </div>
