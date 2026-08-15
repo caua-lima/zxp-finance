@@ -6,10 +6,10 @@ self.addEventListener("push", (event) => {
   try {
     dados = event.data ? event.data.json() : {};
   } catch {
-    dados = { title: "Financeiro", body: event.data ? event.data.text() : "" };
+    dados = { title: "ZXP Finance", body: event.data ? event.data.text() : "" };
   }
 
-  const titulo = dados.title || "Financeiro";
+  const titulo = dados.title || "ZXP Finance";
   const opcoes = {
     body: dados.body || "",
     icon: "/api/icon?size=192",

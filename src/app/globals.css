@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0e0f0c;
-  --foreground: #f5f2e8;
+  /* Paleta oficial da marca ZXP (onyx + dourado + marfim) */
+  --background: #10100e;
+  --foreground: #f6f3e8;
 
-  --color-bg: #0e0f0c;
+  --color-bg: #10100e;
   --color-sidebar: #151610;
   --color-surface: #1b1d16;
   --color-surface-2: #26281d;
@@ -12,8 +13,8 @@
   --color-line: #34372a;
   --color-line-soft: #23251b;
 
-  --color-brand: #f6c445;
-  --color-brand-dark: #e4ae2c;
+  --color-brand: #f4b942;
+  --color-brand-dark: #dfa42e;
   --color-brand-soft: #2a2410;
 
   --color-gold: #f0a74a;
@@ -25,7 +26,7 @@
   --color-negative-soft: #2e1712;
   --color-info: #78a7ff;
 
-  --color-text: #f5f2e8;
+  --color-text: #f6f3e8;
   --color-text-muted: #a9a99c;
   --color-text-faint: #7a7a6e;
 }
@@ -67,8 +68,8 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   background-image:
-    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(246, 196, 69, 0.06), transparent),
-    radial-gradient(ellipse 700px 400px at 100% 0%, rgba(246, 196, 69, 0.04), transparent);
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(244, 185, 66, 0.06), transparent),
+    radial-gradient(ellipse 700px 400px at 100% 0%, rgba(244, 185, 66, 0.04), transparent);
   background-attachment: fixed;
   font-variant-numeric: tabular-nums;
 }
@@ -79,7 +80,7 @@ h1, h2, h3 {
 
 ::selection {
   background: var(--color-brand);
-  color: #0e0f0c;
+  color: #10100e;
 }
 
 select {

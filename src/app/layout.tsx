@@ -15,12 +15,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Financeiro",
-  description: "Controle financeiro pessoal",
+  title: "ZXP Finance",
+  description: "Controle financeiro pessoal — ZXP Solutions",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Financeiro",
+    title: "ZXP Finance",
   },
 };
 
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#0E0F0C",
+  themeColor: "#10100E",
 };
 
 export default function RootLayout({
