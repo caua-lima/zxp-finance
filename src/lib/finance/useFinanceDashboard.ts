@@ -16,6 +16,8 @@ import {
   calculateAvailableBalance,
   calculateProjectedBalance,
   calculateMonthlyCashFlow,
+  calculatePendingIncome,
+  calculatePendingExpenses,
   calculateUpcomingCommitments,
   calculateDailyCashFlow,
   ultimoDiaMes,
@@ -108,6 +110,17 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     () => calculateMonthlyCashFlow(entries, mes),
     [entries, mes]
   );
+  // Só o que ainda não caiu na conta / ainda não saiu — o que já está
+  // refletido no saldo real fica de fora, pra não somar duas vezes com
+  // "Saldo disponível" (ver calculateProjectedBalance).
+  const entradasPendentes = useMemo(
+    () => calculatePendingIncome(entries, mes),
+    [entries, mes]
+  );
+  const compromissosPendentes = useMemo(
+    () => calculatePendingExpenses(entries, mes),
+    [entries, mes]
+  );
 
   const proximosVencimentos = useMemo(
     () => calculateUpcomingCommitments(entries, hojeISO(), 30).slice(0, 5),
@@ -180,6 +193,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     saldoDisponivel,
     saldoProjetado,
     fluxoDoMes,
+    entradasPendentes,
+    compromissosPendentes,
     fluxoDiario,
     proximosVencimentos,
     distribuicaoGastos,

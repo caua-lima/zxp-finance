@@ -9,6 +9,8 @@ import {
   calculateDreBreakdown,
   calculateGastavelPorDia,
   diasRestantesNoMes,
+  calculatePendingIncome,
+  calculatePendingExpenses,
 } from "./calculations";
 import {
   parcelasParaEntries,
@@ -57,6 +59,17 @@ describe("saldo projetado", () => {
 
   test("retorna null quando o saldo real nunca foi informado", () => {
     assert.equal(calculateProjectedBalance(null, [], "2026-08"), null);
+  });
+
+  test("entradas/compromissos pendentes nunca incluem o que já foi recebido/pago (sem contar duas vezes com o saldo real)", () => {
+    const entries: FinancialEntry[] = [
+      entry({ id: "1", type: "income", status: "received", amount: 3000 }), // já caiu no saldo real
+      entry({ id: "2", type: "income", status: "planned", amount: 500 }), // ainda não recebido
+      entry({ id: "3", type: "expense", status: "paid", amount: 200 }), // já saiu do saldo real
+      entry({ id: "4", type: "expense", status: "pending", amount: 80 }), // ainda não pago
+    ];
+    assert.equal(calculatePendingIncome(entries, "2026-08"), 500);
+    assert.equal(calculatePendingExpenses(entries, "2026-08"), 80);
   });
 });
 

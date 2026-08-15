@@ -239,24 +239,40 @@ export default function SaldoPage() {
         <div className="rounded-2xl border border-line bg-surface p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm text-text-muted">Posso gastar por dia</p>
-            <button
-              onClick={editandoReserva ? salvarReserva : abrirEdicaoReserva}
-              className="text-xs text-brand hover:text-brand-dark"
-            >
-              {editandoReserva ? "Salvar" : "Ajustar meta"}
-            </button>
+            {!editandoReserva && (
+              <button
+                onClick={abrirEdicaoReserva}
+                className="text-xs text-brand hover:text-brand-dark"
+              >
+                {reservaMeta > 0 ? "Ajustar meta" : "Definir quanto quer que sobre"}
+              </button>
+            )}
           </div>
 
           {editandoReserva ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-faint whitespace-nowrap">
-                Quero que sobre até o fim do mês:
-              </span>
-              <MoneyInput
-                value={novaReserva}
-                onChange={setNovaReserva}
-                className="w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-              />
+            <div className="rounded-xl border border-brand/30 bg-surface-2 p-3 space-y-2">
+              <label className="text-xs text-text-muted block">
+                Quanto você quer que sobre até o fim do mês?
+              </label>
+              <div className="flex items-center gap-2">
+                <MoneyInput
+                  value={novaReserva}
+                  onChange={setNovaReserva}
+                  className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+                <button
+                  onClick={salvarReserva}
+                  className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
+                >
+                  Salvar
+                </button>
+                <button
+                  onClick={() => setEditandoReserva(false)}
+                  className="rounded-lg border border-line px-3 py-2 text-sm text-text-muted"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           ) : (
             <>

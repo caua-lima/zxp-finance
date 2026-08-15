@@ -48,6 +48,44 @@ export function calculateAvailableBalance(
 }
 
 /**
+ * Soma só o que ainda está pendente (planned/pending) de um tipo, na
+ * competência informada. Base de "entradas previstas" e "compromissos
+ * pendentes" — nunca inclui o que já foi recebido/pago, porque isso já
+ * está refletido no saldo real e somar de novo seria contar duas vezes.
+ */
+function somaPendentePorTipo(
+  entries: FinancialEntry[],
+  competenceMonth: string,
+  type: FinancialEntry["type"]
+): number {
+  return entries
+    .filter(
+      (e) =>
+        e.competenceMonth === competenceMonth &&
+        e.type === type &&
+        isEntryPending(e) &&
+        isEntryActive(e)
+    )
+    .reduce((acc, e) => acc + e.amount, 0);
+}
+
+/** Ganhos do mês ainda não recebidos — não inclui o que já está no saldo real. */
+export function calculatePendingIncome(
+  entries: FinancialEntry[],
+  competenceMonth: string
+): number {
+  return somaPendentePorTipo(entries, competenceMonth, "income");
+}
+
+/** Despesas do mês ainda não pagas — não inclui o que já saiu do saldo real. */
+export function calculatePendingExpenses(
+  entries: FinancialEntry[],
+  competenceMonth: string
+): number {
+  return somaPendentePorTipo(entries, competenceMonth, "expense");
+}
+
+/**
  * Saldo disponível + entradas previstas ainda não recebidas − compromissos
  * pendentes ainda não pagos, todos dentro da competência informada.
  */
@@ -57,16 +95,11 @@ export function calculateProjectedBalance(
   competenceMonth: string
 ): number | null {
   if (saldoReal === null) return null;
-  const doMes = entries.filter(
-    (e) => e.competenceMonth === competenceMonth && isEntryActive(e)
+  return (
+    saldoReal +
+    calculatePendingIncome(entries, competenceMonth) -
+    calculatePendingExpenses(entries, competenceMonth)
   );
-  const entradasPrevistas = doMes
-    .filter((e) => e.type === "income" && isEntryPending(e))
-    .reduce((acc, e) => acc + e.amount, 0);
-  const compromissosPendentes = doMes
-    .filter((e) => e.type === "expense" && isEntryPending(e))
-    .reduce((acc, e) => acc + e.amount, 0);
-  return saldoReal + entradasPrevistas - compromissosPendentes;
 }
 
 export interface MonthlyCashFlow {

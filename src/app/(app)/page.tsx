@@ -82,16 +82,16 @@ export default function DashboardPage() {
             />
             <KpiCard
               label="Entradas previstas"
-              valor={dash.fluxoDoMes.income}
-              explicacao="Ganhos do mês, recebidos ou não"
-              tooltip="Soma de todos os ganhos ativos da competência"
+              valor={dash.entradasPendentes}
+              explicacao="Ganhos ainda não recebidos — o que já entrou não conta aqui de novo"
+              tooltip="Soma dos ganhos da competência que ainda não foram marcados como recebidos"
               cor="text-positive"
             />
             <KpiCard
               label="Compromissos pendentes"
-              valor={dash.fluxoDoMes.expenses}
-              explicacao="Contas, assinaturas, parcelas, fatura e gastos"
-              tooltip="Soma de todas as despesas da competência, pagas ou não"
+              valor={dash.compromissosPendentes}
+              explicacao="Contas, assinaturas, parcelas, fatura e gastos ainda não pagos"
+              tooltip="Soma das despesas da competência que ainda não foram marcadas como pagas"
               cor="text-gold"
             />
             <KpiCard
