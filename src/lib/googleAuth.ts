@@ -1,6 +1,7 @@
 import { createSign, createVerify, createPublicKey } from "crypto";
 
-const ESCOPO = "https://www.googleapis.com/auth/identitytoolkit";
+const ESCOPO_IDENTITY = "https://www.googleapis.com/auth/identitytoolkit";
+const ESCOPO_FIRESTORE = "https://www.googleapis.com/auth/datastore";
 const URL_TOKEN = "https://oauth2.googleapis.com/token";
 const URL_CERTS =
   "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
@@ -27,12 +28,20 @@ export function credenciais() {
   return { projectId, clientEmail, privateKey };
 }
 
-let cacheToken: { valor: string; expiraEm: number } | null = null;
+const cacheTokens = new Map<string, { valor: string; expiraEm: number }>();
 
-/** Troca a service account por um access token OAuth2 do Google. */
-export async function accessToken(): Promise<string> {
-  if (cacheToken && Date.now() < cacheToken.expiraEm - 60_000) {
-    return cacheToken.valor;
+/**
+ * Troca a service account por um access token OAuth2 do Google, escopado
+ * pro que for pedido. Cache separado por escopo — o token do
+ * identitytoolkit (gerenciar logins) não serve pro datastore (ler/
+ * escrever Firestore direto, sem passar pelas regras de segurança).
+ */
+export async function accessToken(
+  escopo: string = ESCOPO_IDENTITY
+): Promise<string> {
+  const cache = cacheTokens.get(escopo);
+  if (cache && Date.now() < cache.expiraEm - 60_000) {
+    return cache.valor;
   }
 
   const { clientEmail, privateKey } = credenciais();
@@ -42,7 +51,7 @@ export async function accessToken(): Promise<string> {
   const corpo = base64url(
     JSON.stringify({
       iss: clientEmail,
-      scope: ESCOPO,
+      scope: escopo,
       aud: URL_TOKEN,
       iat: agora,
       exp: agora + 3600,
@@ -70,11 +79,16 @@ export async function accessToken(): Promise<string> {
     );
   }
 
-  cacheToken = {
+  cacheTokens.set(escopo, {
     valor: dados.access_token,
     expiraEm: Date.now() + dados.expires_in * 1000,
-  };
-  return cacheToken.valor;
+  });
+  return dados.access_token;
+}
+
+/** Access token escopado pra ler/escrever Firestore direto via REST. */
+export async function accessTokenFirestore(): Promise<string> {
+  return accessToken(ESCOPO_FIRESTORE);
 }
 
 let cacheCerts: { valor: Record<string, string>; expiraEm: number } | null =
