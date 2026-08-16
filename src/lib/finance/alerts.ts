@@ -33,6 +33,7 @@ export interface DadosAlertas {
   totalFatura: number;
   rendaLiquidaMensal: number;
   limitePercentualFatura?: number; // padrão 60% se não informado
+  entradasPendentes: number; // soma de ganhos do mês ainda não marcados como recebidos
 }
 
 const LIMITE_PADRAO_PERCENTUAL_FATURA = 60;
@@ -101,6 +102,24 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       impacto: "—",
       cta: "Conferir saldo",
       href: "/saldo",
+    });
+  }
+
+  // Passado o começo do mês, ganho ainda "não recebido" é bem mais provável
+  // de ser esquecimento (dinheiro já caiu, ninguém marcou o toggle) do que
+  // uma previsão real — nudge leve, não é crítico, só pra não inflar o
+  // saldo projetado silenciosamente por semanas.
+  const diaDoMes = Number(dados.hojeISO.split("-")[2]);
+  if (dados.entradasPendentes > 0 && diaDoMes >= 5) {
+    alertas.push({
+      key: `entradas-pendentes__${dados.mes}`,
+      severidade: "info",
+      titulo: "Tem entrada prevista ainda não marcada como recebida",
+      contexto:
+        "Se esse dinheiro já caiu na conta, marca como recebido em Ganhos — senão o saldo projetado conta ele a mais.",
+      impacto: formatarMoeda(dados.entradasPendentes),
+      cta: "Ver ganhos",
+      href: "/ganhos",
     });
   }
 

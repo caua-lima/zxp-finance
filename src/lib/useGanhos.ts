@@ -49,7 +49,13 @@ export function useGanhos(mes: string) {
   const pontuais = useMemo(
     () =>
       todos
-        .filter((g) => g.tipo === "pontual" && g.mes === mes)
+        // "!== recorrente" em vez de "=== pontual": alguns docs antigos foram
+        // criados sem o campo `tipo` (ou vieram de edição manual no
+        // Firestore) — sem esse fallback eles não batiam em nenhum dos dois
+        // filtros e ficavam invisíveis pra sempre, mesmo contando dinheiro
+        // de verdade em algum lugar. Tratar "sem tipo" como pontual os traz
+        // de volta pra tela, onde dá pra editar/arquivar/excluir.
+        .filter((g) => g.tipo !== "recorrente" && g.mes === mes)
         .sort((a, b) => b.criadoEm - a.criadoEm),
     [todos, mes]
   );
@@ -78,7 +84,8 @@ export function useGanhos(mes: string) {
   async function adicionarPontual(
     descricao: string,
     valor: number,
-    categoriaReceita?: string
+    categoriaReceita?: string,
+    recebido: boolean = true
   ) {
     if (!user) return;
     try {
@@ -88,6 +95,12 @@ export function useGanhos(mes: string) {
         descricao,
         valor,
         ...(categoriaReceita ? { categoriaReceita } : {}),
+        // ganho pontual normalmente é lançado depois que o dinheiro já
+        // caiu (igual gasto) — recebido:true por padrão evita "Entradas
+        // previstas" inflado com dinheiro que já entrou. Quem lança algo
+        // que ainda vai receber desmarca o "Recebido" na lista depois.
+        recebido,
+        recebidoEm: recebido ? Date.now() : null,
         criadoEm: Date.now(),
       });
       setErro(null);

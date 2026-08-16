@@ -157,6 +157,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       assinaturasParaRevisar,
       totalFatura: faturas.total,
       rendaLiquidaMensal: ganhos.totalLiquido,
+      entradasPendentes,
     });
   }, [
     loading,
@@ -165,6 +166,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     mes,
     saldoHook.saldo,
     parcelasTerminando,
+    entradasPendentes,
     assinaturasParaRevisar,
     faturas.total,
     ganhos.totalLiquido,
