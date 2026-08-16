@@ -571,14 +571,14 @@ function ItemGasto({
             >
               ↩
             </button>
-            <button
-              onClick={() => setConfirmandoExclusao(true)}
-              className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
-            >
-              Excluir
-            </button>
           </>
         )}
+        <button
+          onClick={() => setConfirmandoExclusao(true)}
+          className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+        >
+          Excluir
+        </button>
       </div>
 
       <ConfirmModal
@@ -599,13 +599,17 @@ function ItemGasto({
       <ConfirmModal
         aberto={confirmandoExclusao}
         titulo="Excluir definitivamente"
-        descricao={`"${gasto.descricao}" será apagado de vez — isso não pode ser desfeito. Se quer manter o histórico e só corrigir o saldo, use "Estornar" em vez de excluir.`}
+        descricao={
+          bloqueado
+            ? `"${gasto.estornado ? gasto.descricao : gasto.descricao.replace(/^Estorno: /, "")}" e o estorno dele serão apagados juntos, de vez — isso não pode ser desfeito. Como as duas metades já se cancelam, o saldo não muda.`
+            : `"${gasto.descricao}" será apagado de vez — isso não pode ser desfeito. Se quer manter o histórico e só corrigir o saldo, use "Estornar" em vez de excluir.`
+        }
         textoConfirmar="Excluir"
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
           onRemover(gasto.id, motivo ?? "");
-          toast.sucesso("Gasto excluído.");
+          toast.sucesso(bloqueado ? "Par estorno/original excluído." : "Gasto excluído.");
           setConfirmandoExclusao(false);
         }}
         onCancelar={() => setConfirmandoExclusao(false)}

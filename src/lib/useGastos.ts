@@ -114,33 +114,41 @@ export function useGastos() {
   }
 
   /**
-   * Exclusão definitiva — diferente de estornar, aqui o lançamento some
-   * de verdade. Só disponível pra gasto "normal" (nunca foi estornado e
-   * não é ele mesmo um estorno): apagar metade de um par estorno/original
-   * deixaria a outra metade contando sozinha, adicionando ou tirando
-   * dinheiro do saldo sem explicação nenhuma. Snapshot completo vai pro
-   * audit log antes de apagar, então o dado sobrevive na trilha de
-   * auditoria mesmo depois do documento sumir.
+   * Exclusão definitiva — diferente de estornar, aqui o(s) lançamento(s)
+   * somem de verdade. Gasto normal: apaga só ele. Gasto que faz parte de
+   * um par estorno/original (qualquer uma das duas metades): apaga as
+   * DUAS juntas no mesmo batch — nunca só uma, porque apagar metade
+   * deixaria a outra contando sozinha e mudando o saldo sem explicação.
+   * Apagar o par inteiro é seguro porque as duas metades já se cancelam
+   * (soma zero), então remover as duas não move o saldo nenhum pouco.
+   * Snapshot completo (dos dois lados, quando houver) vai pro audit log
+   * antes de apagar.
    */
   async function remover(id: string, motivo: string) {
     if (!user) return;
     const gasto = todos.find((g) => g.id === id);
     if (!gasto) return;
-    if (gasto.estornado || gasto.estornoDeId) {
-      setErro("Esse lançamento faz parte de um estorno e não pode ser excluído direto.");
-      return;
-    }
+
+    const idOriginal = gasto.estornoDeId ?? gasto.id;
+    const original = todos.find((g) => g.id === idOriginal);
+    const estorno = todos.find((g) => g.estornoDeId === idOriginal);
+    if (!original) return;
+
     try {
       const batch = writeBatch(db);
-      const ref = doc(db, "usuarios", user.uid, "gastos", id);
       anexarAuditLog(batch, user.uid, user.email, {
         action: "archived",
         entityType: "gasto",
-        entityId: id,
-        summary: `Exclusão definitiva de "${gasto.descricao}": ${motivo}`,
-        before: { ...gasto },
+        entityId: original.id,
+        summary: estorno
+          ? `Exclusão definitiva do par estorno/original de "${original.descricao}": ${motivo}`
+          : `Exclusão definitiva de "${original.descricao}": ${motivo}`,
+        before: estorno ? { original, estorno } : { ...original },
       });
-      batch.delete(ref);
+      batch.delete(doc(db, "usuarios", user.uid, "gastos", original.id));
+      if (estorno) {
+        batch.delete(doc(db, "usuarios", user.uid, "gastos", estorno.id));
+      }
       await batch.commit();
       setErro(null);
     } catch (e) {
