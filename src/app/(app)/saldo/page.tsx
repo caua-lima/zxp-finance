@@ -17,7 +17,12 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 import { useToast } from "@/components/Toast";
-import { diasRestantesNoMes, calculateGastavelPorDia } from "@/lib/finance/calculations";
+import {
+  diasRestantesNoMes,
+  calculateGastavelPorDia,
+  hojeISO,
+  diaISOde,
+} from "@/lib/finance/calculations";
 import { usePushNotifications } from "@/lib/usePushNotifications";
 
 function agruparPorCategoria(gastos: Gasto[]) {
@@ -81,13 +86,13 @@ export default function SaldoPage() {
     ? saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.valor, 0)
     : null;
 
-  const hojeISO = new Date().toISOString().slice(0, 10);
+  const hoje = hojeISO();
   const reservaMeta = saldo?.reservaMeta ?? 0;
-  const diasRestantes = diasRestantesNoMes(hojeISO);
+  const diasRestantes = diasRestantesNoMes(hoje);
   const gastavelPorDia = calculateGastavelPorDia(saldoAtual, reservaMeta, diasRestantes);
 
   const totalGastoHoje = gastos
-    .filter((g) => new Date(g.criadoEm).toISOString().slice(0, 10) === hojeISO)
+    .filter((g) => diaISOde(g.criadoEm) === hoje)
     .reduce((acc, g) => acc + g.valor, 0);
   const aindaPodeGastarHoje = gastavelPorDia === null ? null : gastavelPorDia - totalGastoHoje;
 

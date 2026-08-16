@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { listarUsuarios } from "@/lib/usuariosFirebase";
 import { listarDocumentos, obterDocumento, deletarDocumento } from "@/lib/firestoreRest";
-import { diasRestantesNoMes, calculateGastavelPorDia } from "@/lib/finance/calculations";
+import {
+  diasRestantesNoMes,
+  calculateGastavelPorDia,
+  hojeISO,
+  diaISOde,
+} from "@/lib/finance/calculations";
 import { formatarMoeda } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const FUSO = "America/Sao_Paulo";
 
 interface SaldoDoc {
   valor: number;
@@ -23,24 +26,6 @@ interface GastoDoc {
 interface InscricaoDoc {
   endpoint: string;
   keys: { p256dh: string; auth: string };
-}
-
-function hojeISO(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: FUSO,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-function diaISOde(timestamp: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: FUSO,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(timestamp));
 }
 
 function mensagemDeErro(e: unknown, padrao: string): string {

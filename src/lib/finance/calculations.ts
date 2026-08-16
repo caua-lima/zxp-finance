@@ -315,6 +315,36 @@ export function calculateDreBreakdown(entries: FinancialEntry[]): DreBreakdown {
   };
 }
 
+const FUSO_PADRAO = "America/Sao_Paulo";
+
+/**
+ * Data de hoje no fuso do Brasil, como "AAAA-MM-DD". Existe porque
+ * `Date.toISOString()` é sempre UTC — entre ~21h e meia-noite (horário de
+ * Brasília) o UTC já virou o dia seguinte, então usar `toISOString()` pra
+ * "hoje" faz o app achar que já é amanhã enquanto ainda é hoje pra quem
+ * está usando. Com `Intl.DateTimeFormat` + timeZone explícito isso não
+ * depende do fuso da máquina (funciona igual no browser do usuário e no
+ * servidor da Vercel, que roda em UTC).
+ */
+export function hojeISO(fuso: string = FUSO_PADRAO): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: fuso,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** Mesma conversão de `hojeISO`, mas pra um timestamp já existente (ex: `criadoEm` de um gasto). */
+export function diaISOde(timestamp: number, fuso: string = FUSO_PADRAO): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: fuso,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(timestamp));
+}
+
 /**
  * Dias restantes no mês de `hojeISO`, contando hoje. Dia 31 de um mês de
  * 31 dias devolve 1, não 0 — hoje ainda é um dia pra gastar.

@@ -11,6 +11,8 @@ import {
   diasRestantesNoMes,
   calculatePendingIncome,
   calculatePendingExpenses,
+  hojeISO,
+  diaISOde,
 } from "./calculations";
 import {
   parcelasParaEntries,
@@ -193,6 +195,23 @@ describe("gastável por dia", () => {
   test("diasRestantesNoMes conta hoje: dia 31 de um mês de 31 dias ainda é 1 dia", () => {
     assert.equal(diasRestantesNoMes("2026-08-31"), 1);
     assert.equal(diasRestantesNoMes("2026-08-01"), 31);
+  });
+
+  test("diaISOde usa o fuso de Brasília, não UTC: 23h de 15/08 em Brasília ainda é dia 15, mesmo já sendo dia 16 em UTC", () => {
+    // 23h em Brasília (UTC-3) em 2026-08-15 == 2026-08-16T02:00:00Z.
+    // new Date(...).toISOString().slice(0,10) daria "2026-08-16" (o bug
+    // original): o gasto de "ontem à noite" contaria como "hoje".
+    const timestamp = new Date("2026-08-16T02:00:00Z").getTime();
+    assert.equal(diaISOde(timestamp), "2026-08-15");
+  });
+
+  test("diaISOde: 9h da manhã em Brasília cai no mesmo dia em UTC (sem virada)", () => {
+    const timestamp = new Date("2026-08-15T12:00:00Z").getTime();
+    assert.equal(diaISOde(timestamp), "2026-08-15");
+  });
+
+  test("hojeISO devolve uma data no formato AAAA-MM-DD", () => {
+    assert.match(hojeISO(), /^\d{4}-\d{2}-\d{2}$/);
   });
 });
 
