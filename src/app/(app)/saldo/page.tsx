@@ -11,7 +11,6 @@ import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
 import { useConciliacoes } from "@/lib/useConciliacoes";
-import { useFinanceDashboard } from "@/lib/finance/useFinanceDashboard";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -56,7 +55,6 @@ export default function SaldoPage() {
     remover,
   } = useGastos();
   const conciliacoes = useConciliacoes();
-  const dash = useFinanceDashboard(mesPadrao());
   const toast = useToast();
   const push = usePushNotifications();
 
@@ -181,7 +179,7 @@ export default function SaldoPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-6 mb-6">
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="grid grid-cols-2 gap-3 text-center">
             <div>
               <p className="text-xs text-text-faint">Real informado</p>
               <p className="text-base font-semibold mt-1">{formatarMoeda(saldo.valor)}</p>
@@ -194,20 +192,6 @@ export default function SaldoPage() {
                 }`}
               >
                 {saldoAtual === null ? "—" : formatarMoeda(saldoAtual)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-text-faint">Projetado (fim do mês)</p>
-              <p
-                className={`text-base font-semibold mt-1 ${
-                  dash.saldoProjetado !== null && dash.saldoProjetado >= 0
-                    ? "text-positive"
-                    : "text-negative"
-                }`}
-              >
-                {dash.loading || dash.saldoProjetado === null
-                  ? "—"
-                  : formatarMoeda(dash.saldoProjetado)}
               </p>
             </div>
           </div>

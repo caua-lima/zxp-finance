@@ -49,13 +49,7 @@ export function useGanhos(mes: string) {
   const pontuais = useMemo(
     () =>
       todos
-        // "!== recorrente" em vez de "=== pontual": alguns docs antigos foram
-        // criados sem o campo `tipo` (ou vieram de edição manual no
-        // Firestore) — sem esse fallback eles não batiam em nenhum dos dois
-        // filtros e ficavam invisíveis pra sempre, mesmo contando dinheiro
-        // de verdade em algum lugar. Tratar "sem tipo" como pontual os traz
-        // de volta pra tela, onde dá pra editar/arquivar/excluir.
-        .filter((g) => g.tipo !== "recorrente" && g.mes === mes)
+        .filter((g) => g.tipo === "pontual" && g.mes === mes)
         .sort((a, b) => b.criadoEm - a.criadoEm),
     [todos, mes]
   );
