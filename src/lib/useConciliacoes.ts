@@ -7,6 +7,7 @@ import { Conciliacao, formatarMoeda, mesPadrao } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
+import { hojeISO } from "./finance/calculations";
 
 /**
  * Histórico de conferências de saldo (usuarios/{uid}/conciliacoes).
@@ -65,7 +66,7 @@ export function useConciliacoes() {
       const refConciliacao = doc(collection(db, "usuarios", user.uid, "conciliacoes"));
 
       batch.set(refConciliacao, {
-        dataISO: new Date().toISOString().slice(0, 10),
+        dataISO: hojeISO(),
         saldoInformado: params.saldoInformado,
         saldoEsperado: params.saldoEsperado,
         diferenca,

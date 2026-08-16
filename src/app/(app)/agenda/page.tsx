@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FinancialEntry, FinancialEntrySource, formatarMoeda } from "@/lib/types";
 import { useAgendaEntries } from "@/lib/finance/useAgendaEntries";
-import { isEntryActive, deriveDisplayStatus, labelOrigem } from "@/lib/finance/calculations";
+import { isEntryActive, deriveDisplayStatus, labelOrigem, hojeISO } from "@/lib/finance/calculations";
 import { groupByUrgency } from "@/lib/finance/entries";
 import { ErroBanner } from "@/components/ErroBanner";
 import { StatusBadge, StatusBadgeValor } from "@/components/StatusBadge";
@@ -24,10 +24,6 @@ const HREF_POR_ORIGEM: Record<FinancialEntrySource, string> = {
   adjustment: "/saldo",
   transfer: "/saldo",
 };
-
-function hojeISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function statusCorresponde(
   displayStatus: ReturnType<typeof deriveDisplayStatus>,

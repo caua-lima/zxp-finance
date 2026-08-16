@@ -113,5 +113,40 @@ export function useGastos() {
     }
   }
 
-  return { gastos, loading, erro, adicionar, editar, estornar };
+  /**
+   * Exclusão definitiva — diferente de estornar, aqui o lançamento some
+   * de verdade. Só disponível pra gasto "normal" (nunca foi estornado e
+   * não é ele mesmo um estorno): apagar metade de um par estorno/original
+   * deixaria a outra metade contando sozinha, adicionando ou tirando
+   * dinheiro do saldo sem explicação nenhuma. Snapshot completo vai pro
+   * audit log antes de apagar, então o dado sobrevive na trilha de
+   * auditoria mesmo depois do documento sumir.
+   */
+  async function remover(id: string, motivo: string) {
+    if (!user) return;
+    const gasto = todos.find((g) => g.id === id);
+    if (!gasto) return;
+    if (gasto.estornado || gasto.estornoDeId) {
+      setErro("Esse lançamento faz parte de um estorno e não pode ser excluído direto.");
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "gastos", id);
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "archived",
+        entityType: "gasto",
+        entityId: id,
+        summary: `Exclusão definitiva de "${gasto.descricao}": ${motivo}`,
+        before: { ...gasto },
+      });
+      batch.delete(ref);
+      await batch.commit();
+      setErro(null);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
+  return { gastos, loading, erro, adicionar, editar, estornar, remover };
 }

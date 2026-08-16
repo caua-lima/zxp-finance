@@ -116,6 +116,10 @@ export function mesAtual(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// hojeISO()/diaISOde() (fuso de Brasília, pra "hoje"/"que dia é esse
+// timestamp") moraram em src/lib/finance/calculations.ts — não duplicar
+// aqui.
+
 // Nenhum mês antes deste fica visível no app, mesmo que o mês real seja anterior.
 export const MES_MINIMO = "2026-08";
 

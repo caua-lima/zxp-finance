@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatarMoeda, formatarMes, mesPadrao } from "@/lib/types";
 import { useFinanceDashboard } from "@/lib/finance/useFinanceDashboard";
+import { hojeISO } from "@/lib/finance/calculations";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 import { FinanceActionCenter } from "@/components/FinanceActionCenter";
@@ -11,10 +12,6 @@ import { CashFlowChart } from "@/components/CashFlowChart";
 import { UpcomingList } from "@/components/UpcomingList";
 import { CategoryDonut } from "@/components/CategoryDonut";
 import { SkeletonHome } from "@/components/Skeleton";
-
-function hojeISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function formatarQuando(timestamp: number | null): string {
   if (!timestamp) return "nunca conferido";

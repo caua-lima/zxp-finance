@@ -53,6 +53,7 @@ export default function SaldoPage() {
     adicionar,
     editar,
     estornar,
+    remover,
   } = useGastos();
   const conciliacoes = useConciliacoes();
   const dash = useFinanceDashboard(mesPadrao());
@@ -243,7 +244,12 @@ export default function SaldoPage() {
       {saldo !== null && (
         <div className="rounded-2xl border border-line bg-surface p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-text-muted">Posso gastar por dia</p>
+            <div>
+              <p className="text-sm text-text-muted">Posso gastar por dia</p>
+              <p className="text-[11px] text-text-faint">
+                Hoje: {hoje.split("-").reverse().join("/")}
+              </p>
+            </div>
             {!editandoReserva && (
               <button
                 onClick={abrirEdicaoReserva}
@@ -406,6 +412,7 @@ export default function SaldoPage() {
                     gasto={g}
                     onEditar={editar}
                     onEstornar={estornar}
+                    onRemover={remover}
                   />
                 ))}
               </ul>
@@ -462,6 +469,7 @@ function ItemGasto({
   gasto,
   onEditar,
   onEstornar,
+  onRemover,
 }: {
   gasto: Gasto;
   onEditar: (
@@ -469,10 +477,12 @@ function ItemGasto({
     dados: { descricao: string; valor: number; categoria: string }
   ) => void;
   onEstornar: (id: string, motivo: string) => void;
+  onRemover: (id: string, motivo: string) => void;
 }) {
   const toast = useToast();
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   const [descricao, setDescricao] = useState(gasto.descricao);
   const [valor, setValor] = useState(gasto.valor);
   const [categoria, setCategoria] = useState(gasto.categoria);
@@ -573,8 +583,15 @@ function ItemGasto({
               onClick={() => setConfirmando(true)}
               className="text-text-faint hover:text-negative text-sm"
               aria-label="Estornar"
+              title="Estornar (mantém no histórico + devolve o valor)"
             >
-              ✕
+              ↩
+            </button>
+            <button
+              onClick={() => setConfirmandoExclusao(true)}
+              className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+            >
+              Excluir
             </button>
           </>
         )}
@@ -593,6 +610,21 @@ function ItemGasto({
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
+      />
+
+      <ConfirmModal
+        aberto={confirmandoExclusao}
+        titulo="Excluir definitivamente"
+        descricao={`"${gasto.descricao}" será apagado de vez — isso não pode ser desfeito. Se quer manter o histórico e só corrigir o saldo, use "Estornar" em vez de excluir.`}
+        textoConfirmar="Excluir"
+        perigo
+        pedirMotivo
+        onConfirmar={(motivo) => {
+          onRemover(gasto.id, motivo ?? "");
+          toast.sucesso("Gasto excluído.");
+          setConfirmandoExclusao(false);
+        }}
+        onCancelar={() => setConfirmandoExclusao(false)}
       />
     </li>
   );

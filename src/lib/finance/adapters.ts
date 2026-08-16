@@ -10,7 +10,7 @@ import {
   valorMinhaParte,
   diaVencimentoNoMes,
 } from "@/lib/types";
-import { ultimoDiaMes } from "./calculations";
+import { ultimoDiaMes, diaISOde } from "./calculations";
 
 /**
  * Traduz as coleções antigas (ganhos, contasFixas, assinaturas, parcelas,
@@ -190,7 +190,7 @@ export function gastosParaEntries(gastos: Gasto[], mes: string): FinancialEntry[
       type: "expense" as const,
       status: "paid" as const,
       amount: g.valor,
-      dueDate: new Date(g.criadoEm).toISOString().slice(0, 10),
+      dueDate: diaISOde(g.criadoEm),
       paidAt: new Date(g.criadoEm).toISOString(),
       competenceMonth: mes,
       description: g.descricao,

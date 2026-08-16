@@ -21,13 +21,10 @@ import {
   calculateUpcomingCommitments,
   calculateDailyCashFlow,
   ultimoDiaMes,
+  hojeISO,
 } from "./calculations";
 import { gerarAlertas, FinanceAlert } from "./alerts";
 import { groupByCategory, GrupoPorCategoria } from "./entries";
-
-function hojeISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /**
  * Visão consolidada usada pela Home. Combina os hooks antigos (fonte real
@@ -175,12 +172,9 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
 
   const fluxoDiario = useMemo(() => {
     if (loading || saldoReal === null) return [];
-    const hoje = new Date();
-    const inicio = new Date(hoje);
-    inicio.setDate(1);
     return calculateDailyCashFlow(
       entries,
-      inicio.toISOString().slice(0, 10),
+      `${mes}-01`,
       ultimoDiaMes(mes),
       saldoReal
     );

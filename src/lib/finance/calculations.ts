@@ -202,6 +202,15 @@ export interface PontoFluxoDiario {
  * granularidade possível até as contas fixas terem dia de vencimento real
  * (Fase 6).
  */
+function proximoDiaISO(diaISO: string): string {
+  const [ano, mes, dia] = diaISO.split("-").map(Number);
+  // Construtor local (ano, mês, dia) — nunca faz parse de string como UTC,
+  // diferente de `new Date(diaISO)`. Sem isso o loop abaixo herdava o
+  // mesmo bug de fuso horário do resto do app.
+  const d = new Date(ano, mes - 1, dia + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function calculateDailyCashFlow(
   entries: FinancialEntry[],
   deISO: string,
@@ -209,18 +218,18 @@ export function calculateDailyCashFlow(
   saldoInicial: number
 ): PontoFluxoDiario[] {
   const dias: PontoFluxoDiario[] = [];
-  const cursor = new Date(deISO);
-  const fim = new Date(ateISO);
-  while (cursor <= fim) {
-    const data = cursor.toISOString().slice(0, 10);
-    dias.push({ data, entradas: 0, saidas: 0, saldoAcumulado: 0 });
-    cursor.setDate(cursor.getDate() + 1);
+  let cursor = deISO;
+  while (cursor <= ateISO) {
+    dias.push({ data: cursor, entradas: 0, saidas: 0, saldoAcumulado: 0 });
+    cursor = proximoDiaISO(cursor);
   }
   const porDia = new Map(dias.map((d) => [d.data, d]));
 
   for (const e of entries) {
     if (!isEntryActive(e)) continue;
-    const dia = (e.paidAt ?? e.dueDate).slice(0, 10);
+    // paidAt é timestamp completo (com hora) — precisa converter pro dia
+    // certo no fuso de Brasília, não cortar a string UTC direto.
+    const dia = e.paidAt ? diaISOde(new Date(e.paidAt).getTime()) : e.dueDate.slice(0, 10);
     const ponto = porDia.get(dia);
     if (!ponto) continue;
     if (e.type === "income") ponto.entradas += e.amount;
