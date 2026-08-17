@@ -2,6 +2,7 @@ import {
   FinancialEntry,
   FinancialEntryStatus,
   formatarMoeda,
+  Gasto,
 } from "@/lib/types";
 
 /**
@@ -378,6 +379,21 @@ export function calculateGastavelPorDia(
 ): number | null {
   if (saldoAtual === null || diasRestantes <= 0) return null;
   return (saldoAtual - reservaMeta) / diasRestantes;
+}
+
+/**
+ * Total de gastos de um dia específico, pra calcular "ainda pode gastar
+ * hoje". Deliberadamente ignora ajuste de conciliação (`ajusteConciliacaoId`):
+ * esse valor já foi descontado do saldo real no momento da conferência
+ * (é por isso que `saldoAtual`/`calculateGastavelPorDia` já ficam mais
+ * baixos dali pra frente) — contar ele de novo aqui subtrairia a mesma
+ * correção duas vezes, e um ajuste normalmente cobre semanas de gasto
+ * não lançado, não "gasto de hoje" especificamente.
+ */
+export function calculateGastoDoDia(gastos: Gasto[], diaISO: string): number {
+  return gastos
+    .filter((g) => diaISOde(g.criadoEm) === diaISO && !g.ajusteConciliacaoId)
+    .reduce((acc, g) => acc + g.valor, 0);
 }
 
 export function formatMoney(valor: number): string {

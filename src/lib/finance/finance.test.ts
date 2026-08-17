@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FinancialEntry, parcelasRestantesEm, Parcela } from "../types";
+import { FinancialEntry, parcelasRestantesEm, Parcela, Gasto } from "../types";
 import {
   calculateProjectedBalance,
   calculateOverdueEntries,
@@ -8,6 +8,7 @@ import {
   deriveDisplayStatus,
   calculateDreBreakdown,
   calculateGastavelPorDia,
+  calculateGastoDoDia,
   diasRestantesNoMes,
   calculatePendingIncome,
   calculatePendingExpenses,
@@ -212,6 +213,42 @@ describe("gastável por dia", () => {
 
   test("hojeISO devolve uma data no formato AAAA-MM-DD", () => {
     assert.match(hojeISO(), /^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+function gasto(parcial: Partial<Gasto>): Gasto {
+  return {
+    id: "g1",
+    descricao: "teste",
+    valor: 50,
+    categoria: "Outros",
+    mes: "2026-08",
+    criadoEm: new Date("2026-08-17T12:00:00Z").getTime(), // meio-dia UTC = manhã em Brasília, mesmo dia
+    ...parcial,
+  };
+}
+
+describe("gasto do dia — não conta ajuste de conciliação duas vezes", () => {
+  test("ajuste de conciliação de hoje não entra no total de hoje", () => {
+    const gastos = [
+      gasto({ id: "1", valor: 30 }),
+      gasto({ id: "2", valor: 277.32, ajusteConciliacaoId: "conc1" }),
+    ];
+    // só o gasto normal conta — o ajuste já foi descontado do saldo real
+    // na hora da conciliação, contar de novo aqui subtrairia duas vezes
+    assert.equal(calculateGastoDoDia(gastos, "2026-08-17"), 30);
+  });
+
+  test("gasto de outro dia não entra", () => {
+    const gastos = [
+      gasto({ id: "1", valor: 30, criadoEm: new Date("2026-08-16T12:00:00Z").getTime() }),
+    ];
+    assert.equal(calculateGastoDoDia(gastos, "2026-08-17"), 0);
+  });
+
+  test("estorno (valor negativo) do dia entra normalmente — só ajuste é especial", () => {
+    const gastos = [gasto({ id: "1", valor: -20 })];
+    assert.equal(calculateGastoDoDia(gastos, "2026-08-17"), -20);
   });
 });
 

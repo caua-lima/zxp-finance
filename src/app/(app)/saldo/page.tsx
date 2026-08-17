@@ -19,8 +19,8 @@ import { useToast } from "@/components/Toast";
 import {
   diasRestantesNoMes,
   calculateGastavelPorDia,
+  calculateGastoDoDia,
   hojeISO,
-  diaISOde,
 } from "@/lib/finance/calculations";
 import { usePushNotifications } from "@/lib/usePushNotifications";
 
@@ -90,9 +90,7 @@ export default function SaldoPage() {
   const diasRestantes = diasRestantesNoMes(hoje);
   const gastavelPorDia = calculateGastavelPorDia(saldoAtual, reservaMeta, diasRestantes);
 
-  const totalGastoHoje = gastos
-    .filter((g) => diaISOde(g.criadoEm) === hoje)
-    .reduce((acc, g) => acc + g.valor, 0);
+  const totalGastoHoje = calculateGastoDoDia(gastos, hoje);
   const aindaPodeGastarHoje = gastavelPorDia === null ? null : gastavelPorDia - totalGastoHoje;
 
   function handleSubmit(e: FormEvent) {
