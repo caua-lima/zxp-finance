@@ -53,6 +53,15 @@ export function useGanhos(mes: string) {
     [todos, mes]
   );
 
+  // Documento sem `tipo` reconhecido não bate em nenhum filtro acima —
+  // fica invisível em qualquer tela do app pra sempre, mas continua
+  // ocupando espaço na coleção. Normalmente sobra de edição manual direto
+  // no Firestore. Exposto à parte pra dar um jeito de ver/limpar isso.
+  const orfaos = useMemo(
+    () => todos.filter((g) => g.tipo !== "recorrente" && g.tipo !== "pontual"),
+    [todos]
+  );
+
   async function adicionarRecorrente(
     descricao: string,
     valor: number,
@@ -165,6 +174,33 @@ export function useGanhos(mes: string) {
     }
   }
 
+  /**
+   * Exclusão direta de um documento órfão (sem `tipo` reconhecido) — não
+   * passa pela regra "arquive antes de excluir" porque esse documento não
+   * é um ganho normal navegável pela UI, é sobra de dado malformado.
+   */
+  async function removerOrfao(id: string) {
+    if (!user) return;
+    const ganho = todos.find((g) => g.id === id);
+    if (!ganho) return;
+    try {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      anexarAuditLog(batch, user.uid, user.email, {
+        action: "archived",
+        entityType: "ganho",
+        entityId: id,
+        summary: `Exclusão de documento órfão (sem tipo reconhecido): "${ganho.descricao ?? id}"`,
+        before: { ...ganho },
+      });
+      batch.delete(ref);
+      await batch.commit();
+      setErro(null);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
   async function alternarAtivo(id: string, ativo: boolean) {
     if (!user) return;
     const ganho = todos.find((g) => g.id === id);
@@ -251,6 +287,7 @@ export function useGanhos(mes: string) {
   return {
     recorrentes,
     pontuais,
+    orfaos,
     loading,
     erro,
     total,
@@ -260,6 +297,7 @@ export function useGanhos(mes: string) {
     adicionarPontual,
     editar,
     remover,
+    removerOrfao,
     alternarAtivo,
     alternarArquivadoPontual,
     marcarRecebidoPontual,
