@@ -6,7 +6,6 @@ import {
   onSnapshot,
   addDoc,
   doc,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -72,13 +71,27 @@ export function useContasFixas() {
     dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) {
     if (!user) return;
+    const conta = contas.find((c) => c.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "contasFixas", id), {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "contasFixas", id);
+      batch.update(ref, {
         nome: dados.nome,
         valor: dados.valor,
         categoria: dados.categoria,
         diaVencimento: dados.diaVencimento ?? null,
       });
+      if (conta) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: "updated",
+          entityType: "contaFixa",
+          entityId: id,
+          summary: `"${conta.nome}" editada`,
+          before: { nome: conta.nome, valor: conta.valor, categoria: conta.categoria, diaVencimento: conta.diaVencimento },
+          after: dados,
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));

@@ -6,7 +6,6 @@ import {
   onSnapshot,
   addDoc,
   doc,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -81,15 +80,37 @@ export function useAssinaturas() {
     }
   ) {
     if (!user) return;
+    const assinatura = assinaturas.find((a) => a.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "assinaturas", id), {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "assinaturas", id);
+      const dadosGravados = {
         nome: dados.nome,
         valor: dados.valor,
         cartao: dados.cartao || null,
         naFatura: !!dados.naFatura,
         diaRenovacao: dados.diaRenovacao ?? null,
         usoPercebido: dados.usoPercebido ?? null,
-      });
+      };
+      batch.update(ref, dadosGravados);
+      if (assinatura) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: "updated",
+          entityType: "assinatura",
+          entityId: id,
+          summary: `"${assinatura.nome}" editada`,
+          before: {
+            nome: assinatura.nome,
+            valor: assinatura.valor,
+            cartao: assinatura.cartao,
+            naFatura: assinatura.naFatura,
+            diaRenovacao: assinatura.diaRenovacao,
+            usoPercebido: assinatura.usoPercebido,
+          },
+          after: dadosGravados,
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));

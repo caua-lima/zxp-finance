@@ -6,7 +6,6 @@ import {
   onSnapshot,
   addDoc,
   doc,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -91,15 +90,40 @@ export function useParcelas() {
     }
   ) {
     if (!user) return;
+    const parcela = parcelas.find((p) => p.id === id);
     try {
       const { cartao, mesReferencia, ...resto } = dados;
-      await updateDoc(doc(db, "usuarios", user.uid, "parcelas", id), {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "parcelas", id);
+      const dadosGravados = {
         ...resto,
         dividida: !!dados.dividida,
         naFatura: dados.tipo === "cartao" ? !!dados.naFatura : false,
         cartao: dados.tipo === "cartao" && cartao ? cartao : null,
         mesReferencia: mesReferencia ?? mesPadrao(),
-      });
+      };
+      batch.update(ref, dadosGravados);
+      if (parcela) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: "updated",
+          entityType: "parcela",
+          entityId: id,
+          summary: `"${parcela.nome}" editada`,
+          before: {
+            nome: parcela.nome,
+            valorParcela: parcela.valorParcela,
+            totalParcelas: parcela.totalParcelas,
+            parcelasRestantes: parcela.parcelasRestantes,
+            tipo: parcela.tipo,
+            dividida: parcela.dividida,
+            naFatura: parcela.naFatura,
+            cartao: parcela.cartao,
+            mesReferencia: parcela.mesReferencia,
+          },
+          after: dadosGravados,
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));

@@ -6,7 +6,6 @@ import {
   onSnapshot,
   addDoc,
   doc,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -108,12 +107,26 @@ export function useGanhos(mes: string) {
     dados: { descricao: string; valor: number; categoriaReceita?: string }
   ) {
     if (!user) return;
+    const ganho = todos.find((g) => g.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "ganhos", id), {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      batch.update(ref, {
         descricao: dados.descricao,
         valor: dados.valor,
         categoriaReceita: dados.categoriaReceita ?? null,
       });
+      if (ganho) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: "updated",
+          entityType: "ganho",
+          entityId: id,
+          summary: `"${ganho.descricao}" editado`,
+          before: { descricao: ganho.descricao, valor: ganho.valor, categoriaReceita: ganho.categoriaReceita },
+          after: dados,
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));

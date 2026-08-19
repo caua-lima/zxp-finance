@@ -6,7 +6,6 @@ import {
   onSnapshot,
   addDoc,
   doc,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -64,8 +63,22 @@ export function useGastos() {
     dados: { descricao: string; valor: number; categoria: string }
   ) {
     if (!user) return;
+    const gasto = todos.find((g) => g.id === id);
     try {
-      await updateDoc(doc(db, "usuarios", user.uid, "gastos", id), dados);
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "gastos", id);
+      batch.update(ref, dados);
+      if (gasto) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: "updated",
+          entityType: "gasto",
+          entityId: id,
+          summary: `"${gasto.descricao}" editado`,
+          before: { descricao: gasto.descricao, valor: gasto.valor, categoria: gasto.categoria },
+          after: dados,
+        });
+      }
+      await batch.commit();
       setErro(null);
     } catch (e) {
       setErro(mensagemErro(e));
