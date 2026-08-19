@@ -88,6 +88,16 @@ describe("recebido vs previsto / atraso", () => {
     assert.equal(calculateOverdueEntries([recebido], "2026-08-15").length, 0);
   });
 
+  test("ganho pendente nunca vira 'atrasado' na exibição, mesmo com dueDate no passado (dueDate de ganho é sempre dia 1 do mês, não é um vencimento real)", () => {
+    const ganhoPendente = entry({ type: "income", status: "planned", dueDate: "2026-08-01" });
+    assert.equal(deriveDisplayStatus(ganhoPendente, "2026-08-15"), "planned");
+  });
+
+  test("despesa pendente com dueDate no passado continua virando 'atrasado'", () => {
+    const despesaPendente = entry({ type: "expense", status: "pending", dueDate: "2026-08-01" });
+    assert.equal(deriveDisplayStatus(despesaPendente, "2026-08-15"), "overdue");
+  });
+
   test("calculateUpcomingCommitments só pega despesa pendente dentro da janela", () => {
     const entries = [
       entry({ id: "a", dueDate: "2026-08-16" }), // 1 dia
@@ -185,7 +195,7 @@ describe("gastável por dia", () => {
     const antes = calculateGastavelPorDia(4000, 1000, 30);
     const depoisDeGastar500 = calculateGastavelPorDia(3500, 1000, 30);
     assert.equal(antes, 100);
-    assert.equal(depoisDeGastar500, (3500 - 1000) / 30);
+    assert.equal(depoisDeGastar500, Math.round(((3500 - 1000) / 30) * 100) / 100);
     assert.ok(depoisDeGastar500! < antes!);
   });
 

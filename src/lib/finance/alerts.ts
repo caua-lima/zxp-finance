@@ -27,7 +27,6 @@ export interface DadosAlertas {
   hojeISO: string;
   mes: string;
   saldoAtualizadoEm: number | null; // timestamp da última conferência de saldo, ou null se nunca foi definido
-  reservaMinima?: number;
   parcelasTerminando: { id: string; nome: string }[]; // parcelasRestantesEm(p, mes) === 1
   assinaturasParaRevisar: { id: string; nome: string }[]; // usoPercebido === "revisar"
   totalFatura: number;
@@ -76,20 +75,6 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       impacto: formatarMoeda(dados.saldoProjetado),
       cta: "Ver detalhamento",
       href: "/",
-    });
-  } else if (
-    dados.saldoProjetado !== null &&
-    dados.reservaMinima !== undefined &&
-    dados.saldoProjetado < dados.reservaMinima
-  ) {
-    alertas.push({
-      key: `abaixo-da-reserva__${dados.mes}`,
-      severidade: "warning",
-      titulo: "Saldo projetado abaixo da sua reserva mínima",
-      contexto: `Reserva configurada: ${formatarMoeda(dados.reservaMinima)}.`,
-      impacto: formatarMoeda(dados.saldoProjetado),
-      cta: "Rever compromissos do mês",
-      href: "/agenda",
     });
   }
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
-import { Conciliacao, formatarMoeda, mesPadrao } from "./types";
+import { Conciliacao, arredondarCentavos, formatarMoeda, mesPadrao } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
@@ -58,7 +58,7 @@ export function useConciliacoes() {
     descricaoAjuste?: string;
   }) {
     if (!user) return;
-    const diferenca = params.saldoInformado - params.saldoEsperado;
+    const diferenca = arredondarCentavos(params.saldoInformado - params.saldoEsperado);
     const ajusteCriado = params.criarAjuste && diferenca !== 0;
 
     try {
@@ -78,7 +78,7 @@ export function useConciliacoes() {
 
       if (ajusteCriado) {
         const refGasto = doc(collection(db, "usuarios", user.uid, "gastos"));
-        const valorAjuste = params.saldoEsperado - params.saldoInformado;
+        const valorAjuste = arredondarCentavos(params.saldoEsperado - params.saldoInformado);
         batch.set(refGasto, {
           descricao: `Ajuste de conciliação: ${params.descricaoAjuste}`,
           valor: valorAjuste,

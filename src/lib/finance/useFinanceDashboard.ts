@@ -124,8 +124,15 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     [entries]
   );
 
+  // Ajuste de conciliação normalmente cobre semanas de gasto não lançado
+  // de uma vez só — incluído na distribuição por categoria, ele domina o
+  // gráfico sozinho e não representa um padrão real de consumo do mês.
+  // Fica de fora daqui (mas continua contando no DRE e no total do mês).
   const distribuicaoGastos: GrupoPorCategoria[] = useMemo(
-    () => groupByCategory(entries.filter((e) => e.type === "expense")),
+    () =>
+      groupByCategory(
+        entries.filter((e) => e.type === "expense" && e.source !== "adjustment")
+      ),
     [entries]
   );
 

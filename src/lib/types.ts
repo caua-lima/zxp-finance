@@ -153,6 +153,14 @@ export function formatarMoeda(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+// Soma/subtração de dinheiro em ponto flutuante acumula resíduo binário
+// (ex: 277.32000000000016, visto de verdade em produção numa conciliação).
+// Arredondar pra centavo no ponto de saída de qualquer cálculo evita esse
+// resíduo se propagar/compostar por saldo, conciliação, gastável-por-dia etc.
+export function arredondarCentavos(valor: number): number {
+  return Math.round(valor * 100) / 100;
+}
+
 // Desconto padrão sobre tudo que é emitido (nota/recibo) — salário + comissões.
 export const TAXA_IMPOSTO = 0.06;
 

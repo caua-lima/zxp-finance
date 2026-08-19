@@ -2,6 +2,7 @@ import {
   FinancialEntry,
   FinancialEntryStatus,
   formatarMoeda,
+  arredondarCentavos,
   Gasto,
 } from "@/lib/types";
 
@@ -10,11 +11,6 @@ import {
  * tudo recebe FinancialEntry[] já montado (ver src/lib/finance/adapters.ts)
  * e devolve números/listas simples, fáceis de testar.
  */
-
-export function getCompetenceMonth(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 const STATUS_PENDENTE: FinancialEntryStatus[] = ["planned", "pending"];
 const STATUS_LIQUIDADO: FinancialEntryStatus[] = ["paid", "received"];
@@ -168,27 +164,6 @@ export function calculateOverdueEntries(
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
-/**
- * Receita prevista cuja data esperada já passou e ainda não foi marcada
- * como recebida — só existe pra ganhos, porque é o único tipo de entry
- * com rastreamento real de recebido/previsto (ver Ganho.recebido).
- */
-export function calculateOverdueIncome(
-  entries: FinancialEntry[],
-  hojeISO: string
-): FinancialEntry[] {
-  const hoje = new Date(hojeISO);
-  return entries
-    .filter(
-      (e) =>
-        e.type === "income" &&
-        isEntryPending(e) &&
-        isEntryActive(e) &&
-        new Date(e.dueDate) < hoje
-    )
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-}
-
 export interface PontoFluxoDiario {
   data: string; // "YYYY-MM-DD"
   entradas: number;
@@ -246,15 +221,23 @@ export function calculateDailyCashFlow(
 }
 
 /**
- * Status "de vitrine": igual ao status real, exceto que pendente com
- * vencimento no passado vira "overdue" só pra exibição (o dado guardado
- * continua "pending" — atraso é derivado da data, não é um estado próprio).
+ * Status "de vitrine": igual ao status real, exceto que despesa pendente
+ * com vencimento no passado vira "overdue" só pra exibição (o dado
+ * guardado continua "pending" — atraso é derivado da data, não é um
+ * estado próprio). Restrito a despesa: ganho sempre tem `dueDate` fixo no
+ * dia 1 do mês (ver adapters.ts), então aplicar a mesma regra nele faria
+ * qualquer entrada ainda não marcada como recebida virar "Atrasado" a
+ * partir do dia 2 — um falso alarme, não um atraso real.
  */
 export function deriveDisplayStatus(
   entry: FinancialEntry,
   hojeISO: string
 ): FinancialEntryStatus | "overdue" {
-  if (isEntryPending(entry) && new Date(entry.dueDate) < new Date(hojeISO)) {
+  if (
+    entry.type === "expense" &&
+    isEntryPending(entry) &&
+    new Date(entry.dueDate) < new Date(hojeISO)
+  ) {
     return "overdue";
   }
   return entry.status;
@@ -378,7 +361,7 @@ export function calculateGastavelPorDia(
   diasRestantes: number
 ): number | null {
   if (saldoAtual === null || diasRestantes <= 0) return null;
-  return (saldoAtual - reservaMeta) / diasRestantes;
+  return arredondarCentavos((saldoAtual - reservaMeta) / diasRestantes);
 }
 
 /**
@@ -391,9 +374,11 @@ export function calculateGastavelPorDia(
  * não lançado, não "gasto de hoje" especificamente.
  */
 export function calculateGastoDoDia(gastos: Gasto[], diaISO: string): number {
-  return gastos
-    .filter((g) => diaISOde(g.criadoEm) === diaISO && !g.ajusteConciliacaoId)
-    .reduce((acc, g) => acc + g.valor, 0);
+  return arredondarCentavos(
+    gastos
+      .filter((g) => diaISOde(g.criadoEm) === diaISO && !g.ajusteConciliacaoId)
+      .reduce((acc, g) => acc + g.valor, 0)
+  );
 }
 
 export function formatMoney(valor: number): string {

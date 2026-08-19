@@ -69,8 +69,14 @@ export default function DrePage() {
     faturas.erro ||
     dre.erro;
 
+  // Ajuste de conciliação fica fora da quebra por categoria — costuma
+  // cobrir semanas de gasto não lançado de uma vez, e dominaria o gráfico
+  // sozinho sem representar um padrão real de consumo do mês.
   const despesasPorCategoria = useMemo(
-    () => groupByCategory(dre.entriesAtual.filter((e) => e.type === "expense")),
+    () =>
+      groupByCategory(
+        dre.entriesAtual.filter((e) => e.type === "expense" && e.source !== "adjustment")
+      ),
     [dre.entriesAtual]
   );
   const totalDespesasEntries =
