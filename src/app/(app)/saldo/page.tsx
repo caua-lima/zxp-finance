@@ -16,6 +16,8 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 import { useToast } from "@/components/Toast";
+import { SkeletonLista } from "@/components/Skeleton";
+import { EmptyState } from "@/components/EmptyState";
 import {
   diasRestantesNoMes,
   calculateGastavelPorDia,
@@ -23,6 +25,7 @@ import {
   hojeISO,
 } from "@/lib/finance/calculations";
 import { usePushNotifications } from "@/lib/usePushNotifications";
+import { useMonthClose } from "@/lib/useMonthClose";
 
 function agruparPorCategoria(gastos: Gasto[]) {
   const grupos = new Map<string, Gasto[]>();
@@ -57,6 +60,7 @@ export default function SaldoPage() {
   const conciliacoes = useConciliacoes();
   const toast = useToast();
   const push = usePushNotifications();
+  const monthClose = useMonthClose(mesPadrao());
 
   const [texto, setTexto] = useState("");
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
@@ -337,6 +341,7 @@ export default function SaldoPage() {
       >
         <div className="flex gap-2">
           <input
+            id="saldo-form-texto"
             placeholder='Ex: "Gastei 100 reais de gasolina"'
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
@@ -369,12 +374,17 @@ export default function SaldoPage() {
         </span>
       </div>
 
+      {monthClose.fechado && (
+        <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
+          🔒 Mês fechado — estornar gasto deste mês fica bloqueado. Reabra na
+          aba DRE pra corrigir algo.
+        </div>
+      )}
+
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={4} />
       ) : gastosDoMes.length === 0 ? (
-        <p className="text-sm text-text-faint">
-          Nenhum gasto registrado neste mês.
-        </p>
+        <EmptyState mensagem="Nenhum gasto registrado neste mês." alvoId="saldo-form-texto" />
       ) : (
         <div className="space-y-5">
           {grupos.map(([categoria, itens]) => (
@@ -395,6 +405,7 @@ export default function SaldoPage() {
                     onEditar={editar}
                     onEstornar={estornar}
                     onRemover={remover}
+                    mesFechado={monthClose.fechado}
                   />
                 ))}
               </ul>
@@ -452,6 +463,7 @@ function ItemGasto({
   onEditar,
   onEstornar,
   onRemover,
+  mesFechado,
 }: {
   gasto: Gasto;
   onEditar: (
@@ -460,6 +472,7 @@ function ItemGasto({
   ) => void;
   onEstornar: (id: string, motivo: string) => void;
   onRemover: (id: string, motivo: string) => void;
+  mesFechado?: boolean;
 }) {
   const toast = useToast();
   const [editando, setEditando] = useState(false);
@@ -563,9 +576,14 @@ function ItemGasto({
             </button>
             <button
               onClick={() => setConfirmando(true)}
-              className="text-text-faint hover:text-negative text-sm"
+              disabled={mesFechado}
+              className="text-text-faint hover:text-negative text-sm disabled:opacity-30 disabled:cursor-not-allowed"
               aria-label="Estornar"
-              title="Estornar (mantém no histórico + devolve o valor)"
+              title={
+                mesFechado
+                  ? "Mês fechado — reabra na aba DRE pra estornar"
+                  : "Estornar (mantém no histórico + devolve o valor)"
+              }
             >
               ↩
             </button>
