@@ -8,6 +8,8 @@ import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
+import { SkeletonLista } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
@@ -39,7 +41,7 @@ export default function FaturaPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={3} />
       ) : (
         <ul className="space-y-3">
           {faturas.map((f) => (
@@ -84,6 +86,7 @@ function ItemFatura({
   const [diaVencimento, setDiaVencimento] = useState(
     config.diaVencimento ? String(config.diaVencimento) : ""
   );
+  const toast = useToast();
 
   const percentualUsado = config.limite ? (fatura.valor / config.limite) * 100 : null;
 
@@ -94,6 +97,7 @@ function ItemFatura({
       diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
     });
     setEditandoConfig(false);
+    toast.sucesso(`Configuração de "${fatura.nome}" salva.`);
   }
 
   return (
@@ -107,7 +111,10 @@ function ItemFatura({
             className="w-32 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-brand text-right"
           />
           <button
-            onClick={() => onSalvar(fatura.nome, valor)}
+            onClick={() => {
+              onSalvar(fatura.nome, valor);
+              toast.sucesso(`Fatura de "${fatura.nome}" atualizada.`);
+            }}
             disabled={!alterado || bloqueado}
             className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >

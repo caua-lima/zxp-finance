@@ -7,6 +7,9 @@ import { useAssinaturas } from "@/lib/useAssinaturas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { SkeletonLista } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
 
 function agruparPorCartao(assinaturas: Assinatura[]) {
   const grupos = new Map<string, Assinatura[]>();
@@ -41,6 +44,7 @@ export default function AssinaturasPage() {
   const [cartao, setCartao] = useState("");
   const [naFatura, setNaFatura] = useState(false);
   const [diaRenovacao, setDiaRenovacao] = useState("");
+  const toast = useToast();
 
   const grupos = useMemo(() => agruparPorCartao(assinaturas), [assinaturas]);
 
@@ -56,6 +60,7 @@ export default function AssinaturasPage() {
     adicionar(nomeAparado, valor, cartao || undefined, naFatura, dia).catch(
       console.error
     );
+    toast.sucesso(`"${nomeAparado}" adicionada.`);
   }
 
   return (
@@ -69,6 +74,7 @@ export default function AssinaturasPage() {
       >
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <input
+            id="assinaturas-form-nome"
             placeholder="Nome (ex: Netflix)"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
@@ -145,11 +151,12 @@ export default function AssinaturasPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={4} />
       ) : assinaturas.length === 0 ? (
-        <p className="text-sm text-text-faint">
-          Nenhuma assinatura cadastrada.
-        </p>
+        <EmptyState
+          mensagem="Nenhuma assinatura cadastrada."
+          alvoId="assinaturas-form-nome"
+        />
       ) : (
         <div className="space-y-5">
           {grupos.map(([grupoCartao, itens]) => (
@@ -218,6 +225,7 @@ function ItemAssinatura({
   const [usoPercebido, setUsoPercebido] = useState<UsoPercebidoAssinatura | "">(
     assinatura.usoPercebido ?? ""
   );
+  const toast = useToast();
 
   function salvar() {
     const nomeAparado = nome.trim();
@@ -231,6 +239,7 @@ function ItemAssinatura({
       usoPercebido: usoPercebido || undefined,
     });
     setEditando(false);
+    toast.sucesso("Assinatura atualizada.");
   }
 
   if (editando) {
@@ -316,7 +325,10 @@ function ItemAssinatura({
         <input
           type="checkbox"
           checked={assinatura.ativa}
-          onChange={(e) => onAlternarAtiva(assinatura.id, e.target.checked)}
+          onChange={(e) => {
+            onAlternarAtiva(assinatura.id, e.target.checked);
+            toast.sucesso(e.target.checked ? "Assinatura reativada." : "Assinatura arquivada.");
+          }}
           className="h-4 w-4 shrink-0 accent-brand"
         />
         <div className="min-w-0">
@@ -370,6 +382,7 @@ function ItemAssinatura({
         pedirMotivo
         onConfirmar={(motivo) => {
           onRemover(assinatura.id, motivo ?? "");
+          toast.sucesso("Assinatura excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

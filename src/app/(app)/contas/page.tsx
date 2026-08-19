@@ -7,6 +7,9 @@ import { useContasFixas } from "@/lib/useContasFixas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { SkeletonLista } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
 
 function agruparPorCategoria(contas: ContaFixa[]) {
   const grupos = new Map<string, ContaFixa[]>();
@@ -43,6 +46,7 @@ export default function ContasPage() {
   const [categoria, setCategoria] = useState<string>(CATEGORIAS_CONTAS[0]);
   const [categoriaCustom, setCategoriaCustom] = useState("");
   const [diaVencimento, setDiaVencimento] = useState("");
+  const toast = useToast();
 
   const grupos = useMemo(() => agruparPorCategoria(contas), [contas]);
 
@@ -60,6 +64,7 @@ export default function ContasPage() {
     setCategoriaCustom("");
     setDiaVencimento("");
     adicionar(nomeAparado, valor, cat, dia).catch(console.error);
+    toast.sucesso(`"${nomeAparado}" adicionada.`);
   }
 
   return (
@@ -84,6 +89,7 @@ export default function ContasPage() {
             ))}
           </select>
           <input
+            id="contas-form-nome"
             placeholder="Nome (ex: Internet)"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
@@ -127,11 +133,12 @@ export default function ContasPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={4} />
       ) : contas.length === 0 ? (
-        <p className="text-sm text-text-faint">
-          Nenhuma conta fixa cadastrada.
-        </p>
+        <EmptyState
+          mensagem="Nenhuma conta fixa cadastrada."
+          alvoId="contas-form-nome"
+        />
       ) : (
         <div className="space-y-5">
           {grupos.map(([nomeCategoria, itens]) => (
@@ -218,6 +225,7 @@ function ItemConta({
   const [diaVencimento, setDiaVencimento] = useState(
     conta.diaVencimento ? String(conta.diaVencimento) : ""
   );
+  const toast = useToast();
 
   function salvar() {
     const nomeAparado = nome.trim();
@@ -229,6 +237,7 @@ function ItemConta({
       diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
     });
     setEditando(false);
+    toast.sucesso("Conta atualizada.");
   }
 
   if (editando) {
@@ -294,7 +303,10 @@ function ItemConta({
         <input
           type="checkbox"
           checked={conta.ativa}
-          onChange={(e) => onAlternarAtiva(conta.id, e.target.checked)}
+          onChange={(e) => {
+            onAlternarAtiva(conta.id, e.target.checked);
+            toast.sucesso(e.target.checked ? "Conta reativada." : "Conta arquivada.");
+          }}
           className="h-4 w-4 shrink-0 accent-brand"
         />
         <span className="text-sm truncate">
@@ -334,6 +346,7 @@ function ItemConta({
         pedirMotivo
         onConfirmar={(motivo) => {
           onRemover(conta.id, motivo ?? "");
+          toast.sucesso("Conta excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

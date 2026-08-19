@@ -9,6 +9,9 @@ import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { SkeletonLista } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
 
 type Tipo = "recorrente" | "pontual";
 
@@ -17,6 +20,7 @@ export default function GanhosPage() {
   const {
     recorrentes,
     pontuais,
+    orfaos,
     loading,
     erro,
     total,
@@ -26,6 +30,7 @@ export default function GanhosPage() {
     adicionarPontual,
     editar,
     remover,
+    removerOrfao,
     alternarAtivo,
     alternarArquivadoPontual,
     marcarRecebidoPontual,
@@ -36,6 +41,7 @@ export default function GanhosPage() {
   const [valor, setValor] = useState(0);
   const [tipo, setTipo] = useState<Tipo>("pontual");
   const [categoriaReceita, setCategoriaReceita] = useState("");
+  const toast = useToast();
 
   function estaRecebido(g: Ganho): boolean {
     return g.tipo === "recorrente" ? pagamentos.estaPago("ganho", g.id) : !!g.recebido;
@@ -60,6 +66,7 @@ export default function GanhosPage() {
     } else {
       adicionarPontual(desc, valor, categoriaReceita || undefined).catch(console.error);
     }
+    toast.sucesso(`"${desc}" adicionado.`);
   }
 
   return (
@@ -70,6 +77,7 @@ export default function GanhosPage() {
       <form onSubmit={handleSubmit} className="space-y-2 mb-6">
         <div className="flex gap-2 flex-col sm:flex-row">
           <input
+            id="ganhos-form-descricao"
             placeholder="Descrição (ex: Salário, Comissão)"
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
@@ -149,7 +157,7 @@ export default function GanhosPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={4} />
       ) : (
         <div className="space-y-6">
           <Secao
@@ -174,8 +182,81 @@ export default function GanhosPage() {
             estaRecebido={estaRecebido}
             onAlternarRecebido={alternarRecebido}
           />
+          {orfaos.length > 0 && (
+            <SecaoOrfaos itens={orfaos} onRemover={removerOrfao} />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Documentos de ganho sem `tipo` reconhecido (não é nem "recorrente" nem
+ * "pontual") — normalmente sobra de edição manual direto no Firestore.
+ * Ficam invisíveis em Recorrentes/Só este mês pra sempre, então precisam
+ * de um jeito de ver/limpar que não seja abrir o console do Firebase.
+ */
+function SecaoOrfaos({
+  itens,
+  onRemover,
+}: {
+  itens: Ganho[];
+  onRemover: (id: string) => void;
+}) {
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  const toast = useToast();
+  const alvo = itens.find((g) => g.id === confirmandoId) ?? null;
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-negative mb-2">
+        ⚠ Documentos com dado incompleto ({itens.length})
+      </h2>
+      <p className="text-xs text-text-faint mb-2">
+        Sem um &quot;tipo&quot; reconhecido — por isso não aparecem em
+        nenhuma lista acima. Provavelmente sobra de edição manual antiga.
+        Revise e exclua se não forem reais.
+      </p>
+      <ul className="space-y-2">
+        {itens.map((g) => (
+          <li
+            key={g.id}
+            className="flex items-center justify-between gap-2 rounded-xl border border-negative/30 bg-negative-soft/30 px-4 py-3"
+          >
+            <div className="min-w-0 text-xs">
+              <p className="text-sm text-text truncate">
+                {g.descricao || "(sem descrição)"}
+              </p>
+              <p className="text-text-faint">
+                valor: {formatarMoeda(g.valor ?? 0)} · id: {g.id}
+              </p>
+            </div>
+            <button
+              onClick={() => setConfirmandoId(g.id)}
+              className="shrink-0 text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+            >
+              Excluir
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <ConfirmModal
+        aberto={!!alvo}
+        titulo="Excluir documento incompleto"
+        descricao={`"${alvo?.descricao || alvo?.id}" será apagado de vez — isso não pode ser desfeito.`}
+        textoConfirmar="Excluir"
+        perigo
+        onConfirmar={() => {
+          if (alvo) {
+            onRemover(alvo.id);
+            toast.sucesso("Documento excluído.");
+          }
+          setConfirmandoId(null);
+        }}
+        onCancelar={() => setConfirmandoId(null)}
+      />
     </div>
   );
 }
@@ -208,7 +289,7 @@ function Secao({
     <div>
       <h2 className="text-sm font-medium text-text-muted mb-2">{titulo}</h2>
       {itens.length === 0 ? (
-        <p className="text-sm text-text-faint">{vazio}</p>
+        <EmptyState mensagem={vazio} alvoId="ganhos-form-descricao" />
       ) : (
         <ul className="space-y-2">
           {itens.map((g) => (
@@ -254,6 +335,7 @@ function ItemGanho({
   const [descricao, setDescricao] = useState(ganho.descricao);
   const [valor, setValor] = useState(ganho.valor);
   const [categoriaReceita, setCategoriaReceita] = useState(ganho.categoriaReceita ?? "");
+  const toast = useToast();
 
   const estaAtivo =
     ganho.tipo === "recorrente" ? ganho.ativo !== false : !ganho.arquivado;
@@ -264,6 +346,7 @@ function ItemGanho({
     if (!desc || !valor) return;
     onEditar(ganho.id, { descricao: desc, valor, categoriaReceita: categoriaReceita || undefined });
     setEditando(false);
+    toast.sucesso("Ganho atualizado.");
   }
 
   if (editando) {
@@ -320,7 +403,10 @@ function ItemGanho({
           <input
             type="checkbox"
             checked={estaAtivo}
-            onChange={(e) => onAlternarAtivo(ganho.id, e.target.checked)}
+            onChange={(e) => {
+              onAlternarAtivo(ganho.id, e.target.checked);
+              toast.sucesso(e.target.checked ? "Ganho reativado." : "Ganho arquivado.");
+            }}
             className="h-4 w-4 accent-brand"
           />
         )}
@@ -369,6 +455,7 @@ function ItemGanho({
         pedirMotivo
         onConfirmar={(motivo) => {
           onRemover(ganho.id, motivo ?? "");
+          toast.sucesso("Ganho excluído.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

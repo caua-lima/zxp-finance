@@ -16,6 +16,9 @@ import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { SkeletonLista } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
 
 export default function ParcelasPage() {
   const {
@@ -39,6 +42,7 @@ export default function ParcelasPage() {
   const [dividida, setDividida] = useState(false);
   const [naFatura, setNaFatura] = useState(false);
   const [mesInicio, setMesInicio] = useState(mesPadrao());
+  const toast = useToast();
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,6 +68,7 @@ export default function ParcelasPage() {
       cartao || undefined,
       mesInicio
     ).catch(console.error);
+    toast.sucesso(`"${nomeAparado}" adicionada.`);
     setMesInicio(mesPadrao());
   }
 
@@ -109,6 +114,7 @@ export default function ParcelasPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <input
+            id="parcelas-form-nome"
             placeholder={
               tipo === "cartao" ? "Nome (ex: Notebook)" : "Nome (ex: Carro)"
             }
@@ -203,9 +209,12 @@ export default function ParcelasPage() {
       <MonthSelector mes={mes} onChange={setMes} />
 
       {loading ? (
-        <p className="text-sm text-text-faint">Carregando...</p>
+        <SkeletonLista linhas={4} />
       ) : parcelas.length === 0 ? (
-        <p className="text-sm text-text-faint">Nenhuma parcela cadastrada.</p>
+        <EmptyState
+          mensagem="Nenhuma parcela cadastrada."
+          alvoId="parcelas-form-nome"
+        />
       ) : (
         <div className="space-y-5">
           <GrupoParcelas
@@ -318,6 +327,7 @@ function ItemParcelaQuitada({
   onRemover: (id: string, motivo: string) => void;
 }) {
   const [confirmando, setConfirmando] = useState(false);
+  const toast = useToast();
 
   return (
     <li className="flex items-center justify-between gap-2 rounded-xl border border-line-soft bg-surface-2/40 px-4 py-2.5 opacity-60">
@@ -330,7 +340,7 @@ function ItemParcelaQuitada({
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <button
-          onClick={() =>
+          onClick={() => {
             onEditar(parcela.id, {
               nome: parcela.nome,
               valorParcela: parcela.valorParcela,
@@ -341,8 +351,9 @@ function ItemParcelaQuitada({
               naFatura: parcela.naFatura,
               cartao: parcela.cartao,
               mesReferencia: mesPadrao(),
-            })
-          }
+            });
+            toast.sucesso(`"${parcela.nome}" reaberta.`);
+          }}
           className="text-xs text-text-faint hover:text-brand"
           title="Reabrir (voltar 1 parcela)"
         >
@@ -365,6 +376,7 @@ function ItemParcelaQuitada({
         pedirMotivo
         onConfirmar={(motivo) => {
           onRemover(parcela.id, motivo ?? "");
+          toast.sucesso("Parcela excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
@@ -400,6 +412,7 @@ function ItemParcela({
   const [mesReferencia, setMesReferencia] = useState(
     parcela.mesReferencia ?? mesPadrao()
   );
+  const toast = useToast();
 
   const restantesNoMes = parcelasRestantesEm(parcela, mes);
   const numeroNoMes = parcela.totalParcelas - restantesNoMes + 1;
@@ -422,6 +435,7 @@ function ItemParcela({
       mesReferencia,
     });
     setEditando(false);
+    toast.sucesso("Parcela atualizada.");
   }
 
   if (editando) {
@@ -598,7 +612,10 @@ function ItemParcela({
         </p>
         {parcela.parcelasRestantes > 0 && (
           <button
-            onClick={() => onDarBaixa(parcela.id)}
+            onClick={() => {
+              onDarBaixa(parcela.id);
+              toast.sucesso(`Baixa dada em "${parcela.nome}".`);
+            }}
             className="text-xs text-brand hover:text-brand-dark"
           >
             Dar baixa neste mês
