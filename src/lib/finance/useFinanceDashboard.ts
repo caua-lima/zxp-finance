@@ -14,7 +14,6 @@ import { useSaldo } from "@/lib/useSaldo";
 import { construirFinancialEntries } from "./adapters";
 import {
   calculateAvailableBalance,
-  calculateProjectedBalance,
   calculateMonthlyCashFlow,
   calculatePendingIncome,
   calculatePendingExpenses,
@@ -102,14 +101,14 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
 
   const saldoReal = saldoHook.saldo ? saldoHook.saldo.valor : null;
   const saldoDisponivel = calculateAvailableBalance(saldoReal);
-  const saldoProjetado = calculateProjectedBalance(saldoReal, entries, mes);
   const fluxoDoMes = useMemo(
     () => calculateMonthlyCashFlow(entries, mes),
     [entries, mes]
   );
-  // Só o que ainda não caiu na conta / ainda não saiu — o que já está
-  // refletido no saldo real fica de fora, pra não somar duas vezes com
-  // "Saldo disponível" (ver calculateProjectedBalance).
+  // Saldo é isolado de propósito (ver /saldo) — o valor que o usuário
+  // informa lá já É o que sobrou depois de pagar tudo, não "dinheiro que
+  // ainda vai entrar". "Entradas previstas" nunca deve ser somado a ele
+  // em nenhum KPI/alerta daqui, senão o mesmo salário conta duas vezes.
   const entradasPendentes = useMemo(
     () => calculatePendingIncome(entries, mes),
     [entries, mes]
@@ -156,7 +155,6 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     if (loading) return [];
     return gerarAlertas({
       entries,
-      saldoProjetado,
       hojeISO: hojeISO(),
       mes,
       saldoAtualizadoEm: saldoHook.saldo ? saldoHook.saldo.atualizadoEm : null,
@@ -169,7 +167,6 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
   }, [
     loading,
     entries,
-    saldoProjetado,
     mes,
     saldoHook.saldo,
     parcelasTerminando,
@@ -194,7 +191,6 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     erro,
     entries,
     saldoDisponivel,
-    saldoProjetado,
     fluxoDoMes,
     entradasPendentes,
     compromissosPendentes,

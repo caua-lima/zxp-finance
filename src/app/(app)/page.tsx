@@ -69,13 +69,14 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* B. KPIs principais */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <KpiCard
               label="Saldo disponível hoje"
               valor={dash.saldoDisponivel}
-              explicacao="Só o que está conferido de verdade (Mercado Pago)"
-              tooltip="Saldo real informado, sem somar nada previsto"
+              explicacao="Só o que está conferido de verdade — veja quanto dá pra gastar por dia em Saldo"
+              tooltip="Saldo real informado, isolado — nunca soma entrada nem previsão nenhuma"
               cor="text-brand"
+              destaque
             />
             <KpiCard
               label="Entradas previstas"
@@ -90,18 +91,6 @@ export default function DashboardPage() {
               explicacao="Contas, assinaturas, parcelas, fatura e gastos ainda não pagos"
               tooltip="Soma das despesas da competência que ainda não foram marcadas como pagas"
               cor="text-gold"
-            />
-            <KpiCard
-              label="Saldo projetado"
-              valor={dash.saldoProjetado}
-              explicacao="Disponível + previsto a receber − a pagar"
-              tooltip="Saldo disponível + entradas previstas − compromissos pendentes"
-              cor={
-                dash.saldoProjetado !== null && dash.saldoProjetado < 0
-                  ? "text-negative"
-                  : "text-positive"
-              }
-              destaque
             />
           </div>
 

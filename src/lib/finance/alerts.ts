@@ -23,7 +23,6 @@ export interface FinanceAlert {
 
 export interface DadosAlertas {
   entries: FinancialEntry[];
-  saldoProjetado: number | null;
   hojeISO: string;
   mes: string;
   saldoAtualizadoEm: number | null; // timestamp da última conferência de saldo, ou null se nunca foi definido
@@ -66,24 +65,12 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
     });
   }
 
-  if (dados.saldoProjetado !== null && dados.saldoProjetado < 0) {
-    alertas.push({
-      key: `saldo-negativo__${dados.mes}`,
-      severidade: "critical",
-      titulo: "Saldo projetado fica negativo este mês",
-      contexto: "Somando o que falta pagar e receber, o mês fecha no vermelho.",
-      impacto: formatarMoeda(dados.saldoProjetado),
-      cta: "Ver detalhamento",
-      href: "/",
-    });
-  }
-
   if (dados.saldoAtualizadoEm === null) {
     alertas.push({
       key: `saldo-nunca-conferido`,
       severidade: "info",
       titulo: "Você ainda não conferiu o saldo real",
-      contexto: "Sem isso, o saldo disponível e o projetado ficam imprecisos.",
+      contexto: "Sem isso, o saldo disponível fica impreciso.",
       impacto: "—",
       cta: "Conferir saldo",
       href: "/saldo",
@@ -92,8 +79,8 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
 
   // Passado o começo do mês, ganho ainda "não recebido" é bem mais provável
   // de ser esquecimento (dinheiro já caiu, ninguém marcou o toggle) do que
-  // uma previsão real — nudge leve, não é crítico, só pra não inflar o
-  // saldo projetado silenciosamente por semanas.
+  // uma previsão real — nudge leve, não é crítico, só pra manter "Entradas
+  // previstas" e a renda líquida usada no cálculo da fatura corretas.
   const diaDoMes = Number(dados.hojeISO.split("-")[2]);
   if (dados.entradasPendentes > 0 && diaDoMes >= 5) {
     alertas.push({
@@ -101,7 +88,7 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       severidade: "info",
       titulo: "Tem entrada prevista ainda não marcada como recebida",
       contexto:
-        "Se esse dinheiro já caiu na conta, marca como recebido em Ganhos — senão o saldo projetado conta ele a mais.",
+        "Se esse dinheiro já caiu na conta, marca como recebido em Ganhos — senão continua contando como \"previsto\" indefinidamente.",
       impacto: formatarMoeda(dados.entradasPendentes),
       cta: "Ver ganhos",
       href: "/ganhos",
