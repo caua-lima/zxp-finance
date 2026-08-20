@@ -151,6 +151,17 @@ export function IconAcesso(props: IconProps) {
   );
 }
 
+export function IconComissoes(props: IconProps) {
+  return base(
+    <>
+      <circle cx="7" cy="7" r="3" />
+      <circle cx="17" cy="17" r="3" />
+      <path d="M5 19 19 5" />
+    </>,
+    props
+  );
+}
+
 export function IconPerfil(props: IconProps) {
   return base(
     <>

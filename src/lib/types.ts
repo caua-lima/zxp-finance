@@ -96,6 +96,33 @@ export interface PerfilUsuario {
   atualizadoEm: number;
 }
 
+export interface ComissaoConfig {
+  valorReuniao: number;
+  valorVendaPerformance: number;
+  valorVendaAcelera: number;
+  atualizadoEm: number;
+}
+
+// Valores de referência informados — usados enquanto o usuário não salva
+// uma configuração própria (usuarios/{uid}/comissaoConfig/atual).
+export const COMISSAO_PADRAO: Omit<ComissaoConfig, "atualizadoEm"> = {
+  valorReuniao: 12,
+  valorVendaPerformance: 30,
+  valorVendaAcelera: 45,
+};
+
+export interface Comissao {
+  id: string; // = data (mesmo valor de `data`, doc por dia)
+  data: string; // "YYYY-MM-DD"
+  mes: string; // "YYYY-MM", derivado de `data` — pra filtrar por mês igual o resto do app
+  reunioes: number;
+  vendasPerformance: number;
+  vendasAcelera: number;
+  valorTotal: number; // calculado e gravado no momento do registro, com os valores vigentes então
+  criadoEm: number;
+  atualizadoEm: number;
+}
+
 export interface MonthClose {
   month: string;
   status: "open" | "closed";

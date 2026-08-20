@@ -22,6 +22,7 @@ import {
 } from "./adapters";
 import { sugerirCrescimentoCategorias, compararComBenchmarkIBGE } from "./sugestoes";
 import { GrupoPorCategoria } from "./entries";
+import { calcularComissaoDoDia } from "./comissoes";
 
 /**
  * Testes dos cálculos financeiros críticos (Fase 11). Roda com o test
@@ -372,5 +373,24 @@ describe("sugestões — benchmark IBGE", () => {
     const comparacao = compararComBenchmarkIBGE([grupo("Lazer", 100)], 1);
     assert.equal(comparacao.length, 3); // só Habitação, Transporte, Alimentação
     assert.ok(!comparacao.some((c) => c.categoria === "Lazer"));
+  });
+});
+
+describe("comissão do dia", () => {
+  const valores = { valorReuniao: 12, valorVendaPerformance: 30, valorVendaAcelera: 45 };
+
+  test("multiplica cada contagem pelo valor unitário e soma", () => {
+    const total = calcularComissaoDoDia(
+      { reunioes: 3, vendasPerformance: 2, vendasAcelera: 1 },
+      valores
+    );
+    assert.equal(total, 3 * 12 + 2 * 30 + 1 * 45); // 141
+  });
+
+  test("dia sem nenhum lançamento dá zero", () => {
+    assert.equal(
+      calcularComissaoDoDia({ reunioes: 0, vendasPerformance: 0, vendasAcelera: 0 }, valores),
+      0
+    );
   });
 });

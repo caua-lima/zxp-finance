@@ -16,6 +16,7 @@ import {
   IconChecklist,
   IconDre,
   IconAcesso,
+  IconComissoes,
   IconPerfil,
   IconSair,
 } from "./icons";
@@ -33,6 +34,7 @@ const secoes = [
     itens: [
       { href: "/saldo", label: "Saldo e gastos", labelMobile: "Saldo", Icon: IconSaldo },
       { href: "/ganhos", label: "Ganhos", Icon: IconGanhos },
+      { href: "/comissoes", label: "Comissões", Icon: IconComissoes },
       { href: "/contas", label: "Contas", Icon: IconContas },
       { href: "/parcelas", label: "Parcelas", Icon: IconParcelas },
       { href: "/assinaturas", label: "Assinaturas", Icon: IconAssinaturas },
