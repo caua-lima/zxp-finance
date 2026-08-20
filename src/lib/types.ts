@@ -143,9 +143,31 @@ export function diferencaMeses(de: string, para: string): number {
   return (anoPara - anoDe) * 12 + (mesPara - mesDe);
 }
 
+export function mesSeguinte(mes: string): string {
+  const [ano, m] = mes.split("-").map(Number);
+  const d = new Date(ano, m, 1); // m já é o índice do mês seguinte (m é 1-indexado)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function mesAnteriorDe(mes: string): string {
+  const [ano, m] = mes.split("-").map(Number);
+  const d = new Date(ano, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Quantas parcelas faltam pra `parcela`, no mês `mes`. Devolve 0 quando
+ * `mes` é anterior ao `mesReferencia` da parcela — ela ainda não começou
+ * (ou já foi dada baixa até esse ponto) e não deve contar como compromisso
+ * ativo desse mês em nenhum lugar (checklist, DRE, Agenda/Home). Antes,
+ * meses antes da referência devolviam a contagem cheia, o que fazia uma
+ * parcela cujo início era só no mês seguinte aparecer como "parcela 1"
+ * já no mês atual, em toda tela que usa essa função.
+ */
 export function parcelasRestantesEm(parcela: Parcela, mes: string): number {
   const referencia = parcela.mesReferencia ?? mesPadrao();
-  const decorridos = Math.max(0, diferencaMeses(referencia, mes));
+  const decorridos = diferencaMeses(referencia, mes);
+  if (decorridos < 0) return 0;
   return Math.max(0, parcela.parcelasRestantes - decorridos);
 }
 

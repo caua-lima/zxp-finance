@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { FinancialEntry } from "@/lib/types";
+import { FinancialEntry, mesAnteriorDe } from "@/lib/types";
 import { useGanhos } from "@/lib/useGanhos";
 import { useContasFixas } from "@/lib/useContasFixas";
 import { useAssinaturas } from "@/lib/useAssinaturas";
@@ -12,12 +12,6 @@ import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { construirFinancialEntries } from "./adapters";
 import { calculateDreBreakdown, DreBreakdown } from "./calculations";
-
-function mesAnteriorDe(mes: string): string {
-  const [ano, m] = mes.split("-").map(Number);
-  const d = new Date(ano, m - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 /**
  * Monta o DRE do mês selecionado e do mês anterior (pra comparação),

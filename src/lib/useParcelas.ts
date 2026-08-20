@@ -9,7 +9,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Parcela, TipoParcela, mesPadrao, valorMinhaParte } from "./types";
+import { Parcela, TipoParcela, mesPadrao, mesSeguinte, mesAnteriorDe, valorMinhaParte } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
@@ -168,10 +168,14 @@ export function useParcelas() {
     const p = parcelas.find((x) => x.id === id);
     if (!p) return;
     const novoValor = Math.max(0, p.parcelasRestantes - 1);
+    // Avança a partir da própria referência da parcela, não do mês real de
+    // hoje — assim pagar em dia ou colocar em dia várias parcelas atrasadas
+    // de uma vez sempre aponta a próxima pro mês seguinte certo.
+    const novaReferencia = mesSeguinte(p.mesReferencia ?? mesPadrao());
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "parcelas", id);
-      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: mesPadrao() });
+      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: novaReferencia });
       anexarAuditLog(batch, user.uid, user.email, {
         action: "paid",
         entityType: "parcela",
@@ -192,10 +196,11 @@ export function useParcelas() {
     const p = parcelas.find((x) => x.id === id);
     if (!p) return;
     const novoValor = Math.min(p.totalParcelas, p.parcelasRestantes + 1);
+    const novaReferencia = mesAnteriorDe(p.mesReferencia ?? mesPadrao());
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "parcelas", id);
-      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: mesPadrao() });
+      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: novaReferencia });
       anexarAuditLog(batch, user.uid, user.email, {
         action: "reversed",
         entityType: "parcela",

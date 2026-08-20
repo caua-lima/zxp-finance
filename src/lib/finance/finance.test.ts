@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FinancialEntry, parcelasRestantesEm, Parcela, Gasto } from "../types";
+import { FinancialEntry, parcelasRestantesEm, mesSeguinte, mesAnteriorDe, Parcela, Gasto } from "../types";
 import {
   calculateProjectedBalance,
   calculateOverdueEntries,
@@ -177,14 +177,42 @@ describe("parcela — projeção mês a mês", () => {
     criadoEm: 0,
   };
 
-  test("primeira parcela no mês de referência, não antes", () => {
-    assert.equal(parcelasRestantesEm(parcela, "2026-08"), 6); // ainda não começou a decair
+  test("mês antes da referência não conta como parcela ativa — ainda não começou", () => {
+    // Bug real reportado: uma parcela com mesReferencia em setembro
+    // aparecia como "parcela 1 de 10" já em agosto (e contava no
+    // checklist/DRE de agosto), porque essa função devolvia a contagem
+    // cheia pra qualquer mês antes da referência.
+    assert.equal(parcelasRestantesEm(parcela, "2026-08"), 0);
     assert.equal(parcelasRestantesEm(parcela, "2026-09"), 6);
     assert.equal(parcelasRestantesEm(parcela, "2026-10"), 5);
   });
 
   test("nunca fica negativa", () => {
     assert.equal(parcelasRestantesEm(parcela, "2027-06"), 0);
+  });
+
+  test("mesSeguinte/mesAnteriorDe andam um mês, virando o ano quando preciso", () => {
+    assert.equal(mesSeguinte("2026-08"), "2026-09");
+    assert.equal(mesSeguinte("2026-12"), "2027-01");
+    assert.equal(mesAnteriorDe("2026-09"), "2026-08");
+    assert.equal(mesAnteriorDe("2027-01"), "2026-12");
+  });
+
+  test("dar baixa (simulado): avançar a referência a partir de si mesma, não do mês real de hoje, mantém a próxima parcela no mês certo mesmo pagando várias atrasadas de uma vez", () => {
+    // Cenário do bug reportado: "Certificado Digital", 6 parcelas, já
+    // pagas as 4 primeiras (mesReferencia = agosto, restam 2). Dar baixa
+    // da parcela de agosto deve deixar a próxima (a 6ª) marcada pra
+    // setembro, nunca "ainda em agosto".
+    const referenciaAposBaixa = mesSeguinte("2026-08");
+    const parcelaAposBaixa: Parcela = {
+      ...parcela,
+      totalParcelas: 6,
+      parcelasRestantes: 1,
+      mesReferencia: referenciaAposBaixa,
+    };
+    assert.equal(referenciaAposBaixa, "2026-09");
+    assert.equal(parcelasRestantesEm(parcelaAposBaixa, "2026-08"), 0); // agosto já foi pago, nada resta nele
+    assert.equal(parcelasRestantesEm(parcelaAposBaixa, "2026-09"), 1); // a 6ª cai em setembro
   });
 });
 

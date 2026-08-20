@@ -6,6 +6,7 @@ import {
   formatarMes,
   mesPadrao,
   parcelasRestantesEm,
+  diferencaMeses,
   Parcela,
   TipoParcela,
   valorMinhaParte,
@@ -414,6 +415,12 @@ function ItemParcela({
   );
   const toast = useToast();
 
+  const referencia = parcela.mesReferencia ?? mesPadrao();
+  // decorridos < 0 cobre dois casos que parecem iguais de fora (0 parcelas
+  // pra esse mês) mas são coisas diferentes: a parcela ainda não começou,
+  // ou já foi dada baixa até aqui e a próxima só cai no mês seguinte —
+  // os dois casos mostram "próxima parcela em X" em vez de "parcela 1"/"quitada".
+  const decorridos = diferencaMeses(referencia, mes);
   const restantesNoMes = parcelasRestantesEm(parcela, mes);
   const numeroNoMes = parcela.totalParcelas - restantesNoMes + 1;
   const ehMesAtual = mes === mesPadrao();
@@ -610,7 +617,7 @@ function ItemParcela({
           Faltam {parcela.parcelasRestantes} de {parcela.totalParcelas} ·{" "}
           {parcela.totalParcelas - parcela.parcelasRestantes} pagas
         </p>
-        {parcela.parcelasRestantes > 0 && (
+        {parcela.parcelasRestantes > 0 && decorridos >= 0 && (
           <button
             onClick={() => {
               onDarBaixa(parcela.id);
@@ -623,7 +630,9 @@ function ItemParcela({
         )}
       </div>
       <p className="text-xs text-info mt-1">
-        {ehMesAtual
+        {decorridos < 0
+          ? `próxima parcela em ${formatarMes(referencia)}`
+          : ehMesAtual
           ? restantesNoMes > 0
             ? `este mês: parcela ${numeroNoMes} de ${parcela.totalParcelas}`
             : "quitada"
