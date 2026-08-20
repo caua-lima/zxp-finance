@@ -65,7 +65,8 @@ export function useGanhos(mes: string) {
   async function adicionarRecorrente(
     descricao: string,
     valor: number,
-    categoriaReceita?: string
+    categoriaReceita?: string,
+    semImposto: boolean = false
   ) {
     if (!user) return;
     try {
@@ -75,6 +76,7 @@ export function useGanhos(mes: string) {
         descricao,
         valor,
         ...(categoriaReceita ? { categoriaReceita } : {}),
+        ...(semImposto ? { semImposto } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);
@@ -87,7 +89,8 @@ export function useGanhos(mes: string) {
     descricao: string,
     valor: number,
     categoriaReceita?: string,
-    recebido: boolean = true
+    recebido: boolean = true,
+    semImposto: boolean = false
   ) {
     if (!user) return;
     try {
@@ -97,6 +100,7 @@ export function useGanhos(mes: string) {
         descricao,
         valor,
         ...(categoriaReceita ? { categoriaReceita } : {}),
+        ...(semImposto ? { semImposto } : {}),
         // ganho pontual normalmente é lançado depois que o dinheiro já
         // caiu (igual gasto) — recebido:true por padrão evita "Entradas
         // previstas" inflado com dinheiro que já entrou. Quem lança algo
@@ -113,7 +117,7 @@ export function useGanhos(mes: string) {
 
   async function editar(
     id: string,
-    dados: { descricao: string; valor: number; categoriaReceita?: string }
+    dados: { descricao: string; valor: number; categoriaReceita?: string; semImposto?: boolean }
   ) {
     if (!user) return;
     const ganho = todos.find((g) => g.id === id);
@@ -124,6 +128,7 @@ export function useGanhos(mes: string) {
         descricao: dados.descricao,
         valor: dados.valor,
         categoriaReceita: dados.categoriaReceita ?? null,
+        semImposto: !!dados.semImposto,
       });
       if (ganho) {
         anexarAuditLog(batch, user.uid, user.email, {
@@ -131,7 +136,12 @@ export function useGanhos(mes: string) {
           entityType: "ganho",
           entityId: id,
           summary: `"${ganho.descricao}" editado`,
-          before: { descricao: ganho.descricao, valor: ganho.valor, categoriaReceita: ganho.categoriaReceita },
+          before: {
+            descricao: ganho.descricao,
+            valor: ganho.valor,
+            categoriaReceita: ganho.categoriaReceita,
+            semImposto: ganho.semImposto,
+          },
           after: dados,
         });
       }
@@ -281,7 +291,13 @@ export function useGanhos(mes: string) {
     .filter((g) => !g.arquivado)
     .reduce((acc, g) => acc + g.valor, 0);
   const total = totalRecorrentes + totalPontuais;
-  const imposto = calcularImposto(total);
+  // Imposto só incide sobre o que não foi marcado como "sem imposto" (ex:
+  // bico/trabalho por fora recebido já líquido) — não é uma taxa sobre o
+  // total, é a soma do imposto de cada ganho tributável individualmente.
+  const totalTributavel = [...recorrentes, ...pontuais]
+    .filter((g) => !g.semImposto && (g.tipo === "recorrente" ? g.ativo !== false : !g.arquivado))
+    .reduce((acc, g) => acc + g.valor, 0);
+  const imposto = calcularImposto(totalTributavel);
   const totalLiquido = total - imposto;
 
   return {

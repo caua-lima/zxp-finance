@@ -11,6 +11,7 @@ export interface Ganho {
   categoriaReceita?: string; // ver CATEGORIAS_RECEITA em categoriasFinanceiras.ts
   descricao: string;
   valor: number;
+  semImposto?: boolean; // true pra renda que já chega líquida (ex: bico, trabalho por fora) — não desconta o imposto padrão dela
   criadoEm: number;
 }
 

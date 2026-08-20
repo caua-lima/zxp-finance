@@ -41,6 +41,7 @@ export default function GanhosPage() {
   const [valor, setValor] = useState(0);
   const [tipo, setTipo] = useState<Tipo>("pontual");
   const [categoriaReceita, setCategoriaReceita] = useState("");
+  const [semImposto, setSemImposto] = useState(false);
   const toast = useToast();
 
   function estaRecebido(g: Ganho): boolean {
@@ -61,10 +62,11 @@ export default function GanhosPage() {
     if (!desc || !valor) return;
     setDescricao("");
     setValor(0);
+    setSemImposto(false);
     if (tipo === "recorrente") {
-      adicionarRecorrente(desc, valor, categoriaReceita || undefined).catch(console.error);
+      adicionarRecorrente(desc, valor, categoriaReceita || undefined, semImposto).catch(console.error);
     } else {
-      adicionarPontual(desc, valor, categoriaReceita || undefined).catch(console.error);
+      adicionarPontual(desc, valor, categoriaReceita || undefined, true, semImposto).catch(console.error);
     }
     toast.sucesso(`"${desc}" adicionado.`);
   }
@@ -131,6 +133,15 @@ export default function GanhosPage() {
             Recorrente (todo mês)
           </button>
         </div>
+        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={semImposto}
+            onChange={(e) => setSemImposto(e.target.checked)}
+            className="h-4 w-4 accent-brand"
+          />
+          Já chega sem imposto (ex: bico, trabalho por fora)
+        </label>
       </form>
 
       <div className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2">
@@ -142,7 +153,7 @@ export default function GanhosPage() {
         </div>
         <div className="flex justify-between items-center">
           <span className="text-sm text-text-muted">
-            Imposto ({(TAXA_IMPOSTO * 100).toFixed(0)}%)
+            Imposto ({(TAXA_IMPOSTO * 100).toFixed(0)}% sobre o que não é &quot;sem imposto&quot;)
           </span>
           <span className="text-base font-medium text-negative">
             − {formatarMoeda(imposto)}
@@ -278,7 +289,7 @@ function Secao({
   comAtivo?: boolean;
   onEditar: (
     id: string,
-    dados: { descricao: string; valor: number; categoriaReceita?: string }
+    dados: { descricao: string; valor: number; categoriaReceita?: string; semImposto?: boolean }
   ) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
@@ -323,7 +334,7 @@ function ItemGanho({
   comAtivo?: boolean;
   onEditar: (
     id: string,
-    dados: { descricao: string; valor: number; categoriaReceita?: string }
+    dados: { descricao: string; valor: number; categoriaReceita?: string; semImposto?: boolean }
   ) => void;
   onRemover: (id: string, motivo: string) => void;
   onAlternarAtivo?: (id: string, ativo: boolean) => void;
@@ -335,6 +346,7 @@ function ItemGanho({
   const [descricao, setDescricao] = useState(ganho.descricao);
   const [valor, setValor] = useState(ganho.valor);
   const [categoriaReceita, setCategoriaReceita] = useState(ganho.categoriaReceita ?? "");
+  const [semImposto, setSemImposto] = useState(!!ganho.semImposto);
   const toast = useToast();
 
   const estaAtivo =
@@ -344,36 +356,47 @@ function ItemGanho({
   function salvar() {
     const desc = descricao.trim();
     if (!desc || !valor) return;
-    onEditar(ganho.id, { descricao: desc, valor, categoriaReceita: categoriaReceita || undefined });
+    onEditar(ganho.id, { descricao: desc, valor, categoriaReceita: categoriaReceita || undefined, semImposto });
     setEditando(false);
     toast.sucesso("Ganho atualizado.");
   }
 
   if (editando) {
     return (
-      <li className="flex flex-col sm:flex-row gap-2 rounded-xl border border-brand/40 bg-surface px-4 py-3">
-        <input
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          className="flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        />
-        <MoneyInput
-          value={valor}
-          onChange={setValor}
-          className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        />
-        <select
-          value={categoriaReceita}
-          onChange={(e) => setCategoriaReceita(e.target.value)}
-          className="w-full sm:w-36 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        >
-          <option value="">Categoria</option>
-          {CATEGORIAS_RECEITA.map((c) => (
-            <option key={c} value={c}>
-              {iconeCategoriaReceita(c)} {c}
-            </option>
-          ))}
-        </select>
+      <li className="flex flex-col gap-2 rounded-xl border border-brand/40 bg-surface px-4 py-3">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            className="flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          />
+          <MoneyInput
+            value={valor}
+            onChange={setValor}
+            className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          />
+          <select
+            value={categoriaReceita}
+            onChange={(e) => setCategoriaReceita(e.target.value)}
+            className="w-full sm:w-36 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          >
+            <option value="">Categoria</option>
+            {CATEGORIAS_RECEITA.map((c) => (
+              <option key={c} value={c}>
+                {iconeCategoriaReceita(c)} {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={semImposto}
+            onChange={(e) => setSemImposto(e.target.checked)}
+            className="h-4 w-4 accent-brand"
+          />
+          Já chega sem imposto (ex: bico, trabalho por fora)
+        </label>
         <div className="flex gap-2 shrink-0">
           <button
             onClick={salvar}
@@ -413,6 +436,11 @@ function ItemGanho({
         <span className="text-sm">
           {ganho.categoriaReceita && `${iconeCategoriaReceita(ganho.categoriaReceita)} `}
           {ganho.descricao}
+          {ganho.semImposto && (
+            <span className="ml-1.5 rounded-full border border-line px-1.5 py-0.5 text-[9px] font-medium text-text-faint align-middle">
+              sem imposto
+            </span>
+          )}
         </span>
       </div>
       <div className="flex items-center gap-3">
