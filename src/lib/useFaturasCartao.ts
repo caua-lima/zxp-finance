@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
-import { FaturaCartao } from "./types";
+import { FaturaCartao, formatarMoeda } from "./types";
 import { CARTOES_PREDEFINIDOS } from "./cartoes";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
+import { anexarAuditLog } from "./auditoria";
 
 function chave(mes: string, cartao: string) {
   return `${mes}__${cartao}`;
@@ -70,7 +71,36 @@ export function useFaturasCartao(mes: string) {
     }
   }
 
+  /**
+   * "Excluir" aqui é voltar a fatura pro estado "não lançada" — apaga o
+   * documento em vez de zerar o valor, pra ficar indistinguível de nunca
+   * ter lançado nada (mesma regra que já existe: ausência de doc = 0,
+   * zerado). Loga o valor anterior se havia algo lançado de verdade.
+   */
+  async function excluir(cartao: string) {
+    if (!user) return;
+    const existente = todas.find((f) => f.mes === mes && f.nome === cartao);
+    try {
+      const batch = writeBatch(db);
+      const ref = doc(db, "usuarios", user.uid, "faturasCartao", chave(mes, cartao));
+      batch.delete(ref);
+      if (existente && existente.valor > 0) {
+        anexarAuditLog(batch, user.uid, user.email, {
+          action: "archived",
+          entityType: "fatura",
+          entityId: existente.id,
+          summary: `Fatura "${cartao}" de ${mes} excluída (era ${formatarMoeda(existente.valor)})`,
+          before: { valor: existente.valor },
+        });
+      }
+      await batch.commit();
+      setErro(null);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
   const total = faturas.reduce((acc, f) => acc + f.valor, 0);
 
-  return { faturas, loading, erro, total, salvar };
+  return { faturas, loading, erro, total, salvar, excluir };
 }

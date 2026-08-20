@@ -10,10 +10,11 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
-  const { faturas, loading, erro, total, salvar } = useFaturasCartao(mes);
+  const { faturas, loading, erro, total, salvar, excluir } = useFaturasCartao(mes);
   const cartoesConfig = useCartoesConfig();
   const monthClose = useMonthClose(mes);
 
@@ -50,6 +51,7 @@ export default function FaturaPage() {
               fatura={f}
               config={cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome }}
               onSalvar={salvar}
+              onExcluir={excluir}
               onSalvarConfig={cartoesConfig.salvar}
               bloqueado={monthClose.fechado}
             />
@@ -64,12 +66,14 @@ function ItemFatura({
   fatura,
   config,
   onSalvar,
+  onExcluir,
   onSalvarConfig,
   bloqueado,
 }: {
   fatura: FaturaCartao;
   config: CartaoConfig;
   onSalvar: (cartao: string, valor: number) => void;
+  onExcluir: (cartao: string) => void;
   onSalvarConfig: (
     cartao: string,
     dados: { limite?: number; diaFechamento?: number; diaVencimento?: number }
@@ -79,6 +83,7 @@ function ItemFatura({
   const [valor, setValor] = useState(fatura.valor);
   const alterado = valor !== fatura.valor;
   const [editandoConfig, setEditandoConfig] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   const [limite, setLimite] = useState(config.limite ?? 0);
   const [diaFechamento, setDiaFechamento] = useState(
     config.diaFechamento ? String(config.diaFechamento) : ""
@@ -120,6 +125,15 @@ function ItemFatura({
           >
             Salvar
           </button>
+          {fatura.valor > 0 && (
+            <button
+              onClick={() => setConfirmandoExclusao(true)}
+              disabled={bloqueado}
+              className="text-[11px] text-text-faint hover:text-negative disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              Excluir
+            </button>
+          )}
         </div>
       </div>
 
@@ -171,6 +185,21 @@ function ItemFatura({
           </button>
         </div>
       )}
+
+      <ConfirmModal
+        aberto={confirmandoExclusao}
+        titulo="Excluir fatura"
+        descricao={`A fatura de "${fatura.nome}" (${formatarMoeda(fatura.valor)}) volta a ficar zerada, como se nunca tivesse sido lançada.`}
+        textoConfirmar="Excluir"
+        perigo
+        onConfirmar={() => {
+          onExcluir(fatura.nome);
+          setValor(0);
+          toast.sucesso(`Fatura de "${fatura.nome}" excluída.`);
+          setConfirmandoExclusao(false);
+        }}
+        onCancelar={() => setConfirmandoExclusao(false)}
+      />
     </li>
   );
 }
