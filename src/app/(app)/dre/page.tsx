@@ -23,7 +23,13 @@ import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { useDreComparativo } from "@/lib/finance/useDreComparativo";
 import { groupByCategory } from "@/lib/finance/entries";
 import { formatPercent } from "@/lib/finance/calculations";
+import {
+  sugerirCrescimentoCategorias,
+  compararComBenchmarkIBGE,
+  BENCHMARK_IBGE_POF,
+} from "@/lib/finance/sugestoes";
 import { useMonthClose } from "@/lib/useMonthClose";
+import { usePerfil } from "@/lib/usePerfil";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -50,6 +56,7 @@ export default function DrePage() {
   const faturas = useFaturasCartao(mes);
   const dre = useDreComparativo(mes);
   const monthClose = useMonthClose(mes);
+  const perfil = usePerfil();
   const toast = useToast();
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
   const [confirmandoReabrir, setConfirmandoReabrir] = useState(false);
@@ -78,6 +85,21 @@ export default function DrePage() {
         dre.entriesAtual.filter((e) => e.type === "expense" && e.source !== "adjustment")
       ),
     [dre.entriesAtual]
+  );
+  const despesasPorCategoriaAnterior = useMemo(
+    () =>
+      groupByCategory(
+        dre.entriesAnterior.filter((e) => e.type === "expense" && e.source !== "adjustment")
+      ),
+    [dre.entriesAnterior]
+  );
+  const categoriasEmCrescimento = useMemo(
+    () => sugerirCrescimentoCategorias(despesasPorCategoria, despesasPorCategoriaAnterior),
+    [despesasPorCategoria, despesasPorCategoriaAnterior]
+  );
+  const comparacaoBenchmark = useMemo(
+    () => compararComBenchmarkIBGE(despesasPorCategoria, perfil.perfil?.pessoasNaCasa),
+    [despesasPorCategoria, perfil.perfil]
   );
   const totalDespesasEntries =
     dre.atual.despesasVariaveis + dre.atual.despesasRecorrentes + dre.atual.parcelasCartao;
@@ -293,6 +315,61 @@ export default function DrePage() {
                       {formatPercent(
                         totalDespesasEntries ? (g.total / totalDespesasEntries) * 100 : 0
                       )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {categoriasEmCrescimento.length > 0 && (
+            <div className="rounded-2xl border border-gold/30 bg-gold-soft p-4">
+              <h2 className="text-sm font-medium text-text mb-1">
+                Categorias que mais cresceram
+              </h2>
+              <p className="text-xs text-text-faint mb-3">
+                Comparado com {dre.mesAnterior} — só o que subiu de forma relevante em dinheiro, não ruído
+              </p>
+              <div className="space-y-2">
+                {categoriasEmCrescimento.map((c) => (
+                  <div key={c.categoryId} className="flex items-center justify-between text-sm">
+                    <span className="text-text-muted capitalize">{c.categoryId}</span>
+                    <span className="text-gold font-medium">
+                      {formatarMoeda(c.anterior)} → {formatarMoeda(c.atual)}
+                      <span className="text-text-faint font-normal">
+                        {" "}
+                        ({c.deltaPercentual === Infinity ? "novo" : `+${c.deltaPercentual.toFixed(0)}%`})
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {comparacaoBenchmark.some((c) => c.gastoUsuario > 0) && (
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <h2 className="text-sm font-medium text-text-muted mb-1">
+                Comparado à média nacional (IBGE)
+              </h2>
+              <p className="text-xs text-text-faint mb-3">
+                {BENCHMARK_IBGE_POF.fonte}
+                {perfil.perfil?.pessoasNaCasa
+                  ? ` · ajustado pra ${perfil.perfil.pessoasNaCasa} pessoa(s) na casa`
+                  : " · valor por 1 pessoa — informe quantas pessoas moram com você no Perfil pra ajustar"}
+                . É média nacional agregada, não segmentada por idade ou cidade — trate como
+                referência, não como meta.
+              </p>
+              <div className="space-y-2">
+                {comparacaoBenchmark.map((c) => (
+                  <div key={c.categoria} className="flex items-center justify-between text-sm">
+                    <span className="text-text-muted">{c.categoria}</span>
+                    <span className={c.diferenca > 0 ? "text-negative" : "text-positive"}>
+                      {formatarMoeda(c.gastoUsuario)}
+                      <span className="text-text-faint">
+                        {" "}
+                        vs. média {formatarMoeda(c.benchmark)}
+                      </span>
                     </span>
                   </div>
                 ))}

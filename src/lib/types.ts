@@ -86,6 +86,15 @@ export interface Gasto {
   ajusteConciliacaoId?: string; // presente só em gasto criado por ajuste de conciliação
 }
 
+export interface PerfilUsuario {
+  idade?: number;
+  pessoasNaCasa?: number; // quantas pessoas moram na casa, contando você — base pra dividir benchmark per capita
+  moraSozinho?: boolean;
+  contasProprias?: string; // texto livre: o que é responsabilidade sua vs. dividida/de outra pessoa
+  rendaAproximada?: number;
+  atualizadoEm: number;
+}
+
 export interface MonthClose {
   month: string;
   status: "open" | "closed";

@@ -20,6 +20,8 @@ import {
   assinaturasParaEntries,
   faturasParaEntries,
 } from "./adapters";
+import { sugerirCrescimentoCategorias, compararComBenchmarkIBGE } from "./sugestoes";
+import { GrupoPorCategoria } from "./entries";
 
 /**
  * Testes dos cálculos financeiros críticos (Fase 11). Roda com o test
@@ -293,5 +295,54 @@ describe("DRE — resultado operacional", () => {
     assert.equal(dre.despesasVariaveis, 50);
     assert.equal(dre.despesasRecorrentes, 250);
     assert.equal(dre.parcelasCartao, 450);
+  });
+});
+
+function grupo(categoryId: string, total: number): GrupoPorCategoria {
+  return { categoryId, total, itens: [] };
+}
+
+describe("sugestões — categorias em crescimento", () => {
+  test("ignora crescimento pequeno em dinheiro, mesmo que percentualmente grande", () => {
+    const atual = [grupo("Lazer", 18)];
+    const anterior = [grupo("Lazer", 10)]; // +80%, mas só R$8 — ruído
+    assert.equal(sugerirCrescimentoCategorias(atual, anterior).length, 0);
+  });
+
+  test("categoria nova (sem histórico no mês anterior) aparece como crescimento", () => {
+    const atual = [grupo("Viagem", 300)];
+    const anterior: GrupoPorCategoria[] = [];
+    const resultado = sugerirCrescimentoCategorias(atual, anterior);
+    assert.equal(resultado.length, 1);
+    assert.equal(resultado[0].deltaPercentual, Infinity);
+  });
+
+  test("crescimento relevante em dinheiro e percentual aparece, ordenado do maior pro menor", () => {
+    const atual = [grupo("Alimentação", 800), grupo("Transporte", 400)];
+    const anterior = [grupo("Alimentação", 500), grupo("Transporte", 200)];
+    const resultado = sugerirCrescimentoCategorias(atual, anterior);
+    assert.deepEqual(resultado.map((c) => c.categoryId), ["Alimentação", "Transporte"]);
+  });
+});
+
+describe("sugestões — benchmark IBGE", () => {
+  test("multiplica a média per capita pelas pessoas da casa informadas no perfil", () => {
+    const despesas = [grupo("Moradia", 900)];
+    const comparacao = compararComBenchmarkIBGE(despesas, 2);
+    const habitacao = comparacao.find((c) => c.categoria === "Habitação")!;
+    assert.equal(habitacao.benchmark, 466 * 2);
+    assert.equal(habitacao.gastoUsuario, 900);
+  });
+
+  test("sem perfil informado, assume 1 pessoa", () => {
+    const comparacao = compararComBenchmarkIBGE([], undefined);
+    const habitacao = comparacao.find((c) => c.categoria === "Habitação")!;
+    assert.equal(habitacao.benchmark, 466);
+  });
+
+  test("categoria sem mapeamento pro IBGE (ex: Lazer) não aparece na comparação", () => {
+    const comparacao = compararComBenchmarkIBGE([grupo("Lazer", 100)], 1);
+    assert.equal(comparacao.length, 3); // só Habitação, Transporte, Alimentação
+    assert.ok(!comparacao.some((c) => c.categoria === "Lazer"));
   });
 });

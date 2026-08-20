@@ -16,6 +16,7 @@ import {
   IconChecklist,
   IconDre,
   IconAcesso,
+  IconPerfil,
   IconSair,
 } from "./icons";
 
@@ -51,6 +52,7 @@ const secoes = [
     titulo: "Sistema",
     itens: [
       { href: "/checklist", label: "Checklist", Icon: IconChecklist },
+      { href: "/perfil", label: "Perfil", Icon: IconPerfil },
       { href: "/acesso", label: "Acesso", Icon: IconAcesso },
     ],
   },
