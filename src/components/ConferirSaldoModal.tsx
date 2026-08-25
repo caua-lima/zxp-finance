@@ -138,7 +138,7 @@ export function ConferirSaldoModal({
               onChange={(e) => setDescricaoAjuste(e.target.value)}
               placeholder="Descreva o motivo do ajuste (ex: saque não registrado)"
               rows={2}
-              className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand resize-none mb-3"
+              className="campo resize-none mb-3"
             />
 
             <div className="flex flex-col gap-2">

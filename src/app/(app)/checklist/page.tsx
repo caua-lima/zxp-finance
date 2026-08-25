@@ -16,6 +16,7 @@ import { usePagamentos, OrigemItem } from "@/lib/usePagamentos";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
+import { PageHeader } from "@/components/PageHeader";
 import { SkeletonLista } from "@/components/Skeleton";
 
 interface ItemChecklist {
@@ -154,10 +155,10 @@ export default function ChecklistPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Checklist do mês</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Vá marcando conforme for pagando
-      </p>
+      <PageHeader
+        titulo="Checklist do mês"
+        descricao="Vá marcando conforme for pagando"
+      />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro} />
       {monthClose.fechado && (

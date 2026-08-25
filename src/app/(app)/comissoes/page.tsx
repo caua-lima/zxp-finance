@@ -13,6 +13,70 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/components/Toast";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
+import { IconEditar, IconExcluir } from "@/components/icons";
+
+/**
+ * Contagem com botões +/− em vez de só campo de texto. No celular, digitar
+ * "3" num campo minúsculo dá mais trabalho do que tocar duas vezes no +, e
+ * esses números são quase sempre de 0 a 5. O campo continua editável pra
+ * quando o número for grande.
+ */
+function ContadorCampo({
+  id,
+  titulo,
+  unitario,
+  valor,
+  onChange,
+}: {
+  id?: string;
+  titulo: string;
+  unitario: number;
+  valor: string;
+  onChange: (v: string) => void;
+}) {
+  const n = parseInt(valor, 10) || 0;
+  const definir = (novo: number) => onChange(novo <= 0 ? "" : String(novo));
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/40 py-2 pl-3 pr-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm leading-tight">{titulo}</p>
+        <p className="text-[11px] text-text-faint">{formatarMoeda(unitario)} cada</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => definir(n - 1)}
+          disabled={n <= 0}
+          aria-label={`Diminuir ${titulo}`}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-lg leading-none text-text-muted disabled:opacity-30 active:bg-surface"
+        >
+          −
+        </button>
+        <input
+          id={id}
+          inputMode="numeric"
+          placeholder="0"
+          value={valor}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+          aria-label={titulo}
+          className="h-9 w-11 rounded-lg border border-line bg-surface text-center text-base font-semibold outline-none focus:border-brand"
+        />
+        <button
+          type="button"
+          onClick={() => definir(n + 1)}
+          aria-label={`Aumentar ${titulo}`}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand/40 bg-brand-soft text-lg leading-none text-brand active:bg-surface"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function formatarDataLonga(iso: string): string {
   const [ano, mes, dia] = iso.split("-");
@@ -94,136 +158,128 @@ export default function ComissoesPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Comissões</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Anote o dia a dia e a comissão é calculada e somada sozinha
-      </p>
+      <PageHeader
+        titulo="Comissões"
+        descricao="Anote o dia a dia e a comissão é calculada e somada sozinha"
+      />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={comissoes.erro || config.erro || ganhos.erro} />
 
-      {/* valores por tipo */}
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-4">
-        <div className="flex items-center justify-between mb-1">
+      {/* lançar o dia — a ação principal da tela vem primeiro */}
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl border border-line bg-surface p-4 mb-3 space-y-3"
+      >
+        <div>
+          <label className="rotulo">Dia</label>
+          <input
+            type="date"
+            value={data}
+            onChange={(e) => carregarDia(e.target.value)}
+            className="campo"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <ContadorCampo
+            id="comissoes-form-reunioes"
+            titulo="Reuniões realizadas"
+            unitario={config.valores.valorReuniao}
+            valor={reunioes}
+            onChange={setReunioes}
+          />
+          <ContadorCampo
+            titulo="Vendas performance"
+            unitario={config.valores.valorVendaPerformance}
+            valor={vendasPerformance}
+            onChange={setVendasPerformance}
+          />
+          <ContadorCampo
+            titulo="Vendas acelera"
+            unitario={config.valores.valorVendaAcelera}
+            valor={vendasAcelera}
+            onChange={setVendasAcelera}
+          />
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl bg-surface-2/60 px-3 py-2.5">
+          <span className="text-sm text-text-muted">Comissão do dia</span>
+          <span className="text-lg font-bold text-positive">
+            {formatarMoeda(previaValor)}
+          </span>
+        </div>
+
+        {jaLancadoNoDia && (
+          <p className="text-[11px] text-gold">
+            Esse dia já tem {formatarMoeda(jaLancadoNoDia.valorTotal)} lançado —
+            salvar substitui.
+          </p>
+        )}
+
+        <Botao type="submit" larguraTotal>
+          Salvar dia
+        </Botao>
+      </form>
+
+      {/* valores por tipo — configuração, fica depois do uso diário */}
+      <div className="rounded-2xl border border-line bg-surface p-4 mb-3">
+        <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-text-muted">Valor por tipo</h2>
           <button
             onClick={() => setEditandoValores((v) => !v)}
-            className="text-xs text-brand hover:text-brand-dark"
+            className="rounded-lg px-2 py-1 text-xs font-medium text-brand active:bg-surface-2"
           >
             {editandoValores ? "fechar" : "editar"}
           </button>
         </div>
         {!editandoValores ? (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-faint">
-            <span>Reunião: {formatarMoeda(config.valores.valorReuniao)}</span>
-            <span>Venda performance: {formatarMoeda(config.valores.valorVendaPerformance)}</span>
-            <span>Venda acelera: {formatarMoeda(config.valores.valorVendaAcelera)}</span>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-faint">
+            <span>Reunião {formatarMoeda(config.valores.valorReuniao)}</span>
+            <span>·</span>
+            <span>Performance {formatarMoeda(config.valores.valorVendaPerformance)}</span>
+            <span>·</span>
+            <span>Acelera {formatarMoeda(config.valores.valorVendaAcelera)}</span>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 mt-2">
-            <div>
-              <label className="block text-[11px] text-text-faint mb-1">Reunião</label>
-              <input
-                inputMode="decimal"
-                value={valorReuniao}
-                onChange={(e) => setValorReuniao(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-              />
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="rotulo">Reunião</label>
+                <input
+                  inputMode="decimal"
+                  value={valorReuniao}
+                  onChange={(e) => setValorReuniao(e.target.value)}
+                  className="campo"
+                />
+              </div>
+              <div>
+                <label className="rotulo">Performance</label>
+                <input
+                  inputMode="decimal"
+                  value={valorVendaPerformance}
+                  onChange={(e) => setValorVendaPerformance(e.target.value)}
+                  className="campo"
+                />
+              </div>
+              <div>
+                <label className="rotulo">Acelera</label>
+                <input
+                  inputMode="decimal"
+                  value={valorVendaAcelera}
+                  onChange={(e) => setValorVendaAcelera(e.target.value)}
+                  className="campo"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] text-text-faint mb-1">Venda performance</label>
-              <input
-                inputMode="decimal"
-                value={valorVendaPerformance}
-                onChange={(e) => setValorVendaPerformance(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-text-faint mb-1">Venda acelera</label>
-              <input
-                inputMode="decimal"
-                value={valorVendaAcelera}
-                onChange={(e) => setValorVendaAcelera(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-              />
-            </div>
-            <button
-              onClick={salvarValores}
-              className="col-span-3 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C]"
-            >
+            <Botao onClick={salvarValores} larguraTotal tamanho="pequeno">
               Salvar valores
-            </button>
+            </Botao>
           </div>
         )}
       </div>
 
-      {/* lançar o dia */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-2"
-      >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
-          <div>
-            <label className="block text-[11px] text-text-faint mb-1">Dia</label>
-            <input
-              type="date"
-              value={data}
-              onChange={(e) => carregarDia(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-sm outline-none focus:border-brand"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] text-text-faint mb-1">Reuniões</label>
-            <input
-              id="comissoes-form-reunioes"
-              inputMode="numeric"
-              placeholder="0"
-              value={reunioes}
-              onChange={(e) => setReunioes(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-sm outline-none focus:border-brand"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] text-text-faint mb-1">Vendas performance</label>
-            <input
-              inputMode="numeric"
-              placeholder="0"
-              value={vendasPerformance}
-              onChange={(e) => setVendasPerformance(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-sm outline-none focus:border-brand"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] text-text-faint mb-1">Vendas acelera</label>
-            <input
-              inputMode="numeric"
-              placeholder="0"
-              value={vendasAcelera}
-              onChange={(e) => setVendasAcelera(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-sm outline-none focus:border-brand"
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between pt-1">
-          <p className="text-xs text-text-faint">
-            {jaLancadoNoDia
-              ? `Já tem lançamento nesse dia (${formatarMoeda(jaLancadoNoDia.valorTotal)}) — salvar substitui.`
-              : "Comissão do dia:"}{" "}
-            <span className="text-sm font-semibold text-positive">
-              {formatarMoeda(previaValor)}
-            </span>
-          </p>
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-          >
-            Salvar dia
-          </button>
-        </div>
-      </form>
-
       {/* resumo do mês */}
-      <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-4 mb-6 space-y-2">
+      <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-4 mb-5 space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm text-text-muted">Total de {formatarMes(mes)}</span>
           <span className="text-xl font-bold text-positive">
@@ -254,33 +310,30 @@ export default function ComissoesPage() {
           {comissoes.doMes.map((c) => (
             <li
               key={c.id}
-              className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface px-4 py-3"
+              className="flex items-center gap-2 rounded-xl border border-line bg-surface py-2 pl-4 pr-2"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm">{formatarDataLonga(c.data)}</p>
-                <p className="text-xs text-text-faint">
-                  {c.reunioes} reunião(ões) · {c.vendasPerformance} venda(s) performance ·{" "}
-                  {c.vendasAcelera} venda(s) acelera
+                <p className="truncate text-xs text-text-faint">
+                  {c.reunioes} reunião(ões) · {c.vendasPerformance} performance ·{" "}
+                  {c.vendasAcelera} acelera
                 </p>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-sm font-medium text-positive">
-                  {formatarMoeda(c.valorTotal)}
-                </span>
-                <button
-                  onClick={() => carregarDia(c.data)}
-                  className="text-text-faint hover:text-brand text-sm"
-                  aria-label="Editar"
-                >
-                  ✎
-                </button>
-                <button
+              <span className="shrink-0 text-sm font-medium text-positive">
+                {formatarMoeda(c.valorTotal)}
+              </span>
+              <AcoesItem>
+                <BotaoIcone label="Editar lançamento" onClick={() => carregarDia(c.data)}>
+                  <IconEditar width={17} height={17} />
+                </BotaoIcone>
+                <BotaoIcone
+                  label="Excluir lançamento"
+                  tom="perigo"
                   onClick={() => setConfirmandoExclusao(c.data)}
-                  className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
                 >
-                  Excluir
-                </button>
-              </div>
+                  <IconExcluir width={17} height={17} />
+                </BotaoIcone>
+              </AcoesItem>
             </li>
           ))}
         </ul>

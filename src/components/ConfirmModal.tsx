@@ -59,7 +59,7 @@ export function ConfirmModal({
             onChange={(e) => setMotivo(e.target.value)}
             placeholder="Explique o motivo..."
             rows={3}
-            className="mt-3 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand resize-none"
+            className="campo mt-3 resize-none"
             autoFocus
           />
         )}

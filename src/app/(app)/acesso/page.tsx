@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { ErroBanner } from "@/components/ErroBanner";
+import { PageHeader } from "@/components/PageHeader";
 import { ConfirmModal } from "@/components/ConfirmModal";
 
 interface UsuarioApi {
@@ -102,10 +103,7 @@ export default function AcessoPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Acesso</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Logins que podem entrar neste app
-      </p>
+      <PageHeader titulo="Acesso" descricao="Logins que podem entrar neste app" />
       <ErroBanner mensagem={erro} />
 
       <form
@@ -117,14 +115,14 @@ export default function AcessoPage() {
           placeholder="E-mail"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+          className="campo"
         />
         <input
           type="password"
           placeholder="Senha (mín. 6 caracteres)"
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
-          className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+          className="campo"
         />
         <button
           type="submit"
@@ -211,14 +209,14 @@ function ItemUsuario({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          className="campo"
         />
         <input
           type="password"
           placeholder="Nova senha (deixe em branco pra manter)"
           value={novaSenha}
           onChange={(e) => setNovaSenha(e.target.value)}
-          className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          className="campo"
         />
         <div className="flex gap-2">
           <button

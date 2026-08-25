@@ -162,6 +162,50 @@ export function IconComissoes(props: IconProps) {
   );
 }
 
+export function IconEditar(props: IconProps) {
+  return base(
+    <>
+      <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </>,
+    props
+  );
+}
+
+export function IconExcluir(props: IconProps) {
+  return base(
+    <>
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </>,
+    props
+  );
+}
+
+export function IconEstornar(props: IconProps) {
+  return base(
+    <>
+      <path d="M3 7v6h6" />
+      <path d="M3.5 13a9 9 0 1 0 2.3-9.3L3 7" />
+    </>,
+    props
+  );
+}
+
+export function IconMais(props: IconProps) {
+  return base(
+    <>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    </>,
+    props
+  );
+}
+
 export function IconPerfil(props: IconProps) {
   return base(
     <>

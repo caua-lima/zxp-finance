@@ -51,7 +51,7 @@ export default function LoginPage() {
               placeholder="E-mail"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+              className="campo"
             />
             <input
               type="password"
@@ -59,7 +59,7 @@ export default function LoginPage() {
               placeholder="Senha"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+              className="campo"
             />
           </div>
           {erro && <p className="text-sm text-negative">{erro}</p>}

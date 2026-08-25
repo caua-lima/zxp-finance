@@ -12,6 +12,10 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
+import { IconEditar, IconExcluir } from "@/components/icons";
 
 type Tipo = "recorrente" | "pontual";
 
@@ -73,50 +77,22 @@ export default function GanhosPage() {
 
   return (
     <div>
+      <PageHeader titulo="Ganhos" descricao="Tudo que entra no mês" />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro} />
 
-      <form onSubmit={handleSubmit} className="space-y-2 mb-6">
-        <div className="flex gap-2 flex-col sm:flex-row">
-          <input
-            id="ganhos-form-descricao"
-            placeholder="Descrição (ex: Salário, Comissão)"
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-            className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="w-full sm:w-36 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <select
-            value={categoriaReceita}
-            onChange={(e) => setCategoriaReceita(e.target.value)}
-            className="w-full sm:w-40 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
-          >
-            <option value="">Categoria</option>
-            {CATEGORIAS_RECEITA.map((c) => (
-              <option key={c} value={c}>
-                {iconeCategoriaReceita(c)} {c}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-          >
-            Adicionar
-          </button>
-        </div>
-        <div className="flex gap-2 text-xs">
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-3"
+      >
+        <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
             onClick={() => setTipo("pontual")}
-            className={`rounded-full px-3 py-1 border transition-colors ${
+            className={`min-h-[42px] rounded-xl border text-xs font-medium transition-colors ${
               tipo === "pontual"
                 ? "border-brand bg-brand-soft text-brand"
-                : "border-line text-text-faint"
+                : "border-line text-text-faint active:bg-surface-2"
             }`}
           >
             Só este mês
@@ -124,27 +100,63 @@ export default function GanhosPage() {
           <button
             type="button"
             onClick={() => setTipo("recorrente")}
-            className={`rounded-full px-3 py-1 border transition-colors ${
+            className={`min-h-[42px] rounded-xl border text-xs font-medium transition-colors ${
               tipo === "recorrente"
                 ? "border-brand bg-brand-soft text-brand"
-                : "border-line text-text-faint"
+                : "border-line text-text-faint active:bg-surface-2"
             }`}
           >
             Recorrente (todo mês)
           </button>
         </div>
-        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+        <div>
+          <label htmlFor="ganhos-form-descricao" className="rotulo">
+            Descrição
+          </label>
+          <input
+            id="ganhos-form-descricao"
+            placeholder="ex: Salário, Comissão"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            className="campo"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Categoria</label>
+            <select
+              value={categoriaReceita}
+              onChange={(e) => setCategoriaReceita(e.target.value)}
+              className="campo"
+            >
+              <option value="">Nenhuma</option>
+              {CATEGORIAS_RECEITA.map((c) => (
+                <option key={c} value={c}>
+                  {iconeCategoriaReceita(c)} {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={semImposto}
             onChange={(e) => setSemImposto(e.target.checked)}
-            className="h-4 w-4 accent-brand"
+            className="h-5 w-5 shrink-0 accent-brand"
           />
           Já chega sem imposto (ex: bico, trabalho por fora)
         </label>
+        <Botao type="submit" larguraTotal>
+          Adicionar ganho
+        </Botao>
       </form>
 
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2">
+      <div className="rounded-2xl border border-line bg-surface p-4 mb-5 space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm text-text-muted">Total bruto</span>
           <span className="text-base font-medium text-text">
@@ -363,53 +375,52 @@ function ItemGanho({
 
   if (editando) {
     return (
-      <li className="flex flex-col gap-2 rounded-xl border border-brand/40 bg-surface px-4 py-3">
-        <div className="flex flex-col sm:flex-row gap-2">
+      <li className="rounded-xl border border-brand/40 bg-surface p-4 space-y-3">
+        <div>
+          <label className="rotulo">Descrição</label>
           <input
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
-            className="flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-          />
-          <select
-            value={categoriaReceita}
-            onChange={(e) => setCategoriaReceita(e.target.value)}
-            className="w-full sm:w-36 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-          >
-            <option value="">Categoria</option>
-            {CATEGORIAS_RECEITA.map((c) => (
-              <option key={c} value={c}>
-                {iconeCategoriaReceita(c)} {c}
-              </option>
-            ))}
-          </select>
         </div>
-        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Categoria</label>
+            <select
+              value={categoriaReceita}
+              onChange={(e) => setCategoriaReceita(e.target.value)}
+              className="campo"
+            >
+              <option value="">Nenhuma</option>
+              {CATEGORIAS_RECEITA.map((c) => (
+                <option key={c} value={c}>
+                  {iconeCategoriaReceita(c)} {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={semImposto}
             onChange={(e) => setSemImposto(e.target.checked)}
-            className="h-4 w-4 accent-brand"
+            className="h-5 w-5 shrink-0 accent-brand"
           />
           Já chega sem imposto (ex: bico, trabalho por fora)
         </label>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={salvar}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C]"
-          >
+        <div className="flex gap-2">
+          <Botao onClick={salvar} larguraTotal>
             Salvar
-          </button>
-          <button
-            onClick={() => setEditando(false)}
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-text-muted"
-          >
+          </Botao>
+          <Botao onClick={() => setEditando(false)} variante="secundario" larguraTotal>
             Cancelar
-          </button>
+          </Botao>
         </div>
       </li>
     );
@@ -417,7 +428,7 @@ function ItemGanho({
 
   return (
     <li
-      className={`flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 ${
+      className={`rounded-xl border border-line bg-surface pl-4 pr-2 py-2 ${
         comAtivo && !estaAtivo ? "opacity-50" : ""
       }`}
     >
@@ -430,49 +441,46 @@ function ItemGanho({
               onAlternarAtivo(ganho.id, e.target.checked);
               toast.sucesso(e.target.checked ? "Ganho reativado." : "Ganho arquivado.");
             }}
-            className="h-4 w-4 accent-brand"
+            className="h-5 w-5 shrink-0 accent-brand"
           />
         )}
-        <span className="text-sm">
-          {ganho.categoriaReceita && `${iconeCategoriaReceita(ganho.categoriaReceita)} `}
-          {ganho.descricao}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm">
+            {ganho.categoriaReceita && `${iconeCategoriaReceita(ganho.categoriaReceita)} `}
+            {ganho.descricao}
+          </p>
           {ganho.semImposto && (
-            <span className="ml-1.5 rounded-full border border-line px-1.5 py-0.5 text-[9px] font-medium text-text-faint align-middle">
-              sem imposto
-            </span>
+            <span className="text-[10px] text-text-faint">sem imposto</span>
           )}
-        </span>
-      </div>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => onAlternarRecebido(!recebido)}
-          className={`rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors whitespace-nowrap ${
-            recebido
-              ? "border-positive/30 bg-positive-soft text-positive"
-              : "border-info/30 bg-info/10 text-info"
-          }`}
-        >
-          {recebido ? "✓ Recebido" : "◌ Previsto"}
-        </button>
-        <span className="text-sm font-medium text-positive">
+        </div>
+        <span className="shrink-0 text-sm font-medium text-positive">
           {formatarMoeda(ganho.valor)}
         </span>
-        <button
-          onClick={() => setEditando(true)}
-          className="text-text-faint hover:text-brand text-sm"
-          aria-label="Editar"
-        >
-          ✎
-        </button>
-        {podeExcluir && (
-          <button
-            onClick={() => setConfirmando(true)}
-            className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
-          >
-            Excluir def.
-          </button>
-        )}
+        <AcoesItem>
+          <BotaoIcone label="Editar ganho" onClick={() => setEditando(true)}>
+            <IconEditar width={17} height={17} />
+          </BotaoIcone>
+          {podeExcluir && (
+            <BotaoIcone
+              label="Excluir definitivamente"
+              tom="perigo"
+              onClick={() => setConfirmando(true)}
+            >
+              <IconExcluir width={17} height={17} />
+            </BotaoIcone>
+          )}
+        </AcoesItem>
       </div>
+      <button
+        onClick={() => onAlternarRecebido(!recebido)}
+        className={`mt-1 ml-8 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${
+          recebido
+            ? "border-positive/30 bg-positive-soft text-positive"
+            : "border-info/30 bg-info/10 text-info"
+        }`}
+      >
+        {recebido ? "✓ Recebido" : "◌ Previsto — marcar como recebido"}
+      </button>
 
       <ConfirmModal
         aberto={confirmando}

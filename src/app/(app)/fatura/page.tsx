@@ -11,6 +11,10 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone } from "@/components/BotaoIcone";
+import { IconExcluir } from "@/components/icons";
 import { hojeISO } from "@/lib/finance/calculations";
 import { diasAteVencimento } from "@/lib/finance/vencimentoFatura";
 
@@ -22,11 +26,10 @@ export default function FaturaPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Fatura do cartão</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Lance o valor total da fatura de cada cartão neste mês — fica
-        zerado enquanto não lançar
-      </p>
+      <PageHeader
+        titulo="Fatura do cartão"
+        descricao="Lance o valor total de cada cartão neste mês"
+      />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro || cartoesConfig.erro || monthClose.erro} />
       {monthClose.fechado && (
@@ -115,34 +118,33 @@ function ItemFatura({
 
   return (
     <li className="rounded-xl border border-line bg-surface px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm min-w-0 truncate">💳 {fatura.nome}</span>
-        <div className="flex items-center gap-2 shrink-0">
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="w-32 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-brand text-right"
-          />
-          <button
-            onClick={() => {
-              onSalvar(fatura.nome, valor);
-              toast.sucesso(`Fatura de "${fatura.nome}" atualizada.`);
-            }}
-            disabled={!alterado || bloqueado}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+      <p className="mb-2 truncate text-sm font-medium">💳 {fatura.nome}</p>
+      <div className="flex items-center gap-2">
+        <MoneyInput
+          value={valor}
+          onChange={setValor}
+          className="campo flex-1 text-right font-semibold"
+        />
+        <Botao
+          onClick={() => {
+            onSalvar(fatura.nome, valor);
+            toast.sucesso(`Fatura de "${fatura.nome}" atualizada.`);
+          }}
+          disabled={!alterado || bloqueado}
+          className="shrink-0"
+        >
+          Salvar
+        </Botao>
+        {fatura.valor > 0 && (
+          <BotaoIcone
+            label="Excluir fatura"
+            tom="perigo"
+            onClick={() => setConfirmandoExclusao(true)}
+            disabled={bloqueado}
           >
-            Salvar
-          </button>
-          {fatura.valor > 0 && (
-            <button
-              onClick={() => setConfirmandoExclusao(true)}
-              disabled={bloqueado}
-              className="text-[11px] text-text-faint hover:text-negative disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              Excluir
-            </button>
-          )}
-        </div>
+            <IconExcluir width={17} height={17} />
+          </BotaoIcone>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-text-faint">
@@ -210,21 +212,21 @@ function ItemFatura({
             value={limite}
             onChange={setLimite}
             placeholder="Limite"
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
           <input
             placeholder="Dia fecha"
             inputMode="numeric"
             value={diaFechamento}
             onChange={(e) => setDiaFechamento(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
           <input
             placeholder="Dia vence"
             inputMode="numeric"
             value={diaVencimento}
             onChange={(e) => setDiaVencimento(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
           <button
             onClick={salvarConfig}

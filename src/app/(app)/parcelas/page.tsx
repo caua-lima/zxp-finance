@@ -20,6 +20,10 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
+import { IconEditar, IconExcluir, IconEstornar } from "@/components/icons";
 
 export default function ParcelasPage() {
   const {
@@ -81,21 +85,24 @@ export default function ParcelasPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-4">Parcelas</h1>
+      <PageHeader
+        titulo="Parcelas"
+        descricao="Compras parceladas e financiamentos em andamento"
+      />
       <ErroBanner mensagem={erro} />
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2"
+        className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-3"
       >
-        <div className="flex gap-2 text-xs">
+        <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
             onClick={() => setTipo("cartao")}
-            className={`rounded-full px-3 py-1 border transition-colors ${
+            className={`min-h-[42px] rounded-xl border text-xs font-medium transition-colors ${
               tipo === "cartao"
                 ? "border-brand bg-brand-soft text-brand"
-                : "border-line text-text-faint"
+                : "border-line text-text-faint active:bg-surface-2"
             }`}
           >
             Cartão de crédito
@@ -103,98 +110,109 @@ export default function ParcelasPage() {
           <button
             type="button"
             onClick={() => setTipo("financiamento")}
-            className={`rounded-full px-3 py-1 border transition-colors ${
+            className={`min-h-[42px] rounded-xl border text-xs font-medium transition-colors ${
               tipo === "financiamento"
                 ? "border-brand bg-brand-soft text-brand"
-                : "border-line text-text-faint"
+                : "border-line text-text-faint active:bg-surface-2"
             }`}
           >
             Financiamento
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div>
+          <label htmlFor="parcelas-form-nome" className="rotulo">
+            Nome
+          </label>
           <input
             id="parcelas-form-nome"
-            placeholder={
-              tipo === "cartao" ? "Nome (ex: Notebook)" : "Nome (ex: Carro)"
-            }
+            placeholder={tipo === "cartao" ? "ex: Notebook" : "ex: Carro"}
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            className="col-span-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <MoneyInput
-            value={valorParcela}
-            onChange={setValorParcela}
-            placeholder="Valor parcela"
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <input
-            placeholder="Total parcelas"
-            inputMode="numeric"
-            value={totalParcelas}
-            onChange={(e) => setTotalParcelas(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <input
-            placeholder="Já pagas"
-            inputMode="numeric"
-            value={pagas}
-            onChange={(e) => setPagas(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+            className="campo"
           />
         </div>
 
+        <div>
+          <label className="rotulo">Valor de cada parcela</label>
+          <MoneyInput
+            value={valorParcela}
+            onChange={setValorParcela}
+            className="campo"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Total de parcelas</label>
+            <input
+              placeholder="ex: 10"
+              inputMode="numeric"
+              value={totalParcelas}
+              onChange={(e) => setTotalParcelas(e.target.value)}
+              className="campo"
+            />
+          </div>
+          <div>
+            <label className="rotulo">Já pagas</label>
+            <input
+              placeholder="0"
+              inputMode="numeric"
+              value={pagas}
+              onChange={(e) => setPagas(e.target.value)}
+              className="campo"
+            />
+          </div>
+        </div>
+
         {tipo === "cartao" && (
-          <select
-            value={cartao}
-            onChange={(e) => setCartao(e.target.value)}
-            className="w-full sm:w-64 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          >
-            <option value="">Qual cartão?</option>
-            {CARTOES_PREDEFINIDOS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label className="rotulo">Cartão</label>
+            <select
+              value={cartao}
+              onChange={(e) => setCartao(e.target.value)}
+              className="campo"
+            >
+              <option value="">Qual cartão?</option>
+              {CARTOES_PREDEFINIDOS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
 
-        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={dividida}
             onChange={(e) => setDividida(e.target.checked)}
-            className="h-4 w-4 accent-brand"
+            className="h-5 w-5 shrink-0 accent-brand"
           />
           Dividida (você paga só a metade)
         </label>
 
         {tipo === "cartao" && (
-          <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
             <input
               type="checkbox"
               checked={naFatura}
               onChange={(e) => setNaFatura(e.target.checked)}
-              className="h-4 w-4 accent-brand"
+              className="h-5 w-5 shrink-0 accent-brand"
             />
-            Já está na fatura do cartão (não contar de novo no total)
+            Já está na fatura do cartão (não contar de novo)
           </label>
         )}
 
-        <div className="rounded-lg border border-line-soft bg-surface-2/50 px-3 py-2">
-          <p className="text-xs text-text-muted mb-1.5">
-            Mês da 1ª parcela que você vai pagar
-          </p>
+        <div className="rounded-xl border border-line-soft bg-surface-2/50 px-3 py-2.5">
+          <p className="rotulo">Mês da 1ª parcela que você vai pagar</p>
           <MonthSelector mes={mesInicio} onChange={setMesInicio} />
         </div>
 
-        <button
-          type="submit"
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-        >
-          Adicionar
-        </button>
+        <Botao type="submit" larguraTotal>
+          Adicionar parcela
+        </Botao>
       </form>
 
       <div className="rounded-2xl border border-line bg-surface p-4 mb-4 flex justify-between items-center">
@@ -339,8 +357,9 @@ function ItemParcelaQuitada({
           {parcela.cartao ? ` · ${parcela.cartao}` : ""}
         </p>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
-        <button
+      <AcoesItem>
+        <BotaoIcone
+          label="Reabrir (voltar 1 parcela)"
           onClick={() => {
             onEditar(parcela.id, {
               nome: parcela.nome,
@@ -355,18 +374,17 @@ function ItemParcelaQuitada({
             });
             toast.sucesso(`"${parcela.nome}" reaberta.`);
           }}
-          className="text-xs text-text-faint hover:text-brand"
-          title="Reabrir (voltar 1 parcela)"
         >
-          reabrir
-        </button>
-        <button
+          <IconEstornar width={17} height={17} />
+        </BotaoIcone>
+        <BotaoIcone
+          label="Excluir definitivamente"
+          tom="perigo"
           onClick={() => setConfirmando(true)}
-          className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
         >
-          Excluir def.
-        </button>
-      </div>
+          <IconExcluir width={17} height={17} />
+        </BotaoIcone>
+      </AcoesItem>
 
       <ConfirmModal
         aberto={confirmando}
@@ -475,35 +493,35 @@ function ItemParcela({
         <input
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+          className="campo"
         />
         <div className="grid grid-cols-3 gap-2">
           <MoneyInput
             value={valorParcela}
             onChange={setValorParcela}
             placeholder="Valor parcela"
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
           <input
             placeholder="Total"
             inputMode="numeric"
             value={totalParcelas}
             onChange={(e) => setTotalParcelas(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
           <input
             placeholder="Já pagas"
             inputMode="numeric"
             value={pagas}
             onChange={(e) => setPagas(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
         </div>
         {tipo === "cartao" && (
           <select
             value={cartao}
             onChange={(e) => setCartao(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           >
             <option value="">Qual cartão?</option>
             {CARTOES_PREDEFINIDOS.map((c) => (
@@ -587,13 +605,9 @@ function ItemParcela({
           >
             {formatarMoeda(valorMinhaParte(parcela))}
           </span>
-          <button
-            onClick={() => setEditando(true)}
-            className="text-text-faint hover:text-brand text-sm"
-            aria-label="Editar"
-          >
-            ✎
-          </button>
+          <BotaoIcone label="Editar parcela" onClick={() => setEditando(true)}>
+            <IconEditar width={17} height={17} />
+          </BotaoIcone>
         </div>
       </div>
       {/* linha do tempo */}

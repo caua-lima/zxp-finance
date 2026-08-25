@@ -7,6 +7,7 @@ import { useAgendaEntries } from "@/lib/finance/useAgendaEntries";
 import { isEntryActive, deriveDisplayStatus, labelOrigem, hojeISO } from "@/lib/finance/calculations";
 import { groupByUrgency } from "@/lib/finance/entries";
 import { ErroBanner } from "@/components/ErroBanner";
+import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge, StatusBadgeValor } from "@/components/StatusBadge";
 import { SkeletonLista } from "@/components/Skeleton";
 
@@ -88,10 +89,10 @@ export default function AgendaPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Agenda financeira</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Contas, assinaturas, parcelas, fatura, gastos e receitas — tudo num só lugar
-      </p>
+      <PageHeader
+        titulo="Agenda financeira"
+        descricao="Contas, parcelas, fatura e gastos — tudo num só lugar"
+      />
       <ErroBanner mensagem={erro} />
 
       {/* filtros */}

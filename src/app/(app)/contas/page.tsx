@@ -10,6 +10,10 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
+import { IconEditar, IconExcluir } from "@/components/icons";
 
 function agruparPorCategoria(contas: ContaFixa[]) {
   const grupos = new Map<string, ContaFixa[]>();
@@ -69,18 +73,50 @@ export default function ContasPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-4">Contas fixas</h1>
+      <PageHeader
+        titulo="Contas fixas"
+        descricao="O que vence todo mês, independente do que você fizer"
+      />
       <ErroBanner mensagem={erro} />
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2"
+        className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-3"
       >
-        <div className="grid grid-cols-2 sm:grid-cols-[9.5rem_1fr_8rem_6rem_auto] gap-2">
+        <div>
+          <label htmlFor="contas-form-nome" className="rotulo">
+            Nome da conta
+          </label>
+          <input
+            id="contas-form-nome"
+            placeholder="ex: Internet"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="campo"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Dia do vencimento</label>
+            <input
+              placeholder="opcional"
+              inputMode="numeric"
+              value={diaVencimento}
+              onChange={(e) => setDiaVencimento(e.target.value)}
+              className="campo"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="rotulo">Categoria</label>
           <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+            className="campo"
           >
             {CATEGORIAS_CONTAS.map((cat) => (
               <option key={cat} value={cat}>
@@ -88,44 +124,21 @@ export default function ContasPage() {
               </option>
             ))}
           </select>
-          <input
-            id="contas-form-nome"
-            placeholder="Nome (ex: Internet)"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <input
-            placeholder="Dia venc."
-            inputMode="numeric"
-            value={diaVencimento}
-            onChange={(e) => setDiaVencimento(e.target.value)}
-            title="Dia do vencimento (1-31), opcional"
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-          >
-            Adicionar
-          </button>
         </div>
         {categoria === "Outros" && (
           <input
             placeholder="Nome da categoria (opcional)"
             value={categoriaCustom}
             onChange={(e) => setCategoriaCustom(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+            className="campo"
           />
         )}
+        <Botao type="submit" larguraTotal>
+          Adicionar conta
+        </Botao>
       </form>
 
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-6 flex justify-between items-center">
+      <div className="rounded-2xl border border-line bg-surface p-4 mb-5 flex justify-between items-center">
         <span className="text-sm text-text-muted">Total ativo mensal</span>
         <span className="text-lg font-semibold text-gold">
           {formatarMoeda(total)}
@@ -242,52 +255,56 @@ function ItemConta({
 
   if (editando) {
     return (
-      <li className="flex flex-col sm:flex-row gap-2 rounded-xl border border-brand/40 bg-surface px-4 py-3">
-        <input
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          className="flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        />
-        <select
-          value={
-            (CATEGORIAS_CONTAS as readonly string[]).includes(categoria)
-              ? categoria
-              : "Outros"
-          }
-          onChange={(e) => setCategoria(e.target.value)}
-          className="w-full sm:w-40 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        >
-          {CATEGORIAS_CONTAS.map((cat) => (
-            <option key={cat} value={cat}>
-              {iconeCategoria(cat)} {cat}
-            </option>
-          ))}
-        </select>
-        <MoneyInput
-          value={valor}
-          onChange={setValor}
-          className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        />
-        <input
-          placeholder="Dia venc."
-          inputMode="numeric"
-          value={diaVencimento}
-          onChange={(e) => setDiaVencimento(e.target.value)}
-          className="w-full sm:w-24 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        />
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={salvar}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C]"
+      <li className="rounded-xl border border-brand/40 bg-surface p-4 space-y-3">
+        <div>
+          <label className="rotulo">Nome</label>
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="campo"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Dia do vencimento</label>
+            <input
+              placeholder="opcional"
+              inputMode="numeric"
+              value={diaVencimento}
+              onChange={(e) => setDiaVencimento(e.target.value)}
+              className="campo"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="rotulo">Categoria</label>
+          <select
+            value={
+              (CATEGORIAS_CONTAS as readonly string[]).includes(categoria)
+                ? categoria
+                : "Outros"
+            }
+            onChange={(e) => setCategoria(e.target.value)}
+            className="campo"
           >
+            {CATEGORIAS_CONTAS.map((cat) => (
+              <option key={cat} value={cat}>
+                {iconeCategoria(cat)} {cat}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <Botao onClick={salvar} larguraTotal>
             Salvar
-          </button>
-          <button
-            onClick={() => setEditando(false)}
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-text-muted"
-          >
+          </Botao>
+          <Botao onClick={() => setEditando(false)} variante="secundario" larguraTotal>
             Cancelar
-          </button>
+          </Botao>
         </div>
       </li>
     );
@@ -295,11 +312,11 @@ function ItemConta({
 
   return (
     <li
-      className={`flex items-center justify-between gap-2 rounded-xl border bg-surface px-4 py-3 ${
+      className={`flex items-center gap-2 rounded-xl border bg-surface pl-4 pr-2 py-2 ${
         conta.ativa ? "border-line" : "border-line-soft opacity-50"
       }`}
     >
-      <label className="flex items-center gap-3 min-w-0 cursor-pointer">
+      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-1.5">
         <input
           type="checkbox"
           checked={conta.ativa}
@@ -307,35 +324,34 @@ function ItemConta({
             onAlternarAtiva(conta.id, e.target.checked);
             toast.sucesso(e.target.checked ? "Conta reativada." : "Conta arquivada.");
           }}
-          className="h-4 w-4 shrink-0 accent-brand"
+          className="h-5 w-5 shrink-0 accent-brand"
         />
-        <span className="text-sm truncate">
-          {conta.nome}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">{conta.nome}</span>
           {conta.diaVencimento && (
-            <span className="text-text-faint"> · vence dia {conta.diaVencimento}</span>
+            <span className="block text-xs text-text-faint">
+              vence dia {conta.diaVencimento}
+            </span>
           )}
         </span>
-      </label>
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="text-sm font-medium text-gold">
+        <span className="shrink-0 text-sm font-medium text-gold">
           {formatarMoeda(conta.valor)}
         </span>
-        <button
-          onClick={() => setEditando(true)}
-          className="text-text-faint hover:text-brand text-sm"
-          aria-label="Editar"
-        >
-          ✎
-        </button>
+      </label>
+      <AcoesItem>
+        <BotaoIcone label="Editar conta" onClick={() => setEditando(true)}>
+          <IconEditar width={17} height={17} />
+        </BotaoIcone>
         {!conta.ativa && (
-          <button
+          <BotaoIcone
+            label="Excluir definitivamente"
+            tom="perigo"
             onClick={() => setConfirmando(true)}
-            className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
           >
-            Excluir def.
-          </button>
+            <IconExcluir width={17} height={17} />
+          </BotaoIcone>
         )}
-      </div>
+      </AcoesItem>
 
       <ConfirmModal
         aberto={confirmando}

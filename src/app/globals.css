@@ -104,3 +104,53 @@ select {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/*
+ * Campo de formulário padrão. Existe por causa do celular: os campos
+ * estavam espalhados com `py-2` (~36px de altura), abaixo do mínimo
+ * confortável pra tocar com o dedo. Centralizar aqui garante 46px em
+ * todo lugar de uma vez, e o `font-size: 16px` no mobile evita o zoom
+ * automático que o iOS dá em input com fonte menor que isso.
+ */
+.campo {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  padding: 0.625rem 0.75rem;
+  font-size: 16px;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+@media (min-width: 768px) {
+  .campo {
+    min-height: 42px;
+    font-size: 0.875rem;
+  }
+}
+
+.campo:focus {
+  border-color: var(--color-brand);
+}
+
+.campo::placeholder {
+  color: var(--color-text-faint);
+}
+
+textarea.campo {
+  min-height: 0;
+  resize: none;
+  line-height: 1.5;
+}
+
+/* Rótulo curto acima de um campo. */
+.rotulo {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}

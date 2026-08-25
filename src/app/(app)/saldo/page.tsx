@@ -18,6 +18,10 @@ import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 import { useToast } from "@/components/Toast";
 import { SkeletonLista } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
+import { IconEditar, IconExcluir, IconEstornar } from "@/components/icons";
 import {
   diasRestantesNoMes,
   calculateGastavelPorDia,
@@ -140,74 +144,88 @@ export default function SaldoPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Saldo e gastos</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Mercado Pago · fale o que você gastou e o saldo já desconta sozinho
-      </p>
+      <PageHeader
+        titulo="Saldo e gastos"
+        descricao="Registre o que gastou e veja quanto ainda dá pra gastar hoje"
+      />
       <ErroBanner mensagem={erro} />
 
-      {/* SALDO */}
+      {/* PRIMEIRO USO — sem saldo não existe orçamento diário */}
       {saldo === null ? (
-        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-6 mb-6 text-center">
-          <p className="text-sm text-text-muted mb-2">Saldo ainda não definido</p>
+        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-5 mb-4">
+          <p className="text-sm font-medium">Comece informando quanto você tem</p>
+          <p className="mt-1 mb-3 text-xs text-text-faint">
+            Depois de pagar as contas do mês, coloque aqui o que sobrou na conta.
+            É desse valor que sai o quanto você pode gastar por dia.
+          </p>
           {definindoInicial ? (
-            <div className="flex items-center justify-center gap-2">
+            <div className="space-y-2">
               <MoneyInput
                 value={saldoInicial}
                 onChange={setSaldoInicial}
-                className="w-40 rounded-lg border border-line bg-surface-2 px-3 py-2 text-lg text-center outline-none focus:border-brand"
+                className="campo text-center text-lg font-semibold"
               />
-              <button
-                onClick={salvarSaldoInicial}
-                className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-              >
-                Salvar
-              </button>
-              <button
-                onClick={() => setDefinindoInicial(false)}
-                className="rounded-lg border border-line px-3 py-2 text-sm text-text-muted"
-              >
-                Cancelar
-              </button>
+              <div className="flex gap-2">
+                <Botao onClick={salvarSaldoInicial} larguraTotal>
+                  Salvar
+                </Botao>
+                <Botao
+                  onClick={() => setDefinindoInicial(false)}
+                  variante="secundario"
+                  larguraTotal
+                >
+                  Cancelar
+                </Botao>
+              </div>
             </div>
           ) : (
-            <button
-              onClick={() => setDefinindoInicial(true)}
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-            >
-              Definir saldo inicial
-            </button>
+            <Botao onClick={() => setDefinindoInicial(true)} larguraTotal>
+              Definir saldo
+            </Botao>
           )}
         </div>
       ) : (
-        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-6 mb-6">
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <div>
-              <p className="text-xs text-text-faint">Real informado</p>
-              <p className="text-base font-semibold mt-1">{formatarMoeda(saldo.valor)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-text-faint">Calculado agora</p>
-              <p
-                className={`text-lg font-bold mt-1 ${
-                  saldoAtual !== null && saldoAtual >= 0 ? "text-brand" : "text-negative"
-                }`}
-              >
-                {saldoAtual === null ? "—" : formatarMoeda(saldoAtual)}
-              </p>
-            </div>
-          </div>
-          <p className="text-[11px] text-text-faint text-center mt-3">
-            Última conferência: {new Date(saldo.atualizadoEm).toLocaleString("pt-BR")}
+        /* DESTAQUE — é o número que importa no dia a dia */
+        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-5 mb-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+            Ainda posso gastar hoje
           </p>
-          <div className="text-center mt-3">
-            <button
-              onClick={() => setConferindo(true)}
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-            >
-              Conferir saldo
-            </button>
-          </div>
+          <p
+            className={`mt-1 text-4xl font-bold tracking-tight ${
+              aindaPodeGastarHoje === null
+                ? "text-text-faint"
+                : aindaPodeGastarHoje >= 0
+                ? "text-brand"
+                : "text-negative"
+            }`}
+          >
+            {aindaPodeGastarHoje === null ? "—" : formatarMoeda(aindaPodeGastarHoje)}
+          </p>
+
+          {gastavelPorDia !== null && gastavelPorDia > 0 && (
+            <>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    totalGastoHoje > gastavelPorDia ? "bg-negative" : "bg-brand"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.max(0, (totalGastoHoje / gastavelPorDia) * 100))}%`,
+                  }}
+                />
+              </div>
+              <div className="mt-1.5 flex justify-between text-[11px] text-text-faint">
+                <span>Já gastei {formatarMoeda(totalGastoHoje)}</span>
+                <span>Meta do dia {formatarMoeda(gastavelPorDia)}</span>
+              </div>
+            </>
+          )}
+
+          <p className="mt-3 border-t border-line-soft pt-3 text-[11px] text-text-faint">
+            {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} restante
+            {diasRestantes === 1 ? "" : "s"} no mês · sobra prevista de{" "}
+            {formatarMoeda(reservaMeta)}
+          </p>
         </div>
       )}
 
@@ -226,88 +244,96 @@ export default function SaldoPage() {
         />
       )}
 
-      {/* QUANTO POSSO GASTAR POR DIA */}
-      {saldo !== null && (
-        <div className="rounded-2xl border border-line bg-surface p-4 mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <p className="text-sm text-text-muted">Posso gastar por dia</p>
-              <p className="text-[11px] text-text-faint">
-                Hoje: {hoje.split("-").reverse().join("/")}
-              </p>
-            </div>
-            {!editandoReserva && (
-              <button
-                onClick={abrirEdicaoReserva}
-                className="text-xs text-brand hover:text-brand-dark"
-              >
-                {reservaMeta > 0 ? "Ajustar meta" : "Definir quanto quer que sobre"}
-              </button>
-            )}
-          </div>
+      {/* REGISTRO RÁPIDO — é a ação mais frequente da tela, fica logo abaixo do número */}
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl border border-line bg-surface p-3 mb-3"
+      >
+        <label htmlFor="saldo-form-texto" className="rotulo px-1">
+          Registrar um gasto
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="saldo-form-texto"
+            placeholder='Ex: "Gastei 100 de gasolina"'
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            className="campo flex-1"
+          />
+          <Botao type="submit" className="shrink-0 px-5">
+            Salvar
+          </Botao>
+        </div>
+      </form>
 
+      {/* SALDO, META E NOTIFICAÇÃO */}
+      {saldo !== null && (
+        <div className="rounded-2xl border border-line bg-surface p-4 mb-3">
           {editandoReserva ? (
-            <div className="rounded-xl border border-brand/30 bg-surface-2 p-3 space-y-2">
-              <label className="text-xs text-text-muted block">
+            <div className="space-y-2">
+              <label className="rotulo">
                 Quanto você quer que sobre até o fim do mês?
               </label>
-              <div className="flex items-center gap-2">
-                <MoneyInput
-                  value={novaReserva}
-                  onChange={setNovaReserva}
-                  className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
-                />
-                <button
-                  onClick={salvarReserva}
-                  className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-                >
-                  Salvar
-                </button>
-                <button
+              <MoneyInput
+                value={novaReserva}
+                onChange={setNovaReserva}
+                className="campo"
+              />
+              <div className="flex gap-2">
+                <Botao onClick={salvarReserva} larguraTotal>
+                  Salvar meta
+                </Botao>
+                <Botao
                   onClick={() => setEditandoReserva(false)}
-                  className="rounded-lg border border-line px-3 py-2 text-sm text-text-muted"
+                  variante="secundario"
+                  larguraTotal
                 >
                   Cancelar
-                </button>
+                </Botao>
               </div>
             </div>
           ) : (
-            <>
-              <p
-                className={`text-3xl font-bold ${
-                  gastavelPorDia === null
-                    ? "text-text-faint"
-                    : gastavelPorDia >= 0
-                    ? "text-brand"
-                    : "text-negative"
-                }`}
-              >
-                {gastavelPorDia === null ? "—" : formatarMoeda(gastavelPorDia)}
-              </p>
-              <p className="text-xs text-text-faint mt-1">
-                ({formatarMoeda(saldoAtual ?? 0)} − {formatarMoeda(reservaMeta)} de reserva) ÷{" "}
-                {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} restante
-                {diasRestantes === 1 ? "" : "s"} no mês
-              </p>
-              {gastavelPorDia !== null && (
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-line-soft">
-                  <span className="text-xs text-text-muted">Ainda pode gastar hoje</span>
-                  <span
-                    className={`text-sm font-semibold ${
-                      aindaPodeGastarHoje !== null && aindaPodeGastarHoje >= 0
-                        ? "text-positive"
-                        : "text-negative"
-                    }`}
-                  >
-                    {formatarMoeda(aindaPodeGastarHoje ?? 0)}
-                  </span>
-                </div>
-              )}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-text-muted">Saldo agora</span>
+                <span
+                  className={`text-base font-semibold ${
+                    saldoAtual !== null && saldoAtual >= 0 ? "text-text" : "text-negative"
+                  }`}
+                >
+                  {saldoAtual === null ? "—" : formatarMoeda(saldoAtual)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-text-muted">Quero que sobre</span>
+                <button
+                  onClick={abrirEdicaoReserva}
+                  className="rounded-lg px-2 py-1 text-sm font-medium text-brand active:bg-surface-2"
+                >
+                  {reservaMeta > 0 ? formatarMoeda(reservaMeta) : "definir →"}
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-line-soft pt-2.5">
+                <span className="text-[11px] text-text-faint">
+                  Conferido em{" "}
+                  {new Date(saldo.atualizadoEm).toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })}
+                </span>
+                <Botao
+                  onClick={() => setConferindo(true)}
+                  variante="secundario"
+                  tamanho="pequeno"
+                >
+                  Conferir saldo
+                </Botao>
+              </div>
               {push.suportado && (
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-line-soft">
-                  <span className="text-xs text-text-muted">
-                    Notificação diária às 8h
-                    {push.permissao === "denied" && " · bloqueada no navegador"}
+                <div className="flex items-center justify-between gap-2 border-t border-line-soft pt-2.5">
+                  <span className="text-[11px] text-text-faint">
+                    Aviso diário no celular
+                    {push.permissao === "denied" && " · bloqueado no navegador"}
                   </span>
                   <button
                     onClick={() => {
@@ -320,41 +346,19 @@ export default function SaldoPage() {
                       }
                     }}
                     disabled={push.carregando || push.permissao === "denied"}
-                    className={`text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
-                      push.ativo ? "text-negative hover:text-negative/80" : "text-brand hover:text-brand-dark"
+                    className={`shrink-0 rounded-lg px-2 py-1 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                      push.ativo ? "text-negative" : "text-brand"
                     }`}
                   >
                     {push.carregando ? "..." : push.ativo ? "Desativar" : "Ativar"}
                   </button>
                 </div>
               )}
-              {push.erro && <p className="text-xs text-negative mt-2">{push.erro}</p>}
-            </>
+              {push.erro && <p className="text-xs text-negative">{push.erro}</p>}
+            </div>
           )}
         </div>
       )}
-
-      {/* REGISTRO RÁPIDO */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-3"
-      >
-        <div className="flex gap-2">
-          <input
-            id="saldo-form-texto"
-            placeholder='Ex: "Gastei 100 reais de gasolina"'
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            className="flex-1 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-          >
-            Registrar
-          </button>
-        </div>
-      </form>
 
       {ultimoRegistro && (
         <div className="mb-4 rounded-xl border border-brand/30 bg-brand-soft px-4 py-3 text-sm text-brand">
@@ -494,43 +498,42 @@ function ItemGasto({
 
   if (editando) {
     return (
-      <li className="rounded-xl border border-brand/40 bg-surface px-4 py-3 space-y-2">
-        <input
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          className="w-full rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+      <li className="rounded-xl border border-brand/40 bg-surface p-4 space-y-3">
+        <div>
+          <label className="rotulo">Descrição</label>
+          <input
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            className="campo"
           />
-          <select
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-          >
-            {CATEGORIAS_GASTO.map((c) => (
-              <option key={c} value={c}>
-                {iconeCategoriaGasto(c)} {c}
-              </option>
-            ))}
-          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Categoria</label>
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="campo"
+            >
+              {CATEGORIAS_GASTO.map((c) => (
+                <option key={c} value={c}>
+                  {iconeCategoriaGasto(c)} {c}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={salvar}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C]"
-          >
+          <Botao onClick={salvar} larguraTotal>
             Salvar
-          </button>
-          <button
-            onClick={() => setEditando(false)}
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-text-muted"
-          >
+          </Botao>
+          <Botao onClick={() => setEditando(false)} variante="secundario" larguraTotal>
             Cancelar
-          </button>
+          </Botao>
         </div>
       </li>
     );
@@ -538,64 +541,68 @@ function ItemGasto({
 
   return (
     <li
-      className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-3 ${
+      className={`flex items-center gap-2 rounded-xl border pl-4 pr-2 py-2 ${
         bloqueado
           ? "border-line-soft bg-surface-2/50"
           : "border-line bg-surface"
       }`}
     >
-      <span
-        className={`text-sm truncate ${
-          gasto.estornado ? "line-through text-text-faint" : ehEstorno ? "italic text-text-faint" : ""
-        }`}
-      >
-        {gasto.descricao}
-        {gasto.estornado && (
-          <span className="ml-2 text-[10px] uppercase tracking-wide text-negative">estornado</span>
-        )}
-        {ehEstorno && (
-          <span className="ml-2 text-[10px] uppercase tracking-wide text-info">estorno</span>
-        )}
-      </span>
-      <div className="flex items-center gap-3 shrink-0">
-        <span
-          className={`text-sm font-medium ${
-            gasto.valor < 0 ? "text-positive" : bloqueado ? "text-text-faint" : "text-gold"
+      <div className="min-w-0 flex-1">
+        <p
+          className={`truncate text-sm ${
+            gasto.estornado
+              ? "line-through text-text-faint"
+              : ehEstorno
+              ? "italic text-text-faint"
+              : ""
           }`}
         >
-          {formatarMoeda(gasto.valor)}
-        </span>
+          {gasto.descricao}
+        </p>
+        {(gasto.estornado || ehEstorno) && (
+          <span
+            className={`text-[10px] uppercase tracking-wide ${
+              gasto.estornado ? "text-negative" : "text-info"
+            }`}
+          >
+            {gasto.estornado ? "estornado" : "estorno"}
+          </span>
+        )}
+      </div>
+      <span
+        className={`shrink-0 text-sm font-medium ${
+          gasto.valor < 0 ? "text-positive" : bloqueado ? "text-text-faint" : "text-gold"
+        }`}
+      >
+        {formatarMoeda(gasto.valor)}
+      </span>
+      <AcoesItem>
         {!bloqueado && (
           <>
-            <button
-              onClick={() => setEditando(true)}
-              className="text-text-faint hover:text-brand text-sm"
-              aria-label="Editar"
-            >
-              ✎
-            </button>
-            <button
-              onClick={() => setConfirmando(true)}
-              disabled={mesFechado}
-              className="text-text-faint hover:text-negative text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Estornar"
-              title={
+            <BotaoIcone label="Editar gasto" onClick={() => setEditando(true)}>
+              <IconEditar width={17} height={17} />
+            </BotaoIcone>
+            <BotaoIcone
+              label={
                 mesFechado
                   ? "Mês fechado — reabra na aba DRE pra estornar"
-                  : "Estornar (mantém no histórico + devolve o valor)"
+                  : "Estornar (mantém no histórico e devolve o valor)"
               }
+              onClick={() => setConfirmando(true)}
+              disabled={mesFechado}
             >
-              ↩
-            </button>
+              <IconEstornar width={17} height={17} />
+            </BotaoIcone>
           </>
         )}
-        <button
+        <BotaoIcone
+          label="Excluir gasto"
+          tom="perigo"
           onClick={() => setConfirmandoExclusao(true)}
-          className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
         >
-          Excluir
-        </button>
-      </div>
+          <IconExcluir width={17} height={17} />
+        </BotaoIcone>
+      </AcoesItem>
 
       <ConfirmModal
         aberto={confirmando}

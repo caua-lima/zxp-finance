@@ -10,6 +10,10 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
+import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
+import { IconEditar, IconExcluir } from "@/components/icons";
 
 function agruparPorCartao(assinaturas: Assinatura[]) {
   const grupos = new Map<string, Assinatura[]>();
@@ -65,30 +69,47 @@ export default function AssinaturasPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-4">Assinaturas</h1>
+      <PageHeader titulo="Assinaturas" descricao="Serviços que renovam sozinhos" />
       <ErroBanner mensagem={erro} />
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2"
+        className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-3"
       >
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div>
+          <label htmlFor="assinaturas-form-nome" className="rotulo">
+            Nome
+          </label>
           <input
             id="assinaturas-form-nome"
-            placeholder="Nome (ex: Netflix)"
+            placeholder="ex: Netflix"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+            className="campo"
           />
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Dia da renovação</label>
+            <input
+              placeholder="opcional"
+              inputMode="numeric"
+              value={diaRenovacao}
+              onChange={(e) => setDiaRenovacao(e.target.value)}
+              className="campo"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="rotulo">Cartão</label>
           <select
             value={cartao}
             onChange={(e) => setCartao(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+            className="campo"
           >
             <option value="">Sem cartão</option>
             {CARTOES_PREDEFINIDOS.map((c) => (
@@ -97,33 +118,22 @@ export default function AssinaturasPage() {
               </option>
             ))}
           </select>
-          <input
-            placeholder="Dia renov."
-            inputMode="numeric"
-            value={diaRenovacao}
-            onChange={(e) => setDiaRenovacao(e.target.value)}
-            title="Dia da renovação (1-31), opcional"
-            className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-          >
-            Adicionar
-          </button>
         </div>
-        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={naFatura}
             onChange={(e) => setNaFatura(e.target.checked)}
-            className="h-4 w-4 accent-brand"
+            className="h-5 w-5 shrink-0 accent-brand"
           />
-          Já está na fatura do cartão (não contar de novo no total)
+          Já está na fatura do cartão (não contar de novo)
         </label>
+        <Botao type="submit" larguraTotal>
+          Adicionar assinatura
+        </Botao>
       </form>
 
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-6 space-y-2">
+      <div className="rounded-2xl border border-line bg-surface p-4 mb-5 space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm text-text-muted">
             Total ativo mensal (fora da fatura)
@@ -244,22 +254,37 @@ function ItemAssinatura({
 
   if (editando) {
     return (
-      <li className="rounded-xl border border-brand/40 bg-surface px-4 py-3 space-y-2">
-        <div className="flex flex-col sm:flex-row gap-2">
+      <li className="rounded-xl border border-brand/40 bg-surface p-4 space-y-3">
+        <div>
+          <label className="rotulo">Nome</label>
           <input
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            className="flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           />
-          <MoneyInput
-            value={valor}
-            onChange={setValor}
-            className="w-full sm:w-32 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Valor</label>
+            <MoneyInput value={valor} onChange={setValor} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Dia da renovação</label>
+            <input
+              placeholder="opcional"
+              inputMode="numeric"
+              value={diaRenovacao}
+              onChange={(e) => setDiaRenovacao(e.target.value)}
+              className="campo"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="rotulo">Cartão</label>
           <select
             value={cartao}
             onChange={(e) => setCartao(e.target.value)}
-            className="w-full sm:w-40 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           >
             <option value="">Sem cartão</option>
             {CARTOES_PREDEFINIDOS.map((c) => (
@@ -269,47 +294,35 @@ function ItemAssinatura({
             ))}
           </select>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            placeholder="Dia renov."
-            inputMode="numeric"
-            value={diaRenovacao}
-            onChange={(e) => setDiaRenovacao(e.target.value)}
-            className="w-full sm:w-28 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
-          />
+        <div>
+          <label className="rotulo">Quanto você usa</label>
           <select
             value={usoPercebido}
             onChange={(e) => setUsoPercebido(e.target.value as UsoPercebidoAssinatura | "")}
-            className="w-full sm:w-40 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-brand"
+            className="campo"
           >
-            <option value="">Uso: não avaliado</option>
-            <option value="essencial">Uso: essencial</option>
-            <option value="util">Uso: útil</option>
-            <option value="revisar">Uso: revisar</option>
+            <option value="">Não avaliado</option>
+            <option value="essencial">Essencial</option>
+            <option value="util">Útil</option>
+            <option value="revisar">Vale revisar</option>
           </select>
         </div>
-        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer w-fit">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={naFatura}
             onChange={(e) => setNaFatura(e.target.checked)}
-            className="h-4 w-4 accent-brand"
+            className="h-5 w-5 shrink-0 accent-brand"
           />
-          Já está na fatura do cartão (não contar de novo no total)
+          Já está na fatura do cartão (não contar de novo)
         </label>
         <div className="flex gap-2">
-          <button
-            onClick={salvar}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C]"
-          >
+          <Botao onClick={salvar} larguraTotal>
             Salvar
-          </button>
-          <button
-            onClick={() => setEditando(false)}
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-text-muted"
-          >
+          </Botao>
+          <Botao onClick={() => setEditando(false)} variante="secundario" larguraTotal>
             Cancelar
-          </button>
+          </Botao>
         </div>
       </li>
     );
@@ -317,11 +330,11 @@ function ItemAssinatura({
 
   return (
     <li
-      className={`flex items-center justify-between gap-2 rounded-xl border bg-surface px-4 py-3 ${
+      className={`flex items-center gap-2 rounded-xl border bg-surface py-2 pl-4 pr-2 ${
         assinatura.ativa ? "border-line" : "border-line-soft opacity-50"
       }`}
     >
-      <label className="flex items-center gap-3 min-w-0 cursor-pointer">
+      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-1.5">
         <input
           type="checkbox"
           checked={assinatura.ativa}
@@ -329,49 +342,41 @@ function ItemAssinatura({
             onAlternarAtiva(assinatura.id, e.target.checked);
             toast.sucesso(e.target.checked ? "Assinatura reativada." : "Assinatura arquivada.");
           }}
-          className="h-4 w-4 shrink-0 accent-brand"
+          className="h-5 w-5 shrink-0 accent-brand"
         />
-        <div className="min-w-0">
-          <p className="text-sm truncate">
-            {assinatura.nome}
-            {assinatura.diaRenovacao && (
-              <span className="text-text-faint"> · renova dia {assinatura.diaRenovacao}</span>
-            )}
-          </p>
-          <div className="flex gap-2">
-            {assinatura.naFatura && (
-              <p className="text-xs text-text-faint">já na fatura do cartão</p>
-            )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">{assinatura.nome}</span>
+          <span className="block truncate text-xs text-text-faint">
+            {assinatura.diaRenovacao && `renova dia ${assinatura.diaRenovacao}`}
+            {assinatura.diaRenovacao && assinatura.naFatura && " · "}
+            {assinatura.naFatura && "já na fatura"}
             {assinatura.usoPercebido === "revisar" && (
-              <p className="text-xs text-gold">revisar assinatura</p>
+              <span className="text-gold"> · vale revisar</span>
             )}
-          </div>
-        </div>
-      </label>
-      <div className="flex items-center gap-3 shrink-0">
+          </span>
+        </span>
         <span
-          className={`text-sm font-medium ${
+          className={`shrink-0 text-sm font-medium ${
             assinatura.naFatura ? "text-text-faint" : "text-gold"
           }`}
         >
           {formatarMoeda(assinatura.valor)}
         </span>
-        <button
-          onClick={() => setEditando(true)}
-          className="text-text-faint hover:text-brand text-sm"
-          aria-label="Editar"
-        >
-          ✎
-        </button>
+      </label>
+      <AcoesItem>
+        <BotaoIcone label="Editar assinatura" onClick={() => setEditando(true)}>
+          <IconEditar width={17} height={17} />
+        </BotaoIcone>
         {!assinatura.ativa && (
-          <button
+          <BotaoIcone
+            label="Excluir definitivamente"
+            tom="perigo"
             onClick={() => setConfirmando(true)}
-            className="text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
           >
-            Excluir def.
-          </button>
+            <IconExcluir width={17} height={17} />
+          </BotaoIcone>
         )}
-      </div>
+      </AcoesItem>
 
       <ConfirmModal
         aberto={confirmando}

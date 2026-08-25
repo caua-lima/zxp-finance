@@ -12,6 +12,7 @@ import { hojeISO } from "@/lib/finance/calculations";
 import { usePerfil } from "@/lib/usePerfil";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
+import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 
 const ESCOLARIDADES: { valor: NivelEscolaridade; label: string }[] = [
@@ -102,12 +103,10 @@ export default function PerfilPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-1">Perfil</h1>
-      <p className="text-xs text-text-faint mb-4">
-        Sua situação real — usada pra comparar seus números com a média de
-        quem está no mesmo cenário (ver DRE). Nada aqui entra em nenhum
-        cálculo de saldo ou gastável por dia.
-      </p>
+      <PageHeader
+        titulo="Perfil"
+        descricao="Seu cenário — usado só pra comparar com médias no DRE"
+      />
       <ErroBanner mensagem={erro} />
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -125,7 +124,7 @@ export default function PerfilPage() {
                 value={dataNascimento}
                 onChange={(e) => setDataNascimento(e.target.value)}
                 max={hoje}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               />
               {idade !== null && (
                 <p className="mt-1 text-[11px] text-text-faint">
@@ -143,7 +142,7 @@ export default function PerfilPage() {
               <select
                 value={uf}
                 onChange={(e) => setUf(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               >
                 <option value="">Não informado</option>
                 {UFS.map((sigla) => (
@@ -166,7 +165,7 @@ export default function PerfilPage() {
               <select
                 value={escolaridade}
                 onChange={(e) => setEscolaridade(e.target.value as NivelEscolaridade | "")}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               >
                 <option value="">Não informado</option>
                 {ESCOLARIDADES.map((n) => (
@@ -184,7 +183,7 @@ export default function PerfilPage() {
               <select
                 value={tipoEscola}
                 onChange={(e) => setTipoEscola(e.target.value as TipoEscola | "")}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               >
                 <option value="">Não informado</option>
                 {TIPOS_ESCOLA.map((t) => (
@@ -209,7 +208,7 @@ export default function PerfilPage() {
               <select
                 value={situacaoTrabalho}
                 onChange={(e) => setSituacaoTrabalho(e.target.value as SituacaoTrabalho | "")}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               >
                 <option value="">Não informado</option>
                 {SITUACOES.map((s) => (
@@ -226,7 +225,7 @@ export default function PerfilPage() {
               <MoneyInput
                 value={rendaAproximada}
                 onChange={setRendaAproximada}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               />
               <p className="mt-1 text-[11px] text-text-faint">
                 Opcional — o DRE usa seus ganhos reais lançados, não este campo
@@ -244,7 +243,7 @@ export default function PerfilPage() {
                 placeholder="ex: 4"
                 value={pessoasNaCasa}
                 onChange={(e) => setPessoasNaCasa(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="campo"
               />
             </div>
             <label className="flex items-end gap-2 text-sm text-text-muted cursor-pointer pb-2">
@@ -267,7 +266,7 @@ export default function PerfilPage() {
               value={contasProprias}
               onChange={(e) => setContasProprias(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand resize-none"
+              className="campo resize-none"
             />
           </div>
         </fieldset>
@@ -284,7 +283,7 @@ export default function PerfilPage() {
             value={biografia}
             onChange={(e) => setBiografia(e.target.value)}
             rows={5}
-            className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand resize-none"
+            className="campo resize-none"
           />
         </fieldset>
 
