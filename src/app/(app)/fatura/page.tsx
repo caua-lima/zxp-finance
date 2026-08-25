@@ -11,6 +11,8 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { hojeISO } from "@/lib/finance/calculations";
+import { diasAteVencimento } from "@/lib/finance/vencimentoFatura";
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
@@ -50,6 +52,7 @@ export default function FaturaPage() {
               key={`${mes}-${f.nome}`}
               fatura={f}
               config={cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome }}
+              mes={mes}
               onSalvar={salvar}
               onExcluir={excluir}
               onSalvarConfig={cartoesConfig.salvar}
@@ -65,6 +68,7 @@ export default function FaturaPage() {
 function ItemFatura({
   fatura,
   config,
+  mes,
   onSalvar,
   onExcluir,
   onSalvarConfig,
@@ -72,6 +76,7 @@ function ItemFatura({
 }: {
   fatura: FaturaCartao;
   config: CartaoConfig;
+  mes: string;
   onSalvar: (cartao: string, valor: number) => void;
   onExcluir: (cartao: string) => void;
   onSalvarConfig: (
@@ -94,6 +99,9 @@ function ItemFatura({
   const toast = useToast();
 
   const percentualUsado = config.limite ? (fatura.valor / config.limite) * 100 : null;
+  const diasRestantes = config.diaVencimento
+    ? diasAteVencimento(config.diaVencimento, mes, hojeISO())
+    : null;
 
   function salvarConfig() {
     onSalvarConfig(fatura.nome, {
@@ -146,7 +154,6 @@ function ItemFatura({
           <span>Limite não informado</span>
         )}
         {config.diaFechamento && <span>fecha dia {config.diaFechamento}</span>}
-        {config.diaVencimento && <span>vence dia {config.diaVencimento}</span>}
         <button
           onClick={() => setEditandoConfig((v) => !v)}
           className="text-brand hover:text-brand-dark"
@@ -154,6 +161,48 @@ function ItemFatura({
           {editandoConfig ? "fechar" : "configurar cartão"}
         </button>
       </div>
+
+      {/* vencimento em destaque — é o que dispara a notificação no celular */}
+      {config.diaVencimento ? (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface-2/50 px-3 py-2">
+          <span className="text-xs text-text-muted">
+            🔔 Vence <strong className="text-text">dia {config.diaVencimento}</strong>
+            {diasRestantes !== null && fatura.valor > 0 && (
+              <span
+                className={
+                  diasRestantes < 0
+                    ? "text-negative"
+                    : diasRestantes <= 5
+                    ? "text-gold"
+                    : "text-text-faint"
+                }
+              >
+                {" · "}
+                {diasRestantes < 0
+                  ? `venceu há ${Math.abs(diasRestantes)} dia(s)`
+                  : diasRestantes === 0
+                  ? "é hoje"
+                  : diasRestantes === 1
+                  ? "amanhã"
+                  : `em ${diasRestantes} dias`}
+              </span>
+            )}
+          </span>
+          <span className="text-[11px] text-text-faint">
+            Aviso no celular 5 dias antes, 1 dia antes e no dia
+          </span>
+        </div>
+      ) : (
+        <button
+          onClick={() => setEditandoConfig(true)}
+          className="mt-2 w-full rounded-lg border border-dashed border-line px-3 py-2 text-left text-xs text-text-faint hover:border-brand/40 hover:text-text-muted transition-colors"
+        >
+          + Adicionar dia de vencimento{" "}
+          <span className="text-text-faint">
+            — sem isso não dá pra avisar você no celular antes de vencer
+          </span>
+        </button>
+      )}
 
       {editandoConfig && (
         <div className="grid grid-cols-3 gap-2 mt-2">

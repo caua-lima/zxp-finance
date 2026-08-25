@@ -8,7 +8,8 @@ import {
   hojeISO,
   diaISOde,
 } from "@/lib/finance/calculations";
-import { formatarMoeda } from "@/lib/types";
+import { diasAteVencimento, deveAvisar, montarAviso } from "@/lib/finance/vencimentoFatura";
+import { formatarMoeda, mesPadrao } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,15 @@ interface InscricaoDoc {
   endpoint: string;
   keys: { p256dh: string; auth: string };
 }
+interface CartaoConfigDoc {
+  nome: string;
+  diaVencimento?: number | null;
+}
+interface FaturaDoc {
+  nome: string;
+  valor: number;
+  mes: string;
+}
 
 function mensagemDeErro(e: unknown, padrao: string): string {
   if (e instanceof Error) return e.message;
@@ -35,11 +45,15 @@ function mensagemDeErro(e: unknown, padrao: string): string {
 
 /**
  * Roda 1x por dia (Vercel Cron, ver vercel.json). Pra cada usuário com
- * saldo definido e pelo menos uma inscrição de push: recalcula
- * "quanto pode gastar hoje" com os MESMOS cálculos puros usados no
- * client (src/lib/finance/calculations.ts) — nada duplicado, só lido
- * via Firestore REST em vez do SDK do client, porque aqui não existe
- * sessão de usuário autenticada.
+ * pelo menos uma inscrição de push, envia:
+ *
+ * 1. "quanto pode gastar hoje" — recalculado com os MESMOS cálculos puros
+ *    usados no client (src/lib/finance/calculations.ts), só lido via
+ *    Firestore REST em vez do SDK, porque aqui não existe sessão de
+ *    usuário autenticada. Precisa de saldo definido.
+ * 2. aviso de vencimento de fatura — faltando 5 dias, 1 dia e no próprio
+ *    dia. Só pra fatura com valor lançado, cartão com dia de vencimento
+ *    configurado e que ainda não foi marcada como paga no checklist.
  */
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
@@ -57,6 +71,7 @@ export async function GET(req: NextRequest) {
     webpush.setVapidDetails(subject, chavePublica, chavePrivada);
 
     const hoje = hojeISO();
+    const mes = mesPadrao();
     // dias-no-mês baseado no calendário de verdade (30/31/28/29), igual ao client
     const diasRestantes = diasRestantesNoMes(hoje);
 
@@ -65,14 +80,9 @@ export async function GET(req: NextRequest) {
     let usuariosPulados = 0;
     let pushEnviados = 0;
     let pushExpirados = 0;
+    let avisosVencimento = 0;
 
     for (const usuario of usuarios) {
-      const saldo = await obterDocumento<SaldoDoc>(`usuarios/${usuario.uid}/saldo/atual`);
-      if (!saldo) {
-        usuariosPulados++;
-        continue;
-      }
-
       const inscricoes = await listarDocumentos<InscricaoDoc>(
         `usuarios/${usuario.uid}/pushInscricoes`
       );
@@ -81,53 +91,103 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const gastos = await listarDocumentos<GastoDoc>(`usuarios/${usuario.uid}/gastos`);
-      const gastosDesdeReferencia = gastos.filter(
-        (g) => g.dados.criadoEm > saldo.atualizadoEm
-      );
-      const saldoAtual =
-        saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.dados.valor, 0);
-
-      const gastavelPorDia = calculateGastavelPorDia(
-        saldoAtual,
-        saldo.reservaMeta ?? 0,
-        diasRestantes
-      );
-      if (gastavelPorDia === null) {
-        usuariosPulados++;
-        continue;
-      }
-
-      const totalGastoHoje = gastos
-        .filter((g) => diaISOde(g.dados.criadoEm) === hoje)
-        .reduce((acc, g) => acc + g.dados.valor, 0);
-      const aindaHoje = gastavelPorDia - totalGastoHoje;
-
-      const titulo =
-        aindaHoje >= 0
-          ? `Hoje você pode gastar ${formatarMoeda(aindaHoje)}`
-          : `Já passou ${formatarMoeda(Math.abs(aindaHoje))} do previsto pra hoje`;
-      const corpo = `Orçamento diário: ${formatarMoeda(gastavelPorDia)} · Saldo atual: ${formatarMoeda(saldoAtual)}`;
-      const payload = JSON.stringify({ title: titulo, body: corpo, url: "/saldo" });
-
-      for (const inscricao of inscricoes) {
-        try {
-          await webpush.sendNotification(
-            { endpoint: inscricao.dados.endpoint, keys: inscricao.dados.keys },
-            payload
-          );
-          pushEnviados++;
-        } catch (e) {
-          const statusCode = (e as { statusCode?: number }).statusCode;
-          if (statusCode === 404 || statusCode === 410) {
-            await deletarDocumento(
-              `usuarios/${usuario.uid}/pushInscricoes/${inscricao.id}`
+      /** Dispara um payload pra todos os aparelhos do usuário, limpando os expirados. */
+      async function enviar(payload: string) {
+        for (const inscricao of inscricoes) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: inscricao.dados.endpoint, keys: inscricao.dados.keys },
+              payload
             );
-            pushExpirados++;
+            pushEnviados++;
+          } catch (e) {
+            const statusCode = (e as { statusCode?: number }).statusCode;
+            if (statusCode === 404 || statusCode === 410) {
+              await deletarDocumento(
+                `usuarios/${usuario.uid}/pushInscricoes/${inscricao.id}`
+              );
+              pushExpirados++;
+            }
           }
         }
       }
-      usuariosNotificados++;
+
+      let notificouAlgo = false;
+
+      // 1. quanto pode gastar hoje
+      const saldo = await obterDocumento<SaldoDoc>(`usuarios/${usuario.uid}/saldo/atual`);
+      const gastos = saldo
+        ? await listarDocumentos<GastoDoc>(`usuarios/${usuario.uid}/gastos`)
+        : [];
+
+      if (saldo) {
+        const gastosDesdeReferencia = gastos.filter(
+          (g) => g.dados.criadoEm > saldo.atualizadoEm
+        );
+        const saldoAtual =
+          saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.dados.valor, 0);
+
+        const gastavelPorDia = calculateGastavelPorDia(
+          saldoAtual,
+          saldo.reservaMeta ?? 0,
+          diasRestantes
+        );
+
+        if (gastavelPorDia !== null) {
+          const totalGastoHoje = gastos
+            .filter((g) => diaISOde(g.dados.criadoEm) === hoje)
+            .reduce((acc, g) => acc + g.dados.valor, 0);
+          const aindaHoje = gastavelPorDia - totalGastoHoje;
+
+          const titulo =
+            aindaHoje >= 0
+              ? `Hoje você pode gastar ${formatarMoeda(aindaHoje)}`
+              : `Já passou ${formatarMoeda(Math.abs(aindaHoje))} do previsto pra hoje`;
+          const corpo = `Orçamento diário: ${formatarMoeda(gastavelPorDia)} · Saldo atual: ${formatarMoeda(saldoAtual)}`;
+          await enviar(JSON.stringify({ title: titulo, body: corpo, url: "/saldo" }));
+          notificouAlgo = true;
+        }
+      }
+
+      // 2. vencimento de fatura (5 dias antes, 1 dia antes, no dia)
+      const configs = await listarDocumentos<CartaoConfigDoc>(
+        `usuarios/${usuario.uid}/cartoesConfig`
+      );
+      const comVencimento = configs.filter((c) => !!c.dados.diaVencimento);
+
+      if (comVencimento.length > 0) {
+        const faturas = await listarDocumentos<FaturaDoc>(
+          `usuarios/${usuario.uid}/faturasCartao`
+        );
+        const pagamentos = await listarDocumentos(`usuarios/${usuario.uid}/pagamentos`);
+        const idsPagos = new Set(pagamentos.map((p) => p.id));
+
+        for (const config of comVencimento) {
+          const cartao = config.dados.nome;
+          const fatura = faturas.find(
+            (f) => f.dados.mes === mes && f.dados.nome === cartao
+          );
+          // sem valor lançado não há o que cobrar
+          if (!fatura || fatura.dados.valor <= 0) continue;
+          // já marcada como paga no checklist — ver chave() em usePagamentos
+          if (idsPagos.has(`${mes}__fatura__${fatura.id}`)) continue;
+
+          const dias = diasAteVencimento(config.dados.diaVencimento!, mes, hoje);
+          if (!deveAvisar(dias)) continue;
+
+          const aviso = montarAviso(cartao, formatarMoeda(fatura.dados.valor), dias);
+          if (!aviso) continue;
+
+          await enviar(
+            JSON.stringify({ title: aviso.titulo, body: aviso.corpo, url: "/fatura" })
+          );
+          avisosVencimento++;
+          notificouAlgo = true;
+        }
+      }
+
+      if (notificouAlgo) usuariosNotificados++;
+      else usuariosPulados++;
     }
 
     return NextResponse.json({
@@ -136,6 +196,7 @@ export async function GET(req: NextRequest) {
       usuariosPulados,
       pushEnviados,
       pushExpirados,
+      avisosVencimento,
     });
   } catch (e) {
     return NextResponse.json(
