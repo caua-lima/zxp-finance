@@ -37,6 +37,8 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import { SkeletonLista } from "@/components/Skeleton";
+import { PageHeader } from "@/components/PageHeader";
+import { Botao } from "@/components/Botao";
 
 function agruparPorChave<T>(itens: T[], chave: (item: T) => string) {
   const grupos = new Map<string, T[]>();
@@ -172,35 +174,34 @@ export default function DrePage() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
-        <div>
-          <h1 className="text-lg font-semibold">DRE do mês</h1>
-          <p className="text-xs text-text-faint">
-            Demonstrativo detalhado de receitas e despesas
-          </p>
-        </div>
-        {!monthClose.loading &&
+      <PageHeader
+        titulo="DRE do mês"
+        descricao="Pra onde foi o dinheiro, em detalhe"
+        acao={
+          !monthClose.loading &&
           (monthClose.fechado ? (
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-line-soft bg-surface-2 px-2.5 py-1 text-[11px] text-text-faint">
-                🔒 Mês fechado
+                🔒 Fechado
               </span>
               <button
                 onClick={() => setConfirmandoReabrir(true)}
-                className="text-xs text-brand hover:text-brand-dark"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-brand active:bg-surface-2"
               >
                 Reabrir
               </button>
             </div>
           ) : (
-            <button
+            <Botao
               onClick={() => setConfirmandoFechar(true)}
-              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text-muted hover:border-brand/40 hover:text-text transition-colors"
+              variante="secundario"
+              tamanho="pequeno"
             >
               Fechar mês
-            </button>
-          ))}
-      </div>
+            </Botao>
+          ))
+        }
+      />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro || monthClose.erro} />
 

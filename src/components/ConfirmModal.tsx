@@ -67,17 +67,17 @@ export function ConfirmModal({
         <div className="flex gap-2 mt-4">
           <button
             onClick={onCancelar}
-            className="flex-1 rounded-lg border border-line px-3 py-2 text-sm text-text-muted hover:text-text transition-colors"
+            className="min-h-[44px] flex-1 rounded-xl border border-line px-3 text-sm font-medium text-text-muted transition-colors hover:text-text active:bg-surface-2"
           >
             Cancelar
           </button>
           <button
             onClick={confirmar}
             disabled={bloqueado}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`min-h-[44px] flex-1 rounded-xl px-3 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               perigo
                 ? "bg-negative text-white hover:bg-negative/85"
-                : "bg-brand text-[#0E0F0C] hover:bg-brand-dark"
+                : "bg-brand text-[#10100E] hover:bg-brand-dark"
             }`}
           >
             {textoConfirmar}

@@ -560,13 +560,13 @@ function ItemParcela({
         <div className="flex gap-2">
           <button
             onClick={salvar}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-[#0E0F0C]"
+            className="min-h-[44px] flex-1 rounded-xl bg-brand px-3 text-sm font-semibold text-[#10100E]"
           >
             Salvar
           </button>
           <button
             onClick={() => setEditando(false)}
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-text-muted"
+            className="min-h-[44px] flex-1 rounded-xl border border-line px-3 text-sm font-medium text-text-muted"
           >
             Cancelar
           </button>

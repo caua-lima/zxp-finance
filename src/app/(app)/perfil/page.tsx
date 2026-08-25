@@ -289,7 +289,7 @@ export default function PerfilPage() {
 
         <button
           type="submit"
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
+          className="min-h-[44px] w-full rounded-xl bg-brand px-4 text-sm font-semibold text-[#10100E] transition-colors hover:bg-brand-dark"
         >
           Salvar perfil
         </button>

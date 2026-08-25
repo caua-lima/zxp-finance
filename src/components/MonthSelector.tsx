@@ -19,20 +19,22 @@ export function MonthSelector({
   const podeVoltar = mes > minimo;
 
   return (
-    <div className="flex items-center justify-between gap-3 mb-6">
+    <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-line bg-surface p-1">
       <button
         onClick={() => podeVoltar && onChange(somarMes(mes, -1))}
         disabled={!podeVoltar}
-        className="rounded-lg border border-line px-3 py-1.5 text-sm text-text-muted transition-colors enabled:hover:text-text enabled:hover:border-brand/40 disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Mês anterior"
+        className="flex h-10 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-text-muted transition-colors enabled:active:bg-surface-2 enabled:hover:text-text disabled:opacity-25 disabled:cursor-not-allowed"
       >
         ←
       </button>
-      <span className="text-base font-medium capitalize">
+      <span className="truncate text-sm font-semibold capitalize">
         {formatarMes(mes)}
       </span>
       <button
         onClick={() => onChange(somarMes(mes, 1))}
-        className="rounded-lg border border-line px-3 py-1.5 text-sm text-text-muted hover:text-text hover:border-brand/40 transition-colors"
+        aria-label="Próximo mês"
+        className="flex h-10 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-text-muted transition-colors hover:text-text active:bg-surface-2"
       >
         →
       </button>

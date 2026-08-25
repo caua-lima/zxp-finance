@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatarMoeda } from "@/lib/types";
 import { MoneyInput } from "./MoneyInput";
+import { Botao } from "./Botao";
 
 type Etapa = "informar" | "resultado";
 
@@ -86,21 +87,15 @@ export function ConferirSaldoModal({
             <MoneyInput
               value={saldoInformado}
               onChange={setSaldoInformado}
-              className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-lg text-center outline-none focus:border-brand"
+              className="campo text-center text-lg font-semibold"
             />
             <div className="flex gap-2 mt-4">
-              <button
-                onClick={fechar}
-                className="flex-1 rounded-lg border border-line px-3 py-2 text-sm text-text-muted hover:text-text transition-colors"
-              >
+              <Botao onClick={fechar} variante="secundario" larguraTotal>
                 Cancelar
-              </button>
-              <button
-                onClick={() => setEtapa("resultado")}
-                className="flex-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-              >
+              </Botao>
+              <Botao onClick={() => setEtapa("resultado")} larguraTotal>
                 Comparar
-              </button>
+              </Botao>
             </div>
           </>
         ) : bate ? (
@@ -109,12 +104,9 @@ export function ConferirSaldoModal({
             <p className="text-sm text-text-muted mb-4">
               {formatarMoeda(saldoInformado)} confere com o que o sistema esperava.
             </p>
-            <button
-              onClick={confirmar}
-              className="w-full rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors"
-            >
+            <Botao onClick={confirmar} larguraTotal>
               Confirmar
-            </button>
+            </Botao>
           </>
         ) : (
           <>
@@ -142,25 +134,15 @@ export function ConferirSaldoModal({
             />
 
             <div className="flex flex-col gap-2">
-              <button
-                onClick={criarAjuste}
-                disabled={!descricaoAjuste.trim()}
-                className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-[#0E0F0C] hover:bg-brand-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
+              <Botao onClick={criarAjuste} disabled={!descricaoAjuste.trim()} larguraTotal>
                 Criar ajuste conciliado
-              </button>
-              <button
-                onClick={adiar}
-                className="rounded-lg border border-line px-3 py-2 text-sm text-text-muted hover:text-text transition-colors"
-              >
+              </Botao>
+              <Botao onClick={adiar} variante="secundario" larguraTotal>
                 Adiar conferência (investigar depois)
-              </button>
-              <button
-                onClick={fechar}
-                className="text-xs text-text-faint hover:text-text-muted"
-              >
+              </Botao>
+              <Botao onClick={fechar} variante="fantasma" tamanho="pequeno" larguraTotal>
                 Cancelar
-              </button>
+              </Botao>
             </div>
           </>
         )}
