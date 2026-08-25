@@ -9,6 +9,7 @@ import {
   diaISOde,
 } from "@/lib/finance/calculations";
 import { diasAteVencimento, deveAvisar, montarAviso } from "@/lib/finance/vencimentoFatura";
+import { saldoEstaVelho } from "@/lib/finance/alerts";
 import { formatarMoeda, mesPadrao } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -120,7 +121,18 @@ export async function GET(req: NextRequest) {
         ? await listarDocumentos<GastoDoc>(`usuarios/${usuario.uid}/gastos`)
         : [];
 
-      if (saldo) {
+      if (saldo && saldoEstaVelho(saldo.atualizadoEm, hoje)) {
+        // Saldo de outro mês: mandar o orçamento diário daqui seria mandar um
+        // número errado com cara de certo. Avisa pra atualizar, em vez disso.
+        await enviar(
+          JSON.stringify({
+            title: "Atualize seu saldo",
+            body: "O valor guardado é do mês passado — o quanto você pode gastar por dia não vale mais.",
+            url: "/saldo",
+          })
+        );
+        notificouAlgo = true;
+      } else if (saldo) {
         const gastosDesdeReferencia = gastos.filter(
           (g) => g.dados.criadoEm > saldo.atualizadoEm
         );

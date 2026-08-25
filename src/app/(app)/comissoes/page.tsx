@@ -150,10 +150,37 @@ export default function ComissoesPage() {
     toast.sucesso("Valores de comissão atualizados.");
   }
 
+  // O ganho de comissão do mês é identificado pela descrição. Se já existe,
+  // atualiza o valor em vez de criar outro — clicar duas vezes antes criava
+  // dois ganhos, inflando a receita do mês e distorcendo DRE, comparação com
+  // a média do IBGE e o alerta de fatura pesada (que divide fatura por renda).
+  const descricaoGanho = `Comissão (${formatarMes(mes)})`;
+  const ganhoExistente = ganhos.pontuais.find(
+    (g) => g.descricao === descricaoGanho && !g.arquivado
+  );
+
   function lancarComoGanho() {
     if (comissoes.totalMes <= 0) return;
-    ganhos.adicionarPontual(`Comissão (${formatarMes(mes)})`, comissoes.totalMes).catch(console.error);
-    toast.sucesso("Lançado em Ganhos — confira lá se já não tinha um lançamento este mês.");
+    if (ganhoExistente) {
+      if (ganhoExistente.valor === comissoes.totalMes) {
+        toast.sucesso("O ganho do mês já está com esse valor.");
+        return;
+      }
+      ganhos.editar(ganhoExistente.id, {
+        descricao: descricaoGanho,
+        valor: comissoes.totalMes,
+        categoriaReceita: ganhoExistente.categoriaReceita,
+        semImposto: ganhoExistente.semImposto,
+      });
+      toast.sucesso(
+        `Ganho do mês atualizado pra ${formatarMoeda(comissoes.totalMes)}.`
+      );
+    } else {
+      ganhos
+        .adicionarPontual(descricaoGanho, comissoes.totalMes)
+        .catch(console.error);
+      toast.sucesso("Lançado em Ganhos.");
+    }
   }
 
   return (
@@ -294,9 +321,11 @@ export default function ComissoesPage() {
         {comissoes.totalMes > 0 && (
           <button
             onClick={lancarComoGanho}
-            className="text-xs text-brand hover:text-brand-dark"
+            className="rounded-lg py-1 text-left text-xs font-medium text-brand active:opacity-70"
           >
-            Lançar total como ganho do mês →
+            {ganhoExistente
+              ? `Atualizar ganho do mês (hoje ${formatarMoeda(ganhoExistente.valor)}) →`
+              : "Lançar total como ganho do mês →"}
           </button>
         )}
       </div>

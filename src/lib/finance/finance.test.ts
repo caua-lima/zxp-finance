@@ -7,6 +7,7 @@ import {
   mesAnteriorDe,
   idadeEm,
   diasAteAniversario,
+  MES_MINIMO,
   Parcela,
   Gasto,
 } from "../types";
@@ -34,6 +35,7 @@ import { GrupoPorCategoria } from "./entries";
 import { calcularComissaoDoDia } from "./comissoes";
 import { compararRenda, MEDIA_NACIONAL } from "./benchmarkRenda";
 import { diasAteVencimento, deveAvisar, montarAviso } from "./vencimentoFatura";
+import { saldoEstaVelho } from "./alerts";
 
 /**
  * Testes dos cálculos financeiros críticos (Fase 11). Roda com o test
@@ -486,5 +488,44 @@ describe("vencimento de fatura", () => {
     assert.match(montarAviso("Nubank", "R$ 500,00", 1)!.titulo, /amanhã/);
     assert.match(montarAviso("Nubank", "R$ 500,00", 0)!.titulo, /hoje/);
     assert.equal(montarAviso("Nubank", "R$ 500,00", 3), null);
+  });
+});
+
+describe("saldo de outro mês", () => {
+  // meio-dia em Brasília, pra o teste não depender da virada de fuso
+  const meioDia = (iso: string) => new Date(`${iso}T15:00:00Z`).getTime();
+
+  test("saldo conferido no mês passado é considerado velho", () => {
+    assert.equal(saldoEstaVelho(meioDia("2026-08-28"), "2026-09-01"), true);
+  });
+
+  test("saldo conferido no mesmo mês não é velho, mesmo com dias de diferença", () => {
+    assert.equal(saldoEstaVelho(meioDia("2026-09-01"), "2026-09-28"), false);
+  });
+
+  test("compara mês, não 30 dias: dia 31/08 vs 01/09 já é velho", () => {
+    assert.equal(saldoEstaVelho(meioDia("2026-08-31"), "2026-09-01"), true);
+  });
+
+  test("navegar pra um mês futuro na tela não torna o saldo velho (compara com hoje)", () => {
+    // hojeISO é sempre o dia real; o mês visualizado não entra na conta
+    assert.equal(saldoEstaVelho(meioDia("2026-09-10"), "2026-09-10"), false);
+  });
+});
+
+describe("navegação de meses", () => {
+  // O piso do MonthSelector precisa ser a constante fixa MES_MINIMO, não o
+  // mês corrente — com o mês corrente o piso andava junto com o calendário e
+  // a seta de voltar ficava sempre desabilitada.
+  const podeVoltar = (mesNaTela: string) => mesNaTela > MES_MINIMO;
+
+  test("do mês inicial não dá pra voltar", () => {
+    assert.equal(podeVoltar(MES_MINIMO), false);
+  });
+
+  test("de qualquer mês depois do inicial dá pra voltar", () => {
+    assert.equal(podeVoltar("2026-09"), true);
+    assert.equal(podeVoltar("2026-12"), true);
+    assert.equal(podeVoltar("2027-03"), true);
   });
 });

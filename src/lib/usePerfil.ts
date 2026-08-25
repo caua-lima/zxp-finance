@@ -36,12 +36,24 @@ export function usePerfil() {
     return unsubscribe;
   }, [user]);
 
+  /**
+   * Grava o perfil. Campo vazio vira `null`, nunca `undefined`: o Firestore
+   * rejeita propriedade com valor undefined (o app não liga
+   * `ignoreUndefinedProperties`), e o spread do objeto preserva a chave mesmo
+   * quando o valor é undefined — então um único campo em branco derrubava a
+   * gravação inteira. `null` também é o que faz o `merge` realmente limpar um
+   * campo que o usuário apagou; simplesmente omitir a chave manteria o valor
+   * anterior lá. Quem lê trata null igual a vazio (`?? ""`, `?? 0`).
+   */
   async function salvar(dados: Omit<PerfilUsuario, "atualizadoEm">) {
     if (!user) return;
+    const semUndefined = Object.fromEntries(
+      Object.entries(dados).map(([chave, valor]) => [chave, valor ?? null])
+    );
     try {
       await setDoc(
         doc(db, "usuarios", user.uid, "perfil", "dados"),
-        { ...dados, atualizadoEm: Date.now() },
+        { ...semUndefined, atualizadoEm: Date.now() },
         { merge: true }
       );
       setErro(null);

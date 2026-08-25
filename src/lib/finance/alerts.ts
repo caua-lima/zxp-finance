@@ -1,5 +1,9 @@
 import { FinancialEntry, formatarMoeda } from "@/lib/types";
-import { calculateOverdueEntries, calculateUpcomingCommitments } from "./calculations";
+import {
+  calculateOverdueEntries,
+  calculateUpcomingCommitments,
+  diaISOde,
+} from "./calculations";
 
 /**
  * Central de atenção — gera alertas a partir de dados que o app já tem hoje.
@@ -73,6 +77,20 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       contexto: "Sem isso, o saldo disponível fica impreciso.",
       impacto: "—",
       cta: "Conferir saldo",
+      href: "/saldo",
+    });
+  } else if (saldoEstaVelho(dados.saldoAtualizadoEm, dados.hojeISO)) {
+    // Saldo de um mês anterior ainda alimenta o "posso gastar por dia" — o
+    // número aparece com cara de correto, dividido pelos dias do mês novo.
+    // Crítico porque induz a gastar em cima de um valor que já não existe.
+    alertas.push({
+      key: `saldo-de-outro-mes__${dados.mes}`,
+      severidade: "critical",
+      titulo: "Seu saldo é do mês passado",
+      contexto:
+        "O quanto você pode gastar por dia está sendo calculado com um valor antigo. Depois de pagar as contas do mês, informe o que sobrou.",
+      impacto: `Conferido em ${formatarDataCurta(diaISOde(dados.saldoAtualizadoEm))}`,
+      cta: "Atualizar saldo",
       href: "/saldo",
     });
   }
@@ -149,4 +167,13 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
 function formatarDataCurta(iso: string): string {
   const [, mes, dia] = iso.split("-");
   return `${dia}/${mes}`;
+}
+
+/**
+ * Saldo conferido num mês anterior ao mês corrente. Compara contra o mês de
+ * HOJE, não contra o mês que está sendo visualizado na tela — senão navegar
+ * pra um mês futuro faria um saldo recém-conferido parecer velho.
+ */
+export function saldoEstaVelho(saldoAtualizadoEm: number, hojeISO: string): boolean {
+  return diaISOde(saldoAtualizadoEm).slice(0, 7) < hojeISO.slice(0, 7);
 }
