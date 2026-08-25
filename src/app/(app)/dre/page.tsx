@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   mesPadrao,
   formatarMoeda,
@@ -28,6 +29,7 @@ import {
   compararComBenchmarkIBGE,
   BENCHMARK_IBGE_POF,
 } from "@/lib/finance/sugestoes";
+import { compararRenda, FONTE_RENDA } from "@/lib/finance/benchmarkRenda";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { usePerfil } from "@/lib/usePerfil";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -100,6 +102,16 @@ export default function DrePage() {
   const comparacaoBenchmark = useMemo(
     () => compararComBenchmarkIBGE(despesasPorCategoria, perfil.perfil?.pessoasNaCasa),
     [despesasPorCategoria, perfil.perfil]
+  );
+  // Renda bruta do mês vs. média nacional de quem tem a mesma escolaridade.
+  // Só aparece com escolaridade informada no Perfil — sem isso não existe
+  // referência pra comparar contra, e chutar uma seria pior que não mostrar.
+  const comparacaoRenda = useMemo(
+    () =>
+      perfil.perfil?.escolaridade
+        ? compararRenda(ganhos.total, perfil.perfil.escolaridade)
+        : null,
+    [ganhos.total, perfil.perfil]
   );
   const totalDespesasEntries =
     dre.atual.despesasVariaveis + dre.atual.despesasRecorrentes + dre.atual.parcelasCartao;
@@ -422,6 +434,107 @@ export default function DrePage() {
               destaque
             />
           </Secao>
+
+          {/* SUA RENDA vs. MÉDIA NACIONAL */}
+          {comparacaoRenda ? (
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <h2 className="text-sm font-medium text-text-muted mb-3">
+                Sua renda vs. a média nacional
+              </h2>
+
+              <div className="flex items-baseline justify-between gap-3 mb-1">
+                <span
+                  className={`text-2xl font-bold ${
+                    comparacaoRenda.acimaDaMedia ? "text-positive" : "text-gold"
+                  }`}
+                >
+                  {comparacaoRenda.acimaDaMedia ? "+" : "−"}
+                  {Math.abs(comparacaoRenda.percentual).toFixed(0)}%
+                </span>
+                <span className="text-xs text-text-faint text-right">
+                  {comparacaoRenda.acimaDaMedia ? "acima" : "abaixo"} da média de quem
+                  está {comparacaoRenda.rotuloNivel}
+                </span>
+              </div>
+
+              <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden mb-3">
+                <div
+                  className={`h-full rounded-full ${
+                    comparacaoRenda.acimaDaMedia ? "bg-positive" : "bg-gold"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (comparacaoRenda.rendaMensal / (comparacaoRenda.mediaDoNivel * 2)) * 100)}%`,
+                  }}
+                />
+              </div>
+
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Sua renda bruta do mês</span>
+                  <span className="font-medium">
+                    {formatarMoeda(comparacaoRenda.rendaMensal)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">
+                    Média de quem está {comparacaoRenda.rotuloNivel}
+                  </span>
+                  <span className="text-text-faint">
+                    {formatarMoeda(comparacaoRenda.mediaDoNivel)}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-line-soft pt-1.5">
+                  <span className="text-text-muted">Diferença</span>
+                  <span
+                    className={
+                      comparacaoRenda.acimaDaMedia ? "text-positive" : "text-gold"
+                    }
+                  >
+                    {comparacaoRenda.acimaDaMedia ? "+" : "−"}
+                    {formatarMoeda(Math.abs(comparacaoRenda.diferenca))} ·{" "}
+                    {comparacaoRenda.vezesAMedia.toFixed(2)}× a média
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">
+                    Média nacional (todas as escolaridades)
+                  </span>
+                  <span className="text-text-faint">
+                    {formatarMoeda(comparacaoRenda.mediaNacional)} ·{" "}
+                    {comparacaoRenda.percentualVsNacional >= 0 ? "+" : "−"}
+                    {Math.abs(comparacaoRenda.percentualVsNacional).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+
+              <p className="mt-3 pt-3 border-t border-line-soft text-[11px] text-text-faint">
+                {FONTE_RENDA.nome}. A pesquisa publica média por escolaridade,
+                nacional e somando todas as idades — <strong>não</strong> existe
+                corte oficial por escola pública/particular nem por ano de idade
+                isolado, então essa comparação não é &quot;jovens de 19 anos de
+                escola pública&quot;, e sim &quot;todo mundo no país com a mesma
+                escolaridade&quot;. Como a média inclui gente com décadas de
+                carreira, quem está começando tende a aparecer abaixo dela — isso
+                é esperado, não é um problema.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-center">
+              <p className="text-sm text-text-faint mb-2">
+                {perfil.perfil?.escolaridade
+                  ? "Sem receita lançada neste mês pra comparar."
+                  : "Quer saber se sua renda está acima ou abaixo da média?"}
+              </p>
+              {!perfil.perfil?.escolaridade && (
+                <Link
+                  href="/perfil"
+                  className="text-xs font-medium text-brand hover:text-brand-dark"
+                >
+                  Informe sua escolaridade no Perfil →
+                </Link>
+              )}
+            </div>
+          )}
 
           {/* CONTAS FIXAS */}
           <Secao titulo="Contas fixas" total={totalContas} corTotal="text-gold">

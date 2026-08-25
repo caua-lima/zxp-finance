@@ -87,13 +87,54 @@ export interface Gasto {
   ajusteConciliacaoId?: string; // presente só em gasto criado por ajuste de conciliação
 }
 
+export type NivelEscolaridade =
+  | "sem_instrucao"
+  | "fundamental"
+  | "medio_incompleto"
+  | "medio"
+  | "superior_incompleto"
+  | "superior";
+
+export type TipoEscola = "publica" | "particular" | "ambas";
+
+export type SituacaoTrabalho = "clt" | "pj" | "mei" | "autonomo" | "estagio" | "informal" | "outro";
+
 export interface PerfilUsuario {
-  idade?: number;
+  dataNascimento?: string; // "YYYY-MM-DD" — idade é derivada disso (ver idadeEm)
+  idade?: number; // legado: preenchido manualmente antes de dataNascimento existir
+  escolaridade?: NivelEscolaridade;
+  tipoEscola?: TipoEscola;
+  situacaoTrabalho?: SituacaoTrabalho;
+  uf?: string; // sigla do estado
   pessoasNaCasa?: number; // quantas pessoas moram na casa, contando você — base pra dividir benchmark per capita
   moraSozinho?: boolean;
   contasProprias?: string; // texto livre: o que é responsabilidade sua vs. dividida/de outra pessoa
+  biografia?: string; // texto livre: contexto de vida que os números sozinhos não contam
   rendaAproximada?: number;
   atualizadoEm: number;
+}
+
+/**
+ * Idade em anos completos em `hojeISO`, a partir de "YYYY-MM-DD". Compara
+ * mês/dia direto na string (sem `new Date`) pra não cair no mesmo problema
+ * de fuso que já mordeu o resto do app.
+ */
+export function idadeEm(dataNascimento: string, hojeISO: string): number {
+  const [anoN, mesN, diaN] = dataNascimento.split("-").map(Number);
+  const [anoH, mesH, diaH] = hojeISO.split("-").map(Number);
+  let idade = anoH - anoN;
+  if (mesH < mesN || (mesH === mesN && diaH < diaN)) idade--;
+  return Math.max(0, idade);
+}
+
+/** Dias até o próximo aniversário (0 = é hoje). */
+export function diasAteAniversario(dataNascimento: string, hojeISO: string): number {
+  const [, mesN, diaN] = dataNascimento.split("-").map(Number);
+  const [anoH, mesH, diaH] = hojeISO.split("-").map(Number);
+  const hoje = new Date(anoH, mesH - 1, diaH);
+  let proximo = new Date(anoH, mesN - 1, diaN);
+  if (proximo < hoje) proximo = new Date(anoH + 1, mesN - 1, diaN);
+  return Math.round((proximo.getTime() - hoje.getTime()) / 86400000);
 }
 
 export interface ComissaoConfig {

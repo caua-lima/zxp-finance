@@ -1,6 +1,15 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FinancialEntry, parcelasRestantesEm, mesSeguinte, mesAnteriorDe, Parcela, Gasto } from "../types";
+import {
+  FinancialEntry,
+  parcelasRestantesEm,
+  mesSeguinte,
+  mesAnteriorDe,
+  idadeEm,
+  diasAteAniversario,
+  Parcela,
+  Gasto,
+} from "../types";
 import {
   calculateProjectedBalance,
   calculateOverdueEntries,
@@ -23,6 +32,8 @@ import {
 import { sugerirCrescimentoCategorias, compararComBenchmarkIBGE } from "./sugestoes";
 import { GrupoPorCategoria } from "./entries";
 import { calcularComissaoDoDia } from "./comissoes";
+import { compararRenda, MEDIA_NACIONAL } from "./benchmarkRenda";
+import { diasAteVencimento, deveAvisar, montarAviso } from "./vencimentoFatura";
 
 /**
  * Testes dos cálculos financeiros críticos (Fase 11). Roda com o test
@@ -392,5 +403,88 @@ describe("comissão do dia", () => {
       calcularComissaoDoDia({ reunioes: 0, vendasPerformance: 0, vendasAcelera: 0 }, valores),
       0
     );
+  });
+});
+
+describe("idade e aniversário", () => {
+  test("idade só vira no dia do aniversário, não antes", () => {
+    assert.equal(idadeEm("2007-08-20", "2026-08-19"), 18); // véspera
+    assert.equal(idadeEm("2007-08-20", "2026-08-20"), 19); // no dia
+    assert.equal(idadeEm("2007-08-20", "2026-08-21"), 19);
+  });
+
+  test("mês anterior ao aniversário ainda não conta o ano", () => {
+    assert.equal(idadeEm("2007-12-31", "2026-08-24"), 18);
+  });
+
+  test("diasAteAniversario: 0 no dia, e vira pro ano seguinte quando já passou", () => {
+    assert.equal(diasAteAniversario("2007-08-24", "2026-08-24"), 0);
+    assert.equal(diasAteAniversario("2007-08-26", "2026-08-24"), 2);
+    // já passou em agosto → conta pro aniversário de 2027
+    assert.equal(diasAteAniversario("2007-08-20", "2026-08-24"), 361);
+  });
+});
+
+describe("renda vs. média nacional (PNAD)", () => {
+  test("quem está cursando superior é comparado com a média de médio completo (último nível concluído)", () => {
+    const cursando = compararRenda(2905, "superior_incompleto")!;
+    const concluiuMedio = compararRenda(2905, "medio")!;
+    assert.equal(cursando.mediaDoNivel, concluiuMedio.mediaDoNivel);
+    assert.equal(cursando.diferenca, 0); // exatamente na média
+    assert.equal(cursando.vezesAMedia, 1);
+  });
+
+  test("acima da média: diferença e percentual positivos", () => {
+    const c = compararRenda(5810, "medio")!; // exatamente o dobro de 2905
+    assert.ok(c.acimaDaMedia);
+    assert.equal(c.diferenca, 2905);
+    assert.equal(c.percentual, 100);
+    assert.equal(c.vezesAMedia, 2);
+  });
+
+  test("abaixo da média: diferença e percentual negativos", () => {
+    const c = compararRenda(1000, "superior")!;
+    assert.equal(c.acimaDaMedia, false);
+    assert.ok(c.diferenca < 0);
+    assert.ok(c.percentual < 0);
+  });
+
+  test("compara também com a média nacional geral, independente da escolaridade", () => {
+    const c = compararRenda(MEDIA_NACIONAL, "medio")!;
+    assert.equal(c.percentualVsNacional, 0);
+  });
+
+  test("renda zero não gera comparação (evita divisão por zero na tela)", () => {
+    assert.equal(compararRenda(0, "medio"), null);
+  });
+});
+
+describe("vencimento de fatura", () => {
+  test("conta os dias certos até o vencimento", () => {
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-10"), 5);
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-14"), 1);
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-15"), 0);
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-16"), -1); // já venceu
+  });
+
+  test("dia 31 em mês de 30 dias cai no último dia do mês, não vaza pro mês seguinte", () => {
+    // setembro tem 30 dias — vencimento "dia 31" vira dia 30
+    assert.equal(diasAteVencimento(31, "2026-09", "2026-09-30"), 0);
+  });
+
+  test("avisa só nos 3 marcos: 5 dias, 1 dia e no dia", () => {
+    assert.equal(deveAvisar(5), true);
+    assert.equal(deveAvisar(1), true);
+    assert.equal(deveAvisar(0), true);
+    assert.equal(deveAvisar(4), false);
+    assert.equal(deveAvisar(2), false);
+    assert.equal(deveAvisar(-1), false); // atrasada não repete aviso aqui
+  });
+
+  test("cada marco tem seu próprio texto", () => {
+    assert.match(montarAviso("Nubank", "R$ 500,00", 5)!.titulo, /em 5 dias/);
+    assert.match(montarAviso("Nubank", "R$ 500,00", 1)!.titulo, /amanhã/);
+    assert.match(montarAviso("Nubank", "R$ 500,00", 0)!.titulo, /hoje/);
+    assert.equal(montarAviso("Nubank", "R$ 500,00", 3), null);
   });
 });
