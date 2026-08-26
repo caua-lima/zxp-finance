@@ -18,6 +18,7 @@ import {
   IconDre,
   IconAcesso,
   IconComissoes,
+  IconMicrofone,
   IconPerfil,
   IconMais,
   IconSair,
@@ -42,6 +43,13 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
   {
     titulo: "Dia a dia",
     itens: [
+      {
+        href: "/chat",
+        label: "Anotar gasto",
+        labelCurto: "Anotar",
+        Icon: IconMicrofone,
+        descricao: "Falar ou escrever o que gastou",
+      },
       {
         href: "/saldo",
         label: "Saldo e gastos",
@@ -90,9 +98,9 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
  */
 const TABS_MOBILE: ItemNav[] = [
   { href: "/", label: "Resumo", Icon: IconResumo },
+  { href: "/chat", label: "Anotar", Icon: IconMicrofone },
   { href: "/saldo", label: "Saldo", Icon: IconSaldo },
   { href: "/comissoes", label: "Comissões", Icon: IconComissoes },
-  { href: "/checklist", label: "Checklist", Icon: IconChecklist },
 ];
 
 export function Nav() {

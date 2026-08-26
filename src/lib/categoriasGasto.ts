@@ -22,22 +22,33 @@ export function iconeCategoriaGasto(categoria: string): string {
   return ICONE_CATEGORIA_GASTO[categoria] ?? "🗂️";
 }
 
+// Ordem importa: a primeira regra que bater vence. Termos mais específicos
+// vêm antes dos genéricos (ex: "posto de gasolina" antes de "posto").
 const REGRAS_CATEGORIA: [RegExp, string][] = [
   [
-    /gasolina|combust[ií]vel|uber|99|onibus|ônibus|estacionamento|ped[aá]gio|metr[oô]|passagem/i,
+    /gasolina|etanol|alcool|álcool|combust[ií]vel|posto|uber|\b99\b|indriver|t[aá]xi|taxi|[oô]nibus|onibus|metr[oô]|passagem|bilhete|estacionamento|ped[aá]gio|mec[aâ]nico|oficina|pneu|[oó]leo|lavagem|ipva|licenciamento|multa|revis[aã]o/i,
     "Transporte",
   ],
   [
-    /mercado|supermercado|ifood|restaurante|lanche|padaria|almo[cç]o|janta|caf[eé]|pizza|hamburguer|hambúrguer/i,
+    /mercado|supermercado|hortifruti|feira|a[cç]ougue|ifood|rappi|restaurante|lanche|lanchonete|rango|marmita|padaria|almo[cç]o|jantar?|caf[eé]|pizza|hamb[uú]rguer|hamburguer|burger|sushi|churrasco|espetinho|pastel|coxinha|salgado|a[cç]a[ií]|sorvete|doce|chocolate|refrigerante|suco|p[aã]o|leite/i,
     "Alimentação",
   ],
   [
-    /farm[aá]cia|rem[eé]dio|m[eé]dico|consulta|dentista|exame|academia/i,
+    /farm[aá]cia|rem[eé]dio|m[eé]dico|consulta|dentista|exame|vacina|psic[oó]logo|terapia|fisioterapia|[oó]culos|lente|plano de sa[uú]de|academia|suplemento|whey/i,
     "Saúde",
   ],
-  [/cinema|\bbar\b|balada|jogo|show|viagem|passeio|streaming|netflix/i, "Lazer"],
-  [/roupa|loja|shopping|t[eê]nis|sapato|presente/i, "Compras"],
-  [/aluguel|condom[ií]nio|\bluz\b|\bágua\b|\bagua\b|internet|gás|gas\b/i, "Casa"],
+  [
+    /cinema|\bbar\b|boteco|balada|festa|rol[eê]|cerveja|bebida|ingresso|show|viagem|passeio|streaming|netflix|spotify|disney|prime|jogo|game|steam|livro/i,
+    "Lazer",
+  ],
+  [
+    /roupa|loja|shopping|t[eê]nis|sapato|presente|shopee|mercado livre|amazon|magalu|aliexpress|perfume|cosm[eé]tico|cabelo|barbeiro|sal[aã]o|manicure/i,
+    "Compras",
+  ],
+  [
+    /aluguel|condom[ií]nio|\bluz\b|energia|[aá]gua|agua|internet|wifi|g[aá]s|botij[aã]o|faxina|diarista|material|reforma|m[oó]vel|movel/i,
+    "Casa",
+  ],
 ];
 
 export function inferirCategoriaGasto(descricao: string): string {

@@ -50,6 +50,8 @@ import {
   avisoComissaoEsquecida,
   avisoChecklistParado,
 } from "./notificacoes";
+import { parseGastoTexto } from "../parseGastoTexto";
+import { inferirCategoriaGasto } from "../categoriasGasto";
 import {
   avaliarDiasFechados,
   sequenciaAtual,
@@ -819,6 +821,56 @@ describe("conquistas", () => {
     assert.equal(melhoras.length, 1); // Lazer caiu só 5
     assert.equal(melhoras[0].categoria, "Alimentação");
     assert.equal(melhoras[0].economia, 200);
+  });
+});
+
+describe("interpretar frase de gasto", () => {
+  // Cada caso aqui é uma forma real de falar. O reconhecimento de voz
+  // devolve a frase inteira, incluindo "acabei de gastar" — se o parser não
+  // limpar isso, a descrição vira a frase toda.
+  const casos: [frase: string, valor: number, descricao: string, categoria: string][] = [
+    ["Acabei de gastar 3 reais em paieiro", 3, "paieiro", "Outros"],
+    ["gastei 100 reais de gasolina", 100, "gasolina", "Transporte"],
+    ["paguei 50 no mercado", 50, "mercado", "Alimentação"],
+    ["torrei 200 no rolê", 200, "rolê", "Lazer"],
+    ["almoço 42", 42, "almoço", "Alimentação"],
+    ["comprei um lanche de 25", 25, "lanche", "Alimentação"],
+    ["R$ 15,50 no uber", 15.5, "uber", "Transporte"],
+    ["foi 12 no café", 12, "café", "Alimentação"],
+    ["acabei de pagar a farmácia, 87,90", 87.9, "farmácia", "Saúde"],
+  ];
+
+  for (const [frase, valor, descricao, categoria] of casos) {
+    test(`"${frase}"`, () => {
+      const r = parseGastoTexto(frase);
+      assert.equal(r.valor, valor);
+      assert.equal(r.descricao, descricao);
+      assert.equal(inferirCategoriaGasto(r.descricao), categoria);
+    });
+  }
+
+  test("número por extenso, quando a voz não converte pra dígito", () => {
+    const a = parseGastoTexto("gastei trinta e cinco reais no ifood");
+    assert.equal(a.valor, 35);
+    assert.equal(a.descricao, "ifood");
+
+    const b = parseGastoTexto("paguei cento e vinte de internet");
+    assert.equal(b.valor, 120);
+    assert.equal(b.descricao, "internet");
+  });
+
+  test("marcador de moeda vence número solto — em '2 pizzas de 30 reais' o preço é 30", () => {
+    assert.equal(parseGastoTexto("2 pizzas de 30 reais").valor, 30);
+  });
+
+  test("frase sem valor não inventa número", () => {
+    const r = parseGastoTexto("comprei pão");
+    assert.equal(r.valor, null);
+    assert.equal(r.descricao, "pão");
+  });
+
+  test("frase vazia não quebra", () => {
+    assert.deepEqual(parseGastoTexto("   "), { valor: null, descricao: "" });
   });
 });
 
