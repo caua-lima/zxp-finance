@@ -28,6 +28,7 @@ import {
   calculateGastoDoDia,
   hojeISO,
 } from "@/lib/finance/calculations";
+import { projetarRitmo } from "@/lib/finance/ritmo";
 import { usePushNotifications } from "@/lib/usePushNotifications";
 import { useMonthClose } from "@/lib/useMonthClose";
 
@@ -100,6 +101,13 @@ export default function SaldoPage() {
 
   const totalGastoHoje = calculateGastoDoDia(gastos, hoje);
   const aindaPodeGastarHoje = gastavelPorDia === null ? null : gastavelPorDia - totalGastoHoje;
+
+  // "Previsão de chegada": onde o ritmo já praticado neste mês te deixa no
+  // dia 30. O orçamento diário sozinho não avisa que dá pra estourar um
+  // pouquinho todo dia e só descobrir isso no dia 25. Sem useMemo de
+  // propósito — é um filter + reduce sobre os gastos do mês, e o compilador
+  // do React memoiza sozinho.
+  const projecao = projetarRitmo(saldoAtual, reservaMeta, gastos, mes, hoje);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -221,11 +229,33 @@ export default function SaldoPage() {
             </>
           )}
 
-          <p className="mt-3 border-t border-line-soft pt-3 text-[11px] text-text-faint">
-            {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} restante
-            {diasRestantes === 1 ? "" : "s"} no mês · sobra prevista de{" "}
-            {formatarMoeda(reservaMeta)}
-          </p>
+          {/* previsão de chegada — para onde o ritmo atual te leva */}
+          {projecao && (
+            <div className="mt-3 border-t border-line-soft pt-3">
+              {projecao.diaQueZera ? (
+                <p className="text-xs font-medium text-negative">
+                  ⚠ No seu ritmo, o dinheiro acaba dia{" "}
+                  {projecao.diaQueZera.split("-")[2]}
+                </p>
+              ) : projecao.batendoMeta ? (
+                <p className="text-xs font-medium text-positive">
+                  ✓ No seu ritmo, o mês fecha com{" "}
+                  {formatarMoeda(projecao.sobraProjetada)}
+                </p>
+              ) : (
+                <p className="text-xs font-medium text-gold">
+                  ⚠ No seu ritmo, sobra {formatarMoeda(projecao.sobraProjetada)} —{" "}
+                  {formatarMoeda(reservaMeta - projecao.sobraProjetada)} abaixo da
+                  sua meta
+                </p>
+              )}
+              <p className="mt-1 text-[11px] text-text-faint">
+                Média de {formatarMoeda(projecao.gastoMedioDiario)}/dia até aqui ·{" "}
+                {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} restante
+                {diasRestantes === 1 ? "" : "s"}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

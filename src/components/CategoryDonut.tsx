@@ -39,8 +39,11 @@ export function CategoryDonut({ grupos }: { grupos: GrupoPorCategoria[] }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
       <h2 className="text-sm font-medium text-text-muted mb-4">Distribuição de gastos</h2>
-      <div className="flex items-center gap-6">
-        <svg viewBox="0 0 36 36" className="w-28 h-28 shrink-0 -rotate-90">
+      {/* No celular o donut fica em cima e a legenda embaixo, em largura
+          total: lado a lado sobravam ~200px pra linhas do tipo
+          "Alimentação  R$ 1.234,56 · 45%", que quebravam ou truncavam. */}
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+        <svg viewBox="0 0 36 36" className="h-32 w-32 shrink-0 -rotate-90 sm:h-28 sm:w-28">
           <circle cx="18" cy="18" r={raio} fill="none" stroke="var(--color-surface-2)" strokeWidth="4" />
           {fatias.map((f) => {
             const fracao = f.valor / total;
@@ -63,15 +66,18 @@ export function CategoryDonut({ grupos }: { grupos: GrupoPorCategoria[] }) {
             );
           })}
         </svg>
-        <ul className="flex-1 min-w-0 space-y-1.5">
+        <ul className="w-full min-w-0 flex-1 space-y-2">
           {fatias.map((f) => (
             <li key={f.nome} className="flex items-center justify-between gap-2 text-xs">
-              <span className="flex items-center gap-1.5 min-w-0">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: f.cor }} />
-                <span className="truncate text-text-muted capitalize">{f.nome}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: f.cor }} />
+                <span className="truncate capitalize text-text-muted">{f.nome}</span>
               </span>
-              <span className="shrink-0 text-text">
-                {formatarMoeda(f.valor)} · {((f.valor / total) * 100).toFixed(0)}%
+              <span className="shrink-0 tabular-nums text-text">
+                {formatarMoeda(f.valor)}
+                <span className="ml-1 text-text-faint">
+                  {((f.valor / total) * 100).toFixed(0)}%
+                </span>
               </span>
             </li>
           ))}

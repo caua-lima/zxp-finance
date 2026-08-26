@@ -36,6 +36,20 @@ import { calcularComissaoDoDia } from "./comissoes";
 import { compararRenda, MEDIA_NACIONAL } from "./benchmarkRenda";
 import { diasAteVencimento, deveAvisar, montarAviso } from "./vencimentoFatura";
 import { saldoEstaVelho } from "./alerts";
+import {
+  projetarRitmo,
+  resumoDaSemana,
+  ehSexta,
+  ehDomingo,
+  ehUltimoDiaDoMes,
+  orcamentoDoFimDeSemana,
+} from "./ritmo";
+import {
+  notificacaoDiaria,
+  avisoRitmoPerigoso,
+  avisoComissaoEsquecida,
+  avisoChecklistParado,
+} from "./notificacoes";
 
 /**
  * Testes dos cálculos financeiros críticos (Fase 11). Roda com o test
@@ -510,6 +524,207 @@ describe("saldo de outro mês", () => {
   test("navegar pra um mês futuro na tela não torna o saldo velho (compara com hoje)", () => {
     // hojeISO é sempre o dia real; o mês visualizado não entra na conta
     assert.equal(saldoEstaVelho(meioDia("2026-09-10"), "2026-09-10"), false);
+  });
+});
+
+describe("projeção de ritmo", () => {
+  // gasto num dia específico de setembro/2026, meio-dia em Brasília
+  const gastoEm = (dia: number, valor: number, categoria = "Alimentação"): Gasto => ({
+    id: `g${dia}-${valor}`,
+    descricao: "teste",
+    valor,
+    categoria,
+    mes: "2026-09",
+    criadoEm: new Date(`2026-09-${String(dia).padStart(2, "0")}T15:00:00Z`).getTime(),
+  });
+
+  test("no ritmo tranquilo, projeta sobra acima da meta", () => {
+    // dia 10, gastou 500 em 10 dias = 50/dia. Restam 20 dias à frente.
+    // 3000 - 50*20 = 2000, acima da meta de 800.
+    const gastos = [gastoEm(10, 500)];
+    const p = projetarRitmo(3000, 800, gastos, "2026-09", "2026-09-10")!;
+    assert.equal(p.gastoMedioDiario, 50);
+    assert.equal(p.sobraProjetada, 2000);
+    assert.equal(p.batendoMeta, true);
+    assert.equal(p.diaQueZera, null);
+  });
+
+  test("no ritmo apertado, avisa que não bate a meta mesmo sem zerar", () => {
+    // dia 10, gastou 1500 = 150/dia. 1500 - 150*20 = -1500 → zera antes.
+    const gastos = [gastoEm(10, 1500)];
+    const p = projetarRitmo(1500, 800, gastos, "2026-09", "2026-09-10")!;
+    assert.equal(p.batendoMeta, false);
+  });
+
+  test("aponta o dia exato em que o dinheiro zera", () => {
+    // dia 10, gastou 1000 = 100/dia. Saldo 500 aguenta 5 dias → zera dia 15.
+    const gastos = [gastoEm(10, 1000)];
+    const p = projetarRitmo(500, 0, gastos, "2026-09", "2026-09-10")!;
+    assert.equal(p.gastoMedioDiario, 100);
+    assert.equal(p.diasQueAguenta, 5);
+    assert.equal(p.diaQueZera, "2026-09-15");
+  });
+
+  test("sem gasto nenhum não inventa dia de zerar", () => {
+    const p = projetarRitmo(1000, 0, [], "2026-09", "2026-09-10")!;
+    assert.equal(p.gastoMedioDiario, 0);
+    assert.equal(p.diaQueZera, null);
+    assert.equal(p.sobraProjetada, 1000);
+  });
+
+  test("ajuste de conciliação não entra no ritmo (senão um ajuste grande vira 'ritmo')", () => {
+    const gastos = [gastoEm(10, 100), { ...gastoEm(10, 900), ajusteConciliacaoId: "c1" }];
+    const p = projetarRitmo(3000, 0, gastos, "2026-09", "2026-09-10")!;
+    assert.equal(p.gastoMedioDiario, 10); // só os 100, não os 1000
+  });
+
+  test("sem saldo informado não há projeção", () => {
+    assert.equal(projetarRitmo(null, 800, [], "2026-09", "2026-09-10"), null);
+  });
+
+  test("no último dia do mês não projeta nada pra frente", () => {
+    const gastos = [gastoEm(30, 3000)];
+    const p = projetarRitmo(1000, 800, gastos, "2026-09", "2026-09-30")!;
+    assert.equal(p.sobraProjetada, 1000); // 0 dias à frente
+    assert.equal(p.batendoMeta, true);
+  });
+});
+
+describe("marcos da semana e do mês", () => {
+  test("identifica sexta, domingo e último dia", () => {
+    assert.equal(ehSexta("2026-09-04"), true); // sexta
+    assert.equal(ehSexta("2026-09-05"), false); // sábado
+    assert.equal(ehDomingo("2026-09-06"), true);
+    assert.equal(ehUltimoDiaDoMes("2026-09-30"), true);
+    assert.equal(ehUltimoDiaDoMes("2026-09-29"), false);
+    assert.equal(ehUltimoDiaDoMes("2026-02-28"), true); // fevereiro sem bissexto
+  });
+
+  test("orçamento do fim de semana é o diário vezes 3", () => {
+    assert.equal(orcamentoDoFimDeSemana(60), 180);
+    assert.equal(orcamentoDoFimDeSemana(null), null);
+  });
+});
+
+describe("resumo da semana", () => {
+  const gastoEm = (iso: string, valor: number, categoria: string): Gasto => ({
+    id: `${iso}-${valor}`,
+    descricao: "teste",
+    valor,
+    categoria,
+    mes: iso.slice(0, 7),
+    criadoEm: new Date(`${iso}T15:00:00Z`).getTime(),
+  });
+
+  test("soma os últimos 7 dias e aponta a categoria que mais pesou", () => {
+    const gastos = [
+      gastoEm("2026-09-10", 200, "Alimentação"),
+      gastoEm("2026-09-12", 80, "Transporte"),
+      gastoEm("2026-09-13", 150, "Alimentação"),
+    ];
+    const r = resumoDaSemana(gastos, "2026-09-13");
+    assert.equal(r.total, 430);
+    assert.equal(r.categoriaTop, "Alimentação");
+    assert.equal(r.valorTop, 350);
+  });
+
+  test("gasto de 8 dias atrás fica de fora da janela", () => {
+    const gastos = [
+      gastoEm("2026-09-05", 999, "Lazer"), // 8 dias antes de 13/09
+      gastoEm("2026-09-07", 100, "Lazer"), // 6 dias antes, entra
+    ];
+    const r = resumoDaSemana(gastos, "2026-09-13");
+    assert.equal(r.total, 100);
+  });
+
+  test("semana sem gasto devolve zero, sem categoria", () => {
+    const r = resumoDaSemana([], "2026-09-13");
+    assert.equal(r.total, 0);
+    assert.equal(r.categoriaTop, null);
+  });
+});
+
+describe("notificações do dia", () => {
+  // setembro/2026: dia 4 = sexta, 6 = domingo, 7 = segunda, 30 = último dia
+  const base = {
+    saldoAtual: 2000,
+    reservaMeta: 800,
+    gastavelPorDia: 80,
+    gastoHoje: 20,
+    gastos: [] as Gasto[],
+    projecao: null,
+  };
+
+  test("dia comum fala de quanto ainda dá pra gastar hoje", () => {
+    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-09" });
+    assert.match(n.title, /pode gastar/);
+    assert.equal(n.url, "/saldo");
+  });
+
+  test("estourou o dia: o título muda de tom", () => {
+    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-09", gastoHoje: 200 });
+    assert.match(n.title, /passou/);
+  });
+
+  test("sexta fala do fim de semana inteiro, não só do dia", () => {
+    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-04" });
+    assert.match(n.title, /Fim de semana/);
+    assert.match(n.title, /240,00/); // 80 × 3 dias
+  });
+
+  test("domingo fecha a semana com a categoria que mais pesou", () => {
+    const gastos: Gasto[] = [
+      {
+        id: "g1", descricao: "ifood", valor: 300, categoria: "Alimentação",
+        mes: "2026-09", criadoEm: new Date("2026-09-05T15:00:00Z").getTime(),
+      },
+    ];
+    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-06", gastos });
+    assert.match(n.title, /Semana fechada/);
+    assert.match(n.body, /Alimentação/);
+  });
+
+  test("último dia do mês fecha o mês e diz se bateu a meta", () => {
+    const bateu = notificacaoDiaria({ ...base, hojeISO: "2026-09-30", saldoAtual: 900 });
+    assert.match(bateu.body, /bateu/);
+    const naoBateu = notificacaoDiaria({ ...base, hojeISO: "2026-09-30", saldoAtual: 300 });
+    assert.ok(!naoBateu.body.includes("bateu"));
+  });
+});
+
+describe("avisos fora da rotina", () => {
+  const projecaoQueZera = {
+    gastoMedioDiario: 100, sobraProjetada: -500, batendoMeta: false,
+    diaQueZera: "2026-09-22", diasQueAguenta: 5,
+  };
+
+  test("ritmo perigoso só avisa na segunda, pra não virar ruído diário", () => {
+    assert.ok(avisoRitmoPerigoso(projecaoQueZera, "2026-09-07")); // segunda
+    assert.equal(avisoRitmoPerigoso(projecaoQueZera, "2026-09-08"), null); // terça
+  });
+
+  test("ritmo saudável nunca vira aviso, nem na segunda", () => {
+    const ok = { ...projecaoQueZera, diaQueZera: null, batendoMeta: true };
+    assert.equal(avisoRitmoPerigoso(ok, "2026-09-07"), null);
+  });
+
+  test("comissão: avisa se ontem foi dia útil sem lançamento", () => {
+    // quarta 09, ontem foi terça 08 — sem lançamento
+    assert.ok(avisoComissaoEsquecida(new Set(), "2026-09-09"));
+    // com lançamento em 08, não avisa
+    assert.equal(avisoComissaoEsquecida(new Set(["2026-09-08"]), "2026-09-09"), null);
+  });
+
+  test("comissão: não cobra na segunda (ontem era domingo) nem no domingo", () => {
+    assert.equal(avisoComissaoEsquecida(new Set(), "2026-09-07"), null); // segunda
+    assert.equal(avisoComissaoEsquecida(new Set(), "2026-09-06"), null); // domingo
+  });
+
+  test("checklist parado avisa uma vez, no dia 8, e só se nada foi pago", () => {
+    assert.ok(avisoChecklistParado(6, 0, "2026-09-08"));
+    assert.equal(avisoChecklistParado(6, 2, "2026-09-08"), null); // já começou
+    assert.equal(avisoChecklistParado(6, 0, "2026-09-09"), null); // outro dia
+    assert.equal(avisoChecklistParado(0, 0, "2026-09-08"), null); // nada cadastrado
   });
 });
 

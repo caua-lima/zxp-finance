@@ -10,6 +10,14 @@ import {
 } from "@/lib/finance/calculations";
 import { diasAteVencimento, deveAvisar, montarAviso } from "@/lib/finance/vencimentoFatura";
 import { saldoEstaVelho } from "@/lib/finance/alerts";
+import { projetarRitmo } from "@/lib/finance/ritmo";
+import {
+  notificacaoDiaria,
+  avisoRitmoPerigoso,
+  avisoComissaoEsquecida,
+  avisoChecklistParado,
+} from "@/lib/finance/notificacoes";
+import type { Gasto } from "@/lib/types";
 import { formatarMoeda, mesPadrao } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -22,8 +30,12 @@ interface SaldoDoc {
   reservaMeta?: number;
 }
 interface GastoDoc {
+  descricao?: string;
   valor: number;
+  categoria?: string;
+  mes?: string;
   criadoEm: number;
+  ajusteConciliacaoId?: string;
 }
 interface InscricaoDoc {
   endpoint: string;
@@ -82,6 +94,8 @@ export async function GET(req: NextRequest) {
     let pushEnviados = 0;
     let pushExpirados = 0;
     let avisosVencimento = 0;
+    let avisosRitmo = 0;
+    let avisosComissao = 0;
 
     for (const usuario of usuarios) {
       const inscricoes = await listarDocumentos<InscricaoDoc>(
@@ -133,30 +147,92 @@ export async function GET(req: NextRequest) {
         );
         notificouAlgo = true;
       } else if (saldo) {
+        const listaGastos: Gasto[] = gastos.map((g) => ({
+          id: g.id,
+          descricao: g.dados.descricao ?? "",
+          valor: g.dados.valor,
+          categoria: g.dados.categoria ?? "Outros",
+          mes: g.dados.mes ?? "",
+          criadoEm: g.dados.criadoEm,
+          ajusteConciliacaoId: g.dados.ajusteConciliacaoId,
+        }));
+
         const gastosDesdeReferencia = gastos.filter(
           (g) => g.dados.criadoEm > saldo.atualizadoEm
         );
         const saldoAtual =
           saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.dados.valor, 0);
+        const reservaMeta = saldo.reservaMeta ?? 0;
 
         const gastavelPorDia = calculateGastavelPorDia(
           saldoAtual,
-          saldo.reservaMeta ?? 0,
+          reservaMeta,
           diasRestantes
         );
 
         if (gastavelPorDia !== null) {
           const totalGastoHoje = gastos
-            .filter((g) => diaISOde(g.dados.criadoEm) === hoje)
+            .filter((g) => diaISOde(g.dados.criadoEm) === hoje && !g.dados.ajusteConciliacaoId)
             .reduce((acc, g) => acc + g.dados.valor, 0);
-          const aindaHoje = gastavelPorDia - totalGastoHoje;
 
-          const titulo =
-            aindaHoje >= 0
-              ? `Hoje você pode gastar ${formatarMoeda(aindaHoje)}`
-              : `Já passou ${formatarMoeda(Math.abs(aindaHoje))} do previsto pra hoje`;
-          const corpo = `Orçamento diário: ${formatarMoeda(gastavelPorDia)} · Saldo atual: ${formatarMoeda(saldoAtual)}`;
-          await enviar(JSON.stringify({ title: titulo, body: corpo, url: "/saldo" }));
+          const projecao = projetarRitmo(saldoAtual, reservaMeta, listaGastos, mes, hoje);
+
+          // Uma notificação de rotina por dia, com a cara do dia (sexta fala
+          // de fim de semana, domingo fecha a semana, dia 30 fecha o mês).
+          await enviar(
+            JSON.stringify(
+              notificacaoDiaria({
+                hojeISO: hoje,
+                saldoAtual,
+                reservaMeta,
+                gastavelPorDia,
+                gastoHoje: totalGastoHoje,
+                gastos: listaGastos,
+                projecao,
+              })
+            )
+          );
+          notificouAlgo = true;
+
+          // Alerta separado, só na segunda, e só se o ritmo zera o dinheiro
+          // antes do fim do mês — o tipo de coisa que merece interromper.
+          const perigo = avisoRitmoPerigoso(projecao, hoje);
+          if (perigo) {
+            await enviar(JSON.stringify(perigo));
+            avisosRitmo++;
+          }
+        }
+      }
+
+      // Comissão não lançada ontem (ele lança todo dia de trabalho)
+      const comissoes = await listarDocumentos<{ data: string }>(
+        `usuarios/${usuario.uid}/comissoes`
+      );
+      const aviso = avisoComissaoEsquecida(
+        new Set(comissoes.map((c) => c.dados.data)),
+        hoje
+      );
+      if (aviso) {
+        await enviar(JSON.stringify(aviso));
+        avisosComissao++;
+        notificouAlgo = true;
+      }
+
+      // Checklist do mês nem começado. As leituras ficam dentro do if porque
+      // este aviso só existe no dia 8 — não vale pagar 2 leituras por usuário
+      // nos outros 29 dias do mês.
+      if (Number(hoje.split("-")[2]) === 8) {
+        const [contas, pagamentosDoMes] = await Promise.all([
+          listarDocumentos<{ ativa?: boolean }>(`usuarios/${usuario.uid}/contasFixas`),
+          listarDocumentos(`usuarios/${usuario.uid}/pagamentos`),
+        ]);
+        const contasAtivas = contas.filter((c) => c.dados.ativa).length;
+        const marcadosNoMes = pagamentosDoMes.filter((p) =>
+          p.id.startsWith(`${mes}__`)
+        ).length;
+        const avisoChecklist = avisoChecklistParado(contasAtivas, marcadosNoMes, hoje);
+        if (avisoChecklist) {
+          await enviar(JSON.stringify(avisoChecklist));
           notificouAlgo = true;
         }
       }
@@ -209,6 +285,8 @@ export async function GET(req: NextRequest) {
       pushEnviados,
       pushExpirados,
       avisosVencimento,
+      avisosRitmo,
+      avisosComissao,
     });
   } catch (e) {
     return NextResponse.json(
