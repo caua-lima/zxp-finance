@@ -284,6 +284,29 @@ export default function SaldoPage() {
         />
       )}
 
+      {/* REGISTRO RÁPIDO — ação mais frequente da tela, fica logo abaixo do número
+          e acima de tudo mais, pra não precisar rolar pra lançar um gasto */}
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl border border-line bg-surface p-3 mb-3"
+      >
+        <label htmlFor="saldo-form-texto" className="rotulo px-1">
+          Registrar um gasto
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="saldo-form-texto"
+            placeholder='Ex: "Gastei 100 de gasolina"'
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            className="campo flex-1"
+          />
+          <Botao type="submit" className="shrink-0 px-5">
+            Salvar
+          </Botao>
+        </div>
+      </form>
+
       {/* CONQUISTAS — só aparece quando há o que comemorar de verdade */}
       {conquistas && conquistas.diasFechados > 0 && (
         <div className="mb-3 rounded-2xl border border-positive/25 bg-positive-soft/40 p-4">
@@ -323,28 +346,6 @@ export default function SaldoPage() {
           )}
         </div>
       )}
-
-      {/* REGISTRO RÁPIDO — é a ação mais frequente da tela, fica logo abaixo do número */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-3 mb-3"
-      >
-        <label htmlFor="saldo-form-texto" className="rotulo px-1">
-          Registrar um gasto
-        </label>
-        <div className="flex gap-2">
-          <input
-            id="saldo-form-texto"
-            placeholder='Ex: "Gastei 100 de gasolina"'
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            className="campo flex-1"
-          />
-          <Botao type="submit" className="shrink-0 px-5">
-            Salvar
-          </Botao>
-        </div>
-      </form>
 
       {/* SALDO, META E NOTIFICAÇÃO */}
       {saldo !== null && (

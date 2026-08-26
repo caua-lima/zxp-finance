@@ -13,6 +13,8 @@ import { useAssinaturas } from "@/lib/useAssinaturas";
 import { useParcelas } from "@/lib/useParcelas";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { usePagamentos, OrigemItem } from "@/lib/usePagamentos";
+import { useCartoesConfig } from "@/lib/useCartoesConfig";
+import { hojeISO } from "@/lib/finance/calculations";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -25,6 +27,8 @@ interface ItemChecklist {
   nome: string;
   detalhe?: string;
   valor: number;
+  /** Dia do mês em que vence, quando cadastrado. Ordena a lista e marca atraso. */
+  diaVencimento?: number;
 }
 
 export default function ChecklistPage() {
@@ -34,6 +38,7 @@ export default function ChecklistPage() {
   const parcelas = useParcelas();
   const faturas = useFaturasCartao(mes);
   const pagamentos = usePagamentos(mes);
+  const cartoesConfig = useCartoesConfig();
   const monthClose = useMonthClose(mes);
 
   const loading =
@@ -59,6 +64,7 @@ export default function ChecklistPage() {
         nome: c.nome,
         detalhe: `${iconeCategoria(c.categoria)} ${c.categoria}`,
         valor: c.valor,
+        diaVencimento: c.diaVencimento,
       }));
 
     const itensAssinaturas: ItemChecklist[] = assinaturas.assinaturas
@@ -68,6 +74,7 @@ export default function ChecklistPage() {
         origem: "assinatura" as const,
         nome: a.nome,
         valor: a.valor,
+        diaVencimento: a.diaRenovacao,
       }));
 
     const itensParcelas: ItemChecklist[] = parcelas.parcelas
@@ -103,22 +110,35 @@ export default function ChecklistPage() {
                 } desse cartão`
               : undefined,
           valor: f.valor,
+          diaVencimento: cartoesConfig.configs.find((c) => c.nome === f.nome)
+            ?.diaVencimento,
         };
       });
 
+    // Dentro de cada grupo, o que vence antes vem antes — no começo do mês a
+    // pergunta é "qual pago primeiro", e ordem de cadastro não responde isso.
+    // Sem dia cadastrado vai pro fim (o app assume fim do mês nesses casos).
+    const porVencimento = (a: ItemChecklist, b: ItemChecklist) =>
+      (a.diaVencimento ?? 99) - (b.diaVencimento ?? 99);
+
     return [
-      { titulo: "Contas fixas", itens: itensContas },
-      { titulo: "Assinaturas", itens: itensAssinaturas },
+      { titulo: "Contas fixas", itens: [...itensContas].sort(porVencimento) },
+      { titulo: "Assinaturas", itens: [...itensAssinaturas].sort(porVencimento) },
       { titulo: "Parcelas e financiamentos", itens: itensParcelas },
-      { titulo: "Fatura do cartão", itens: itensFaturas },
+      { titulo: "Fatura do cartão", itens: [...itensFaturas].sort(porVencimento) },
     ];
   }, [
     contas.contas,
     assinaturas.assinaturas,
     parcelas.parcelas,
     faturas.faturas,
+    cartoesConfig.configs,
     mes,
   ]);
+
+  const hoje = hojeISO();
+  const diaDeHoje = Number(hoje.split("-")[2]);
+  const ehMesCorrente = mes === hoje.slice(0, 7);
 
   function alternarPago(item: ItemChecklist, marcado: boolean) {
     if (monthClose.fechado) return;
@@ -246,16 +266,25 @@ export default function ChecklistPage() {
                   <ul className="space-y-2">
                     {grupo.itens.map((item) => {
                       const pago = pagamentos.estaPago(item.origem, item.id);
+                      // Só marca atraso no mês corrente: navegando pra um mês
+                      // futuro nada está atrasado, e num passado tudo estaria.
+                      const atrasada =
+                        !pago &&
+                        ehMesCorrente &&
+                        item.diaVencimento !== undefined &&
+                        item.diaVencimento < diaDeHoje;
                       return (
                         <li key={`${item.origem}-${item.id}`}>
                           <label
-                            className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+                            className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors ${
                               pago
                                 ? "border-brand/30 bg-brand-soft/40"
+                                : atrasada
+                                ? "border-negative/40 bg-negative-soft/30"
                                 : "border-line bg-surface hover:border-brand/25"
                             }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex min-w-0 items-center gap-3">
                               <input
                                 type="checkbox"
                                 checked={pago}
@@ -267,24 +296,30 @@ export default function ChecklistPage() {
                               />
                               <div className="min-w-0">
                                 <p
-                                  className={`text-sm truncate ${
+                                  className={`truncate text-sm ${
                                     pago
-                                      ? "line-through text-text-muted"
+                                      ? "text-text-muted line-through"
                                       : "text-text"
                                   }`}
                                 >
                                   {item.nome}
                                 </p>
-                                {item.detalhe && (
-                                  <p className="text-xs text-text-faint truncate">
-                                    {item.detalhe}
-                                  </p>
-                                )}
+                                <p className="truncate text-xs text-text-faint">
+                                  {item.diaVencimento !== undefined && (
+                                    <span className={atrasada ? "font-medium text-negative" : ""}>
+                                      {atrasada
+                                        ? `venceu dia ${item.diaVencimento}`
+                                        : `vence dia ${item.diaVencimento}`}
+                                    </span>
+                                  )}
+                                  {item.diaVencimento !== undefined && item.detalhe && " · "}
+                                  {item.detalhe}
+                                </p>
                               </div>
                             </div>
                             <span
-                              className={`text-sm font-medium shrink-0 ${
-                                pago ? "text-text-faint" : "text-gold"
+                              className={`shrink-0 text-sm font-medium ${
+                                pago ? "text-text-faint" : atrasada ? "text-negative" : "text-gold"
                               }`}
                             >
                               {formatarMoeda(item.valor)}

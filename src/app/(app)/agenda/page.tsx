@@ -49,6 +49,7 @@ export default function AgendaPage() {
   const [status, setStatus] = useState<FiltroStatus>("todos");
   const [categoria, setCategoria] = useState("todas");
   const [origem, setOrigem] = useState<FinancialEntrySource | "todas">("todas");
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   const categorias = useMemo(
     () => [...new Set(entries.map((e) => e.categoryId))].sort(),
@@ -60,6 +61,15 @@ export default function AgendaPage() {
   );
 
   const hoje = hojeISO();
+
+  // Quantos filtros estão fora do padrão — vira o contador no botão, pra
+  // ficar óbvio quando a lista está filtrada e não simplesmente vazia.
+  const filtrosAtivos =
+    (periodo !== "30" ? 1 : 0) +
+    (tipo !== "todos" ? 1 : 0) +
+    (status !== "todos" ? 1 : 0) +
+    (categoria !== "todas" ? 1 : 0) +
+    (origem !== "todas" ? 1 : 0);
 
   const filtrados = useMemo(() => {
     return entries.filter((e) => {
@@ -95,8 +105,33 @@ export default function AgendaPage() {
       />
       <ErroBanner mensagem={erro} />
 
-      {/* filtros */}
-      <div className="rounded-2xl border border-line bg-surface p-3 mb-4 flex flex-wrap gap-2">
+      {/* Filtros recolhidos por padrão: eram 13 chips + 2 selects ocupando
+          meia tela de celular antes de aparecer qualquer lançamento, sendo
+          que o padrão (próximos 30 dias, tudo) já é o que se quer ver quase
+          sempre. O botão mostra quantos filtros estão fora do padrão. */}
+      <div className="mb-4">
+        <button
+          onClick={() => setFiltrosAbertos((v) => !v)}
+          aria-expanded={filtrosAbertos}
+          className="flex min-h-[42px] w-full items-center justify-between rounded-xl border border-line bg-surface px-4 text-sm text-text-muted active:bg-surface-2"
+        >
+          <span>
+            Filtros
+            {filtrosAtivos > 0 && (
+              <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand">
+                {filtrosAtivos}
+              </span>
+            )}
+          </span>
+          <span className="text-text-faint">{filtrosAbertos ? "fechar" : "abrir"}</span>
+        </button>
+      </div>
+
+      <div
+        className={`rounded-2xl border border-line bg-surface p-3 mb-4 flex-wrap gap-2 ${
+          filtrosAbertos ? "flex" : "hidden"
+        }`}
+      >
         <SeletorChips
           valor={periodo}
           onChange={(v) => setPeriodo(v as FiltroPeriodo)}
