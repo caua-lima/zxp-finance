@@ -384,6 +384,20 @@ export default function SaldoPage() {
                   </button>
                 </div>
               )}
+              {push.precisaInstalar && (
+                <div className="border-t border-line-soft pt-2.5">
+                  <p className="text-[11px] font-medium text-gold">
+                    Pra receber aviso no celular, instale o app
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-text-faint">
+                    No iPhone a notificação só funciona com o app na tela de
+                    início. Toque em <strong>Compartilhar</strong> (o quadrado com
+                    a seta pra cima) e depois em{" "}
+                    <strong>Adicionar à Tela de Início</strong>. Abra por lá e o
+                    botão de ativar aparece aqui.
+                  </p>
+                </div>
+              )}
               {push.erro && <p className="text-xs text-negative">{push.erro}</p>}
             </div>
           )}

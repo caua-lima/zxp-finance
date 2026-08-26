@@ -29,6 +29,8 @@ export function usePushNotifications() {
   const [ativo, setAtivo] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [ehIOS, setEhIOS] = useState(false);
+  const [instalado, setInstalado] = useState(false);
 
   useEffect(() => {
     const suporta =
@@ -36,6 +38,22 @@ export function usePushNotifications() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- detecta suporte do navegador só depois de montar (evita mismatch de SSR)
     setSuportado(suporta);
     if (suporta) setPermissao(Notification.permission);
+
+    // iPadOS 13+ se identifica como Mac; o toque é o que diferencia de um
+    // desktop de verdade.
+    const ua = navigator.userAgent;
+    const ios =
+      /iPad|iPhone|iPod/.test(ua) ||
+      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    setEhIOS(ios);
+
+    // No iOS, push só existe rodando como app instalado na tela de início —
+    // em aba do Safari o PushManager simplesmente não existe, e sem essa
+    // detecção o usuário fica sem notificação e sem saber por quê.
+    setInstalado(
+      window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone === true
+    );
   }, []);
 
   useEffect(() => {
@@ -112,5 +130,22 @@ export function usePushNotifications() {
     }
   }, [user]);
 
-  return { suportado, permissao, ativo, carregando, erro, ativar, desativar };
+  /**
+   * iPhone/iPad em aba do navegador: precisa instalar na tela de início antes
+   * de conseguir receber notificação. É o único caso em que dá pra explicar
+   * o que fazer — nos outros, "não suportado" é definitivo.
+   */
+  const precisaInstalar = ehIOS && !instalado && !suportado;
+
+  return {
+    suportado,
+    permissao,
+    ativo,
+    carregando,
+    erro,
+    precisaInstalar,
+    instalado,
+    ativar,
+    desativar,
+  };
 }
