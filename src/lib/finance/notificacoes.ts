@@ -81,6 +81,19 @@ export function notificacaoDiaria(estado: EstadoDiario): Notificacao {
 
   if (ehDomingo(hojeISO)) {
     const semana = resumoDaSemana(gastos, hojeISO);
+    const orcamentoDaSemana = gastavelPorDia * 7;
+    const sobrouNaSemana = orcamentoDaSemana - semana.total;
+
+    // Semana fechada abaixo do orçamento é o momento óbvio de reconhecer —
+    // e o número é real: é exatamente o que sobrou do limite de 7 dias.
+    if (sobrouNaSemana > 0 && semana.total > 0) {
+      return {
+        title: `Semana no controle: sobrou ${formatarMoeda(sobrouNaSemana)}`,
+        body: `Gastou ${formatarMoeda(semana.total)} de ${formatarMoeda(orcamentoDaSemana)}.${frasePrevisao(projecao, reservaMeta)}`,
+        url: "/saldo",
+      };
+    }
+
     const detalhe =
       semana.categoriaTop && semana.valorTop > 0
         ? ` O que mais pesou: ${semana.categoriaTop}, ${formatarMoeda(semana.valorTop)}.`

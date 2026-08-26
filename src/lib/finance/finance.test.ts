@@ -50,6 +50,14 @@ import {
   avisoComissaoEsquecida,
   avisoChecklistParado,
 } from "./notificacoes";
+import {
+  avaliarDiasFechados,
+  sequenciaAtual,
+  melhorSequencia,
+  resumirConquistas,
+  dinheiroLiberando,
+  categoriasQueMelhoraram,
+} from "./conquistas";
 
 /**
  * Testes dos cálculos financeiros críticos (Fase 11). Roda com o test
@@ -672,14 +680,22 @@ describe("notificações do dia", () => {
     assert.match(n.title, /240,00/); // 80 × 3 dias
   });
 
-  test("domingo fecha a semana com a categoria que mais pesou", () => {
-    const gastos: Gasto[] = [
-      {
-        id: "g1", descricao: "ifood", valor: 300, categoria: "Alimentação",
-        mes: "2026-09", criadoEm: new Date("2026-09-05T15:00:00Z").getTime(),
-      },
-    ];
-    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-06", gastos });
+  const gastoSemana = (valor: number): Gasto[] => [
+    {
+      id: "g1", descricao: "ifood", valor, categoria: "Alimentação",
+      mes: "2026-09", criadoEm: new Date("2026-09-05T15:00:00Z").getTime(),
+    },
+  ];
+
+  test("domingo reconhece quando a semana fechou abaixo do orçamento", () => {
+    // orçamento da semana = 80 × 7 = 560; gastou 300 → sobrou 260
+    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-06", gastos: gastoSemana(300) });
+    assert.match(n.title, /Semana no controle/);
+    assert.match(n.title, /260,00/);
+  });
+
+  test("domingo com semana estourada aponta a categoria que mais pesou", () => {
+    const n = notificacaoDiaria({ ...base, hojeISO: "2026-09-06", gastos: gastoSemana(900) });
     assert.match(n.title, /Semana fechada/);
     assert.match(n.body, /Alimentação/);
   });
@@ -725,6 +741,84 @@ describe("avisos fora da rotina", () => {
     assert.equal(avisoChecklistParado(6, 2, "2026-09-08"), null); // já começou
     assert.equal(avisoChecklistParado(6, 0, "2026-09-09"), null); // outro dia
     assert.equal(avisoChecklistParado(0, 0, "2026-09-08"), null); // nada cadastrado
+  });
+});
+
+describe("conquistas", () => {
+  const gastoEm = (dia: number, valor: number, categoria = "Alimentação"): Gasto => ({
+    id: `g${dia}-${valor}`,
+    descricao: "teste",
+    valor,
+    categoria,
+    mes: "2026-09",
+    criadoEm: new Date(`2026-09-${String(dia).padStart(2, "0")}T15:00:00Z`).getTime(),
+  });
+
+  test("hoje não entra na avaliação — o dia ainda está correndo", () => {
+    const dias = avaliarDiasFechados([gastoEm(5, 10)], 80, "2026-09", "2026-09-05");
+    assert.equal(dias.length, 4); // dias 1 a 4
+    assert.ok(!dias.some((d) => d.dia === "2026-09-05"));
+  });
+
+  test("dia sem gasto nenhum conta como dentro do orçamento", () => {
+    const dias = avaliarDiasFechados([], 80, "2026-09", "2026-09-04");
+    assert.equal(dias.length, 3);
+    assert.ok(dias.every((d) => d.dentroDoOrcamento));
+  });
+
+  test("sequência quebra no dia que estourou e recomeça depois", () => {
+    const gastos = [gastoEm(1, 10), gastoEm(2, 500), gastoEm(3, 10), gastoEm(4, 10)];
+    const dias = avaliarDiasFechados(gastos, 80, "2026-09", "2026-09-05");
+    assert.equal(sequenciaAtual(dias), 2); // dias 3 e 4
+    assert.equal(melhorSequencia(dias), 2);
+  });
+
+  test("resumo soma o que sobrou nos dias no controle", () => {
+    // orçamento 80: dia 1 gastou 30 (sobra 50), dia 2 gastou 60 (sobra 20)
+    const gastos = [gastoEm(1, 30), gastoEm(2, 60)];
+    const dias = avaliarDiasFechados(gastos, 80, "2026-09", "2026-09-03");
+    const r = resumirConquistas(dias, 80);
+    assert.equal(r.diasNoControle, 2);
+    assert.equal(r.economiaAcumulada, 70);
+  });
+
+  test("ajuste de conciliação não estraga a sequência", () => {
+    const gastos = [gastoEm(1, 10), { ...gastoEm(2, 900), ajusteConciliacaoId: "c1" }];
+    const dias = avaliarDiasFechados(gastos, 80, "2026-09", "2026-09-03");
+    assert.equal(sequenciaAtual(dias), 2);
+  });
+
+  test("dinheiro liberando: soma a última parcela de cada compromisso", () => {
+    const parcela = (nome: string, valor: number, restantes: number): Parcela => ({
+      id: nome, tipo: "cartao", nome, valorParcela: valor,
+      totalParcelas: 10, parcelasRestantes: restantes,
+      mesReferencia: "2026-09", criadoEm: 0,
+    });
+    const r = dinheiroLiberando(
+      [parcela("Notebook", 239, 1), parcela("Curso", 100, 5)],
+      "2026-09"
+    );
+    assert.equal(r.parcelas.length, 1);
+    assert.equal(r.totalMensal, 239);
+  });
+
+  test("parcela já na fatura não conta como dinheiro liberando", () => {
+    const naFatura: Parcela = {
+      id: "p1", tipo: "cartao", nome: "Curso", valorParcela: 200,
+      totalParcelas: 6, parcelasRestantes: 1, naFatura: true,
+      mesReferencia: "2026-09", criadoEm: 0,
+    };
+    assert.equal(dinheiroLiberando([naFatura], "2026-09").totalMensal, 0);
+  });
+
+  test("categorias que melhoraram ignoram queda pequena", () => {
+    const melhoras = categoriasQueMelhoraram(
+      [{ categoryId: "Alimentação", total: 300 }, { categoryId: "Lazer", total: 95 }],
+      [{ categoryId: "Alimentação", total: 500 }, { categoryId: "Lazer", total: 100 }]
+    );
+    assert.equal(melhoras.length, 1); // Lazer caiu só 5
+    assert.equal(melhoras[0].categoria, "Alimentação");
+    assert.equal(melhoras[0].economia, 200);
   });
 });
 

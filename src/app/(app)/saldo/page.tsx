@@ -29,6 +29,7 @@ import {
   hojeISO,
 } from "@/lib/finance/calculations";
 import { projetarRitmo } from "@/lib/finance/ritmo";
+import { avaliarDiasFechados, resumirConquistas } from "@/lib/finance/conquistas";
 import { usePushNotifications } from "@/lib/usePushNotifications";
 import { useMonthClose } from "@/lib/useMonthClose";
 
@@ -108,6 +109,15 @@ export default function SaldoPage() {
   // propósito — é um filter + reduce sobre os gastos do mês, e o compilador
   // do React memoiza sozinho.
   const projecao = projetarRitmo(saldoAtual, reservaMeta, gastos, mes, hoje);
+
+  // O lado positivo: dias fechados dentro do orçamento e quanto isso já
+  // sobrou. Antes o app só falava quando algo dava errado.
+  const diasAvaliados =
+    gastavelPorDia !== null
+      ? avaliarDiasFechados(gastos, gastavelPorDia, mes, hoje)
+      : [];
+  const conquistas =
+    gastavelPorDia !== null ? resumirConquistas(diasAvaliados, gastavelPorDia) : null;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -272,6 +282,46 @@ export default function SaldoPage() {
           }}
           onFechar={() => setConferindo(false)}
         />
+      )}
+
+      {/* CONQUISTAS — só aparece quando há o que comemorar de verdade */}
+      {conquistas && conquistas.diasFechados > 0 && (
+        <div className="mb-3 rounded-2xl border border-positive/25 bg-positive-soft/40 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-positive">
+                {conquistas.sequencia >= 2
+                  ? `${conquistas.sequencia} dias seguidos no controle`
+                  : `${conquistas.diasNoControle} de ${conquistas.diasFechados} dias no controle`}
+              </p>
+              <p className="mt-0.5 text-[11px] text-text-faint">
+                {conquistas.economiaAcumulada > 0
+                  ? `Você já economizou ${formatarMoeda(conquistas.economiaAcumulada)} em relação ao seu limite diário`
+                  : "Dia fechado gastando menos que o limite conta como um dia no controle"}
+              </p>
+            </div>
+            {conquistas.sequencia >= 3 && (
+              <span className="shrink-0 text-2xl" aria-hidden="true">
+                🔥
+              </span>
+            )}
+          </div>
+
+          {/* pontinhos: um por dia fechado do mês */}
+          {conquistas.diasFechados <= 31 && (
+            <div className="mt-3 flex flex-wrap gap-1" aria-hidden="true">
+              {diasAvaliados.map((d) => (
+                <span
+                  key={d.dia}
+                  title={`Dia ${d.dia.split("-")[2]}: ${formatarMoeda(d.gasto)}`}
+                  className={`h-2 w-2 rounded-full ${
+                    d.dentroDoOrcamento ? "bg-positive" : "bg-negative/50"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* REGISTRO RÁPIDO — é a ação mais frequente da tela, fica logo abaixo do número */}

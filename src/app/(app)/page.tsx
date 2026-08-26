@@ -73,6 +73,23 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Boa notícia: parcela terminando é dinheiro que volta todo mês */}
+          {dash.liberando.totalMensal > 0 && (
+            <div className="rounded-2xl border border-positive/25 bg-positive-soft/40 p-4">
+              <p className="text-sm font-semibold text-positive">
+                +{formatarMoeda(dash.liberando.totalMensal)} por mês a partir do mês que vem
+              </p>
+              <p className="mt-1 text-xs text-text-muted">
+                {dash.liberando.parcelas.length === 1
+                  ? `A última parcela de ${dash.liberando.parcelas[0].nome} cai neste mês.`
+                  : `${dash.liberando.parcelas.length} parcelas terminam neste mês: ${dash.liberando.parcelas
+                      .map((p) => p.nome)
+                      .join(", ")}.`}{" "}
+                Esse valor deixa de sair do seu bolso.
+              </p>
+            </div>
+          )}
+
           {/* C. Atalhos das ações mais comuns */}
           <div className="grid grid-cols-3 gap-2">
             <AtalhoRapido href="/saldo" titulo="Gasto" descricao="registrar" />

@@ -30,6 +30,7 @@ import {
   BENCHMARK_IBGE_POF,
 } from "@/lib/finance/sugestoes";
 import { compararRenda, FONTE_RENDA } from "@/lib/finance/benchmarkRenda";
+import { categoriasQueMelhoraram } from "@/lib/finance/conquistas";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { usePerfil } from "@/lib/usePerfil";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -99,6 +100,12 @@ export default function DrePage() {
   );
   const categoriasEmCrescimento = useMemo(
     () => sugerirCrescimentoCategorias(despesasPorCategoria, despesasPorCategoriaAnterior),
+    [despesasPorCategoria, despesasPorCategoriaAnterior]
+  );
+  // Espelho do "categorias que mais cresceram": sem isso o DRE só apontava o
+  // que piorou, o que dá leitura injusta de um mês que no conjunto foi melhor.
+  const categoriasQueCairam = useMemo(
+    () => categoriasQueMelhoraram(despesasPorCategoria, despesasPorCategoriaAnterior),
     [despesasPorCategoria, despesasPorCategoriaAnterior]
   );
   const comparacaoBenchmark = useMemo(
@@ -352,6 +359,30 @@ export default function DrePage() {
                       <span className="text-text-faint font-normal">
                         {" "}
                         ({c.deltaPercentual === Infinity ? "novo" : `+${c.deltaPercentual.toFixed(0)}%`})
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {categoriasQueCairam.length > 0 && (
+            <div className="rounded-2xl border border-positive/25 bg-positive-soft/40 p-4">
+              <h2 className="text-sm font-medium text-text mb-1">
+                Onde você gastou menos
+              </h2>
+              <p className="text-xs text-text-faint mb-3">
+                Comparado com {dre.mesAnterior}
+              </p>
+              <div className="space-y-2">
+                {categoriasQueCairam.map((c) => (
+                  <div key={c.categoria} className="flex items-center justify-between text-sm">
+                    <span className="capitalize text-text-muted">{c.categoria}</span>
+                    <span className="font-medium text-positive">
+                      −{formatarMoeda(c.economia)}
+                      <span className="ml-1 font-normal text-text-faint">
+                        ({formatarMoeda(c.anterior)} → {formatarMoeda(c.atual)})
                       </span>
                     </span>
                   </div>

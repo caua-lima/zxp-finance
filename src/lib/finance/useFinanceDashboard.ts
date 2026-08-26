@@ -24,6 +24,7 @@ import {
 } from "./calculations";
 import { gerarAlertas, FinanceAlert } from "./alerts";
 import { groupByCategory, GrupoPorCategoria } from "./entries";
+import { dinheiroLiberando } from "./conquistas";
 
 /**
  * Visão consolidada usada pela Home. Combina os hooks antigos (fonte real
@@ -143,6 +144,14 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     [parcelas.parcelas, mes]
   );
 
+  // Parcela que termina neste mês = dinheiro que volta pro bolso todo mês a
+  // partir do mês que vem. O app já sabia disso, mas só falava "está na
+  // última parcela", sem dizer quanto isso libera — que é a parte boa.
+  const liberando = useMemo(
+    () => dinheiroLiberando(parcelas.parcelas, mes),
+    [parcelas.parcelas, mes]
+  );
+
   const assinaturasParaRevisar = useMemo(
     () =>
       assinaturas.assinaturas
@@ -197,6 +206,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     fluxoDiario,
     proximosVencimentos,
     distribuicaoGastos,
+    liberando,
     alertas,
     ultimaAtualizacaoSaldo: saldoHook.saldo?.atualizadoEm ?? null,
   };
