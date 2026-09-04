@@ -50,6 +50,7 @@ import {
   avisoComissaoEsquecida,
   avisoChecklistParado,
 } from "./notificacoes";
+import { semUndefined } from "../semUndefined";
 import { parseGastoTexto } from "../parseGastoTexto";
 import { inferirCategoriaGasto } from "../categoriasGasto";
 import {
@@ -871,6 +872,50 @@ describe("interpretar frase de gasto", () => {
 
   test("frase vazia não quebra", () => {
     assert.deepEqual(parseGastoTexto("   "), { valor: null, descricao: "" });
+  });
+});
+
+describe("audit log não pode conter undefined", () => {
+  // O Firestore rejeita propriedade undefined e derruba o batch inteiro.
+  // Como o log vai no mesmo batch da alteração, isso fazia a edição falhar.
+  const temUndefined = (o: unknown, cam = ""): string[] => {
+    if (o === undefined) return [cam || "(raiz)"];
+    if (o === null || typeof o !== "object") return [];
+    return Object.entries(o as Record<string, unknown>).flatMap(([k, v]) =>
+      temUndefined(v, cam ? `${cam}.${k}` : k)
+    );
+  };
+
+  test("limpa campo opcional vazio de before/after, em qualquer profundidade", () => {
+    const log = {
+      action: "updated",
+      summary: "editado",
+      before: { descricao: "Comissão", categoriaReceita: undefined, semImposto: undefined },
+      after: { descricao: "Comissão", valor: 600, categoriaReceita: undefined },
+    };
+    const limpo = semUndefined(log);
+    assert.deepEqual(temUndefined(limpo), []);
+    // e não inventa nem perde o que estava preenchido
+    assert.equal(limpo.before.descricao, "Comissão");
+    assert.equal(limpo.after.valor, 600);
+    assert.ok(!("categoriaReceita" in limpo.before));
+  });
+
+  test("preserva null — é valor válido e significa 'foi apagado'", () => {
+    const limpo = semUndefined({ before: { cartao: null, valor: 0 } });
+    assert.equal(limpo.before.cartao, null);
+    assert.equal(limpo.before.valor, 0);
+  });
+
+  test("before ausente no topo não vira chave undefined", () => {
+    const limpo = semUndefined({ action: "created", before: undefined });
+    assert.deepEqual(temUndefined(limpo), []);
+    assert.ok(!("before" in limpo));
+  });
+
+  test("limpa dentro de array também", () => {
+    const limpo = semUndefined({ itens: [{ a: 1, b: undefined }] });
+    assert.deepEqual(temUndefined(limpo), []);
   });
 });
 

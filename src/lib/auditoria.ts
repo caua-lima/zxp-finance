@@ -1,5 +1,6 @@
 import { WriteBatch, doc, collection } from "firebase/firestore";
 import { db } from "./firebase";
+import { semUndefined } from "./semUndefined";
 
 /**
  * Trilha de auditoria (usuarios/{uid}/audit_logs). Toda mudança em
@@ -40,10 +41,13 @@ export function anexarAuditLog(
   entrada: AuditLogInput
 ) {
   const ref = doc(collection(db, "usuarios", uid, "audit_logs"));
-  batch.set(ref, {
-    ...entrada,
-    actorUid: uid,
-    ...(actorEmail ? { actorEmail } : {}),
-    createdAt: Date.now(),
-  });
+  batch.set(
+    ref,
+    semUndefined({
+      ...entrada,
+      actorUid: uid,
+      ...(actorEmail ? { actorEmail } : {}),
+      createdAt: Date.now(),
+    })
+  );
 }
