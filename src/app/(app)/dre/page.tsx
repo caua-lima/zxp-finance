@@ -225,12 +225,11 @@ export default function DrePage() {
         descricao={`Trava marcar pago/recebido e lançar fatura pra ${mes}. Dá pra reabrir depois, com motivo.`}
         textoConfirmar="Fechar"
         onConfirmar={() => {
-          monthClose.fechar({
+          toast.sucessoSe(monthClose.fechar({
             income: dre.atual.receitaOperacional,
             expenses: totalDespesasEntries,
             result: resultadoOperacionalLiquido,
-          });
-          toast.sucesso(`Mês de ${mes} fechado.`);
+          }), `Mês de ${mes} fechado.`);
           setConfirmandoFechar(false);
         }}
         onCancelar={() => setConfirmandoFechar(false)}
@@ -243,8 +242,7 @@ export default function DrePage() {
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          monthClose.reabrir(motivo ?? "");
-          toast.sucesso(`Mês de ${mes} reaberto.`);
+          toast.sucessoSe(monthClose.reabrir(motivo ?? ""), `Mês de ${mes} reaberto.`);
           setConfirmandoReabrir(false);
         }}
         onCancelar={() => setConfirmandoReabrir(false)}

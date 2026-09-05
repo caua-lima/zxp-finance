@@ -67,8 +67,7 @@ export default function ContasPage() {
     setValor(0);
     setCategoriaCustom("");
     setDiaVencimento("");
-    adicionar(nomeAparado, valor, cat, dia).catch(console.error);
-    toast.sucesso(`"${nomeAparado}" adicionada.`);
+    toast.sucessoSe(adicionar(nomeAparado, valor, cat, dia), `"${nomeAparado}" adicionada.`);
   }
 
   return (
@@ -182,9 +181,9 @@ function GrupoCategoria({
   onEditar: (
     id: string,
     dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
-  ) => void;
-  onRemover: (id: string, motivo: string) => void;
-  onAlternarAtiva: (id: string, ativa: boolean) => void;
+  ) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const subtotal = itens
     .filter((c) => c.ativa)
@@ -226,9 +225,9 @@ function ItemConta({
   onEditar: (
     id: string,
     dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
-  ) => void;
-  onRemover: (id: string, motivo: string) => void;
-  onAlternarAtiva: (id: string, ativa: boolean) => void;
+  ) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -243,14 +242,16 @@ function ItemConta({
   function salvar() {
     const nomeAparado = nome.trim();
     if (!nomeAparado || !valor) return;
-    onEditar(conta.id, {
-      nome: nomeAparado,
-      valor,
-      categoria: categoria.trim() || "Outros",
-      diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
-    });
+    toast.sucessoSe(
+      onEditar(conta.id, {
+        nome: nomeAparado,
+        valor,
+        categoria: categoria.trim() || "Outros",
+        diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
+      }),
+      "Conta atualizada."
+    );
     setEditando(false);
-    toast.sucesso("Conta atualizada.");
   }
 
   if (editando) {
@@ -321,8 +322,7 @@ function ItemConta({
           type="checkbox"
           checked={conta.ativa}
           onChange={(e) => {
-            onAlternarAtiva(conta.id, e.target.checked);
-            toast.sucesso(e.target.checked ? "Conta reativada." : "Conta arquivada.");
+            toast.sucessoSe(onAlternarAtiva(conta.id, e.target.checked), e.target.checked ? "Conta reativada." : "Conta arquivada.");
           }}
           className="h-5 w-5 shrink-0 accent-brand"
         />
@@ -361,8 +361,7 @@ function ItemConta({
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          onRemover(conta.id, motivo ?? "");
-          toast.sucesso("Conta excluída.");
+          toast.sucessoSe(onRemover(conta.id, motivo ?? ""), "Conta excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

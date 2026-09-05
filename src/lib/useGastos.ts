@@ -43,7 +43,7 @@ export function useGastos() {
   );
 
   async function adicionar(descricao: string, valor: number, categoria: string) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "gastos"), {
         descricao,
@@ -53,8 +53,10 @@ export function useGastos() {
         criadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -62,7 +64,7 @@ export function useGastos() {
     id: string,
     dados: { descricao: string; valor: number; categoria: string }
   ) {
-    if (!user) return;
+    if (!user) return false;
     const gasto = todos.find((g) => g.id === id);
     try {
       const batch = writeBatch(db);
@@ -80,8 +82,10 @@ export function useGastos() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -92,9 +96,9 @@ export function useGastos() {
    * saldo. Bloqueia estornar duas vezes o mesmo gasto.
    */
   async function estornar(id: string, motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     const original = todos.find((g) => g.id === id);
-    if (!original || original.estornado || original.estornoDeId) return;
+    if (!original || original.estornado || original.estornoDeId) return false;
     try {
       const batch = writeBatch(db);
       const refOriginal = doc(db, "usuarios", user.uid, "gastos", id);
@@ -121,8 +125,10 @@ export function useGastos() {
       });
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -138,14 +144,14 @@ export function useGastos() {
    * antes de apagar.
    */
   async function remover(id: string, motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     const gasto = todos.find((g) => g.id === id);
-    if (!gasto) return;
+    if (!gasto) return false;
 
     const idOriginal = gasto.estornoDeId ?? gasto.id;
     const original = todos.find((g) => g.id === idOriginal);
     const estorno = todos.find((g) => g.estornoDeId === idOriginal);
-    if (!original) return;
+    if (!original) return false;
 
     try {
       const batch = writeBatch(db);
@@ -164,8 +170,10 @@ export function useGastos() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

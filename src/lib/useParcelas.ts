@@ -55,7 +55,7 @@ export function useParcelas() {
     cartao?: string,
     mesReferencia?: string
   ) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "parcelas"), {
         tipo,
@@ -70,8 +70,10 @@ export function useParcelas() {
         criadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -89,7 +91,7 @@ export function useParcelas() {
       mesReferencia?: string;
     }
   ) {
-    if (!user) return;
+    if (!user) return false;
     const parcela = parcelas.find((p) => p.id === id);
     try {
       const { cartao, mesReferencia, ...resto } = dados;
@@ -125,8 +127,10 @@ export function useParcelas() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -138,12 +142,12 @@ export function useParcelas() {
    * snapshot completo gravado em audit log antes do delete.
    */
   async function remover(id: string, motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     const parcela = parcelas.find((p) => p.id === id);
-    if (!parcela) return;
+    if (!parcela) return false;
     if (parcela.parcelasRestantes > 0) {
       setErro("Parcela ativa não pode ser excluída — espere ela ficar quitada.");
-      return;
+      return false;
     }
     try {
       const batch = writeBatch(db);
@@ -158,15 +162,17 @@ export function useParcelas() {
       batch.delete(ref);
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function darBaixa(id: string) {
-    if (!user) return;
+    if (!user) return false;
     const p = parcelas.find((x) => x.id === id);
-    if (!p) return;
+    if (!p) return false;
     const novoValor = Math.max(0, p.parcelasRestantes - 1);
     // Avança a partir da própria referência da parcela, não do mês real de
     // hoje — assim pagar em dia ou colocar em dia várias parcelas atrasadas
@@ -186,15 +192,17 @@ export function useParcelas() {
       });
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function reverterBaixa(id: string) {
-    if (!user) return;
+    if (!user) return false;
     const p = parcelas.find((x) => x.id === id);
-    if (!p) return;
+    if (!p) return false;
     const novoValor = Math.min(p.totalParcelas, p.parcelasRestantes + 1);
     const novaReferencia = mesAnteriorDe(p.mesReferencia ?? mesPadrao());
     try {
@@ -211,8 +219,10 @@ export function useParcelas() {
       });
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

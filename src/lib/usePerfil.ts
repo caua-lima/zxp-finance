@@ -46,7 +46,7 @@ export function usePerfil() {
    * anterior lá. Quem lê trata null igual a vazio (`?? ""`, `?? 0`).
    */
   async function salvar(dados: Omit<PerfilUsuario, "atualizadoEm">) {
-    if (!user) return;
+    if (!user) return false;
     const semUndefined = Object.fromEntries(
       Object.entries(dados).map(([chave, valor]) => [chave, valor ?? null])
     );
@@ -57,8 +57,10 @@ export function usePerfil() {
         { merge: true }
       );
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

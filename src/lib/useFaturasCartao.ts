@@ -59,15 +59,17 @@ export function useFaturasCartao(mes: string) {
   }, [todas, mes]);
 
   async function salvar(cartao: string, valor: number) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await setDoc(
         doc(db, "usuarios", user.uid, "faturasCartao", chave(mes, cartao)),
         { nome: cartao, valor, mes, criadoEm: Date.now() }
       );
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -78,7 +80,7 @@ export function useFaturasCartao(mes: string) {
    * zerado). Loga o valor anterior se havia algo lançado de verdade.
    */
   async function excluir(cartao: string) {
-    if (!user) return;
+    if (!user) return false;
     const existente = todas.find((f) => f.mes === mes && f.nome === cartao);
     try {
       const batch = writeBatch(db);
@@ -95,8 +97,10 @@ export function useFaturasCartao(mes: string) {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

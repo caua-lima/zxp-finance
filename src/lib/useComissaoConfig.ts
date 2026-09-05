@@ -42,15 +42,17 @@ export function useComissaoConfig() {
     valorVendaPerformance: number;
     valorVendaAcelera: number;
   }) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await setDoc(doc(db, "usuarios", user.uid, "comissaoConfig", "atual"), {
         ...dados,
         atualizadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

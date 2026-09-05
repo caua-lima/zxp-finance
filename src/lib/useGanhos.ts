@@ -68,7 +68,7 @@ export function useGanhos(mes: string) {
     categoriaReceita?: string,
     semImposto: boolean = false
   ) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "ganhos"), {
         tipo: "recorrente",
@@ -80,8 +80,10 @@ export function useGanhos(mes: string) {
         criadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -92,7 +94,7 @@ export function useGanhos(mes: string) {
     recebido: boolean = true,
     semImposto: boolean = false
   ) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "ganhos"), {
         tipo: "pontual",
@@ -110,8 +112,10 @@ export function useGanhos(mes: string) {
         criadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -119,7 +123,7 @@ export function useGanhos(mes: string) {
     id: string,
     dados: { descricao: string; valor: number; categoriaReceita?: string; semImposto?: boolean }
   ) {
-    if (!user) return;
+    if (!user) return false;
     const ganho = todos.find((g) => g.id === id);
     try {
       const batch = writeBatch(db);
@@ -147,8 +151,10 @@ export function useGanhos(mes: string) {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -158,13 +164,13 @@ export function useGanhos(mes: string) {
    * completo vai pro audit log antes de apagar.
    */
   async function remover(id: string, motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     const ganho = todos.find((g) => g.id === id);
-    if (!ganho) return;
+    if (!ganho) return false;
     const arquivadoPara = ganho.tipo === "recorrente" ? ganho.ativo === false : !!ganho.arquivado;
     if (!arquivadoPara) {
       setErro("Arquive o ganho antes de excluir definitivamente.");
-      return;
+      return false;
     }
     try {
       const batch = writeBatch(db);
@@ -179,8 +185,10 @@ export function useGanhos(mes: string) {
       batch.delete(ref);
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -190,9 +198,9 @@ export function useGanhos(mes: string) {
    * é um ganho normal navegável pela UI, é sobra de dado malformado.
    */
   async function removerOrfao(id: string) {
-    if (!user) return;
+    if (!user) return false;
     const ganho = todos.find((g) => g.id === id);
-    if (!ganho) return;
+    if (!ganho) return false;
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "ganhos", id);
@@ -206,13 +214,15 @@ export function useGanhos(mes: string) {
       batch.delete(ref);
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function alternarAtivo(id: string, ativo: boolean) {
-    if (!user) return;
+    if (!user) return false;
     const ganho = todos.find((g) => g.id === id);
     try {
       const batch = writeBatch(db);
@@ -230,13 +240,15 @@ export function useGanhos(mes: string) {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function marcarRecebidoPontual(id: string, recebido: boolean) {
-    if (!user) return;
+    if (!user) return false;
     const ganho = todos.find((g) => g.id === id);
     try {
       const batch = writeBatch(db);
@@ -254,13 +266,15 @@ export function useGanhos(mes: string) {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function alternarArquivadoPontual(id: string, ativo: boolean) {
-    if (!user) return;
+    if (!user) return false;
     const arquivado = !ativo;
     const ganho = todos.find((g) => g.id === id);
     try {
@@ -279,8 +293,10 @@ export function useGanhos(mes: string) {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

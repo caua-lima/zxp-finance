@@ -54,7 +54,7 @@ export function useComissoes(mes: string) {
   const totalVendasAcelera = doMes.reduce((acc, c) => acc + c.vendasAcelera, 0);
 
   async function registrar(data: string, contagem: ContagemComissao, valores: ValoresComissao) {
-    if (!user) return;
+    if (!user) return false;
     const existente = todas.find((c) => c.id === data);
     const valorTotal = calcularComissaoDoDia(contagem, valores);
     try {
@@ -78,15 +78,17 @@ export function useComissoes(mes: string) {
       });
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function remover(data: string) {
-    if (!user) return;
+    if (!user) return false;
     const existente = todas.find((c) => c.id === data);
-    if (!existente) return;
+    if (!existente) return false;
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "comissoes", data);
@@ -100,8 +102,10 @@ export function useComissoes(mes: string) {
       batch.delete(ref);
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

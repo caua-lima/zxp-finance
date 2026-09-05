@@ -51,7 +51,7 @@ export function useAssinaturas() {
     naFatura?: boolean,
     diaRenovacao?: number
   ) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "assinaturas"), {
         nome,
@@ -63,8 +63,10 @@ export function useAssinaturas() {
         criadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -79,7 +81,7 @@ export function useAssinaturas() {
       usoPercebido?: UsoPercebidoAssinatura;
     }
   ) {
-    if (!user) return;
+    if (!user) return false;
     const assinatura = assinaturas.find((a) => a.id === id);
     try {
       const batch = writeBatch(db);
@@ -112,8 +114,10 @@ export function useAssinaturas() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -123,12 +127,12 @@ export function useAssinaturas() {
    * pro audit log antes de apagar.
    */
   async function remover(id: string, motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     const assinatura = assinaturas.find((a) => a.id === id);
-    if (!assinatura) return;
+    if (!assinatura) return false;
     if (assinatura.ativa) {
       setErro("Arquive a assinatura antes de excluir definitivamente.");
-      return;
+      return false;
     }
     try {
       const batch = writeBatch(db);
@@ -143,13 +147,15 @@ export function useAssinaturas() {
       batch.delete(ref);
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function alternarAtiva(id: string, ativa: boolean) {
-    if (!user) return;
+    if (!user) return false;
     const assinatura = assinaturas.find((a) => a.id === id);
     try {
       const batch = writeBatch(db);
@@ -169,8 +175,10 @@ export function useAssinaturas() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

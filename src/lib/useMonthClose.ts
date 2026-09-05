@@ -42,7 +42,7 @@ export function useMonthClose(mes: string) {
   const fechado = fechamento?.status === "closed";
 
   async function fechar(snapshot: { income: number; expenses: number; result: number }, notes?: string) {
-    if (!user) return;
+    if (!user) return false;
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "monthCloses", mes);
@@ -63,13 +63,15 @@ export function useMonthClose(mes: string) {
       });
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function reabrir(motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "monthCloses", mes);
@@ -82,8 +84,10 @@ export function useMonthClose(mes: string) {
       });
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

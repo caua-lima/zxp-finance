@@ -62,7 +62,7 @@ export default function ParcelasPage() {
     setPagas("");
     setDividida(false);
     setNaFatura(false);
-    adicionar(
+    toast.sucessoSe(adicionar(
       nomeAparado,
       valorParcela,
       vTotal,
@@ -72,8 +72,7 @@ export default function ParcelasPage() {
       naFatura,
       cartao || undefined,
       mesInicio
-    ).catch(console.error);
-    toast.sucesso(`"${nomeAparado}" adicionada.`);
+    ), `"${nomeAparado}" adicionada.`);
     setMesInicio(mesPadrao());
   }
 
@@ -281,9 +280,9 @@ function GrupoParcelas({
   titulo: string;
   itens: Parcela[];
   mes: string;
-  onEditar: (id: string, dados: DadosEdicaoParcela) => void;
-  onRemover: (id: string, motivo: string) => void;
-  onDarBaixa: (id: string) => void;
+  onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onDarBaixa: (id: string) => Promise<boolean>;
 }) {
   if (itens.length === 0) return null;
 
@@ -342,8 +341,8 @@ function ItemParcelaQuitada({
   onRemover,
 }: {
   parcela: Parcela;
-  onEditar: (id: string, dados: DadosEdicaoParcela) => void;
-  onRemover: (id: string, motivo: string) => void;
+  onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
 }) {
   const [confirmando, setConfirmando] = useState(false);
   const toast = useToast();
@@ -361,7 +360,7 @@ function ItemParcelaQuitada({
         <BotaoIcone
           label="Reabrir (voltar 1 parcela)"
           onClick={() => {
-            onEditar(parcela.id, {
+            toast.sucessoSe(onEditar(parcela.id, {
               nome: parcela.nome,
               valorParcela: parcela.valorParcela,
               totalParcelas: parcela.totalParcelas,
@@ -371,8 +370,7 @@ function ItemParcelaQuitada({
               naFatura: parcela.naFatura,
               cartao: parcela.cartao,
               mesReferencia: mesPadrao(),
-            });
-            toast.sucesso(`"${parcela.nome}" reaberta.`);
+            }), `"${parcela.nome}" reaberta.`);
           }}
         >
           <IconEstornar width={17} height={17} />
@@ -394,8 +392,7 @@ function ItemParcelaQuitada({
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          onRemover(parcela.id, motivo ?? "");
-          toast.sucesso("Parcela excluída.");
+          toast.sucessoSe(onRemover(parcela.id, motivo ?? ""), "Parcela excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
@@ -412,8 +409,8 @@ function ItemParcela({
 }: {
   parcela: Parcela;
   mes: string;
-  onEditar: (id: string, dados: DadosEdicaoParcela) => void;
-  onDarBaixa: (id: string) => void;
+  onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
+  onDarBaixa: (id: string) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(parcela.nome);
@@ -448,19 +445,21 @@ function ItemParcela({
     const vTotal = parseInt(totalParcelas, 10);
     if (!nomeAparado || !valorParcela || !vTotal) return;
     const vPagas = pagas ? Math.min(parseInt(pagas, 10), vTotal) : 0;
-    onEditar(parcela.id, {
-      nome: nomeAparado,
-      valorParcela,
-      totalParcelas: vTotal,
-      parcelasRestantes: Math.max(0, vTotal - vPagas),
-      tipo,
-      dividida,
-      naFatura,
-      cartao: cartao || undefined,
-      mesReferencia,
-    });
+    toast.sucessoSe(
+      onEditar(parcela.id, {
+        nome: nomeAparado,
+        valorParcela,
+        totalParcelas: vTotal,
+        parcelasRestantes: Math.max(0, vTotal - vPagas),
+        tipo,
+        dividida,
+        naFatura,
+        cartao: cartao || undefined,
+        mesReferencia,
+      }),
+      "Parcela atualizada."
+    );
     setEditando(false);
-    toast.sucesso("Parcela atualizada.");
   }
 
   if (editando) {
@@ -634,8 +633,7 @@ function ItemParcela({
         {parcela.parcelasRestantes > 0 && decorridos >= 0 && (
           <button
             onClick={() => {
-              onDarBaixa(parcela.id);
-              toast.sucesso(`Baixa dada em "${parcela.nome}".`);
+              toast.sucessoSe(onDarBaixa(parcela.id), `Baixa dada em "${parcela.nome}".`);
             }}
             className="text-xs text-brand hover:text-brand-dark"
           >

@@ -80,12 +80,12 @@ function ItemFatura({
   fatura: FaturaCartao;
   config: CartaoConfig;
   mes: string;
-  onSalvar: (cartao: string, valor: number) => void;
-  onExcluir: (cartao: string) => void;
+  onSalvar: (cartao: string, valor: number) => Promise<boolean>;
+  onExcluir: (cartao: string) => Promise<boolean>;
   onSalvarConfig: (
     cartao: string,
     dados: { limite?: number; diaFechamento?: number; diaVencimento?: number }
-  ) => void;
+  ) => Promise<boolean>;
   bloqueado?: boolean;
 }) {
   const [valor, setValor] = useState(fatura.valor);
@@ -107,13 +107,15 @@ function ItemFatura({
     : null;
 
   function salvarConfig() {
-    onSalvarConfig(fatura.nome, {
-      limite: limite || undefined,
-      diaFechamento: diaFechamento ? parseInt(diaFechamento, 10) : undefined,
-      diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
-    });
+    toast.sucessoSe(
+      onSalvarConfig(fatura.nome, {
+        limite: limite || undefined,
+        diaFechamento: diaFechamento ? parseInt(diaFechamento, 10) : undefined,
+        diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
+      }),
+      `Configuração de "${fatura.nome}" salva.`
+    );
     setEditandoConfig(false);
-    toast.sucesso(`Configuração de "${fatura.nome}" salva.`);
   }
 
   return (
@@ -127,8 +129,7 @@ function ItemFatura({
         />
         <Botao
           onClick={() => {
-            onSalvar(fatura.nome, valor);
-            toast.sucesso(`Fatura de "${fatura.nome}" atualizada.`);
+            toast.sucessoSe(onSalvar(fatura.nome, valor), `Fatura de "${fatura.nome}" atualizada.`);
           }}
           disabled={!alterado || bloqueado}
           className="shrink-0"
@@ -244,9 +245,8 @@ function ItemFatura({
         textoConfirmar="Excluir"
         perigo
         onConfirmar={() => {
-          onExcluir(fatura.nome);
+          toast.sucessoSe(onExcluir(fatura.nome), `Fatura de "${fatura.nome}" excluída.`);
           setValor(0);
-          toast.sucesso(`Fatura de "${fatura.nome}" excluída.`);
           setConfirmandoExclusao(false);
         }}
         onCancelar={() => setConfirmandoExclusao(false)}

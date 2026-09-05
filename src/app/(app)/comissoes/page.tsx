@@ -132,8 +132,7 @@ export default function ComissoesPage() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!data) return;
-    comissoes.registrar(data, contagemAtual, config.valores);
-    toast.sucesso(`Comissão de ${formatarDataLonga(data)} salva: ${formatarMoeda(previaValor)}.`);
+    toast.sucessoSe(comissoes.registrar(data, contagemAtual, config.valores), `Comissão de ${formatarDataLonga(data)} salva: ${formatarMoeda(previaValor)}.`);
     setReunioes("");
     setVendasPerformance("");
     setVendasAcelera("");
@@ -141,13 +140,15 @@ export default function ComissoesPage() {
   }
 
   function salvarValores() {
-    config.salvar({
-      valorReuniao: parseFloat(valorReuniao.replace(",", ".")) || 0,
-      valorVendaPerformance: parseFloat(valorVendaPerformance.replace(",", ".")) || 0,
-      valorVendaAcelera: parseFloat(valorVendaAcelera.replace(",", ".")) || 0,
-    });
+    toast.sucessoSe(
+      config.salvar({
+        valorReuniao: parseFloat(valorReuniao.replace(",", ".")) || 0,
+        valorVendaPerformance: parseFloat(valorVendaPerformance.replace(",", ".")) || 0,
+        valorVendaAcelera: parseFloat(valorVendaAcelera.replace(",", ".")) || 0,
+      }),
+      "Valores de comissão atualizados."
+    );
     setEditandoValores(false);
-    toast.sucesso("Valores de comissão atualizados.");
   }
 
   // O ganho de comissão do mês é identificado pela descrição. Se já existe,
@@ -166,20 +167,17 @@ export default function ComissoesPage() {
         toast.sucesso("O ganho do mês já está com esse valor.");
         return;
       }
-      ganhos.editar(ganhoExistente.id, {
+      toast.sucessoSe(ganhos.editar(ganhoExistente.id, {
         descricao: descricaoGanho,
         valor: comissoes.totalMes,
         categoriaReceita: ganhoExistente.categoriaReceita,
         semImposto: ganhoExistente.semImposto,
-      });
-      toast.sucesso(
-        `Ganho do mês atualizado pra ${formatarMoeda(comissoes.totalMes)}.`
-      );
+      }), `Ganho do mês atualizado pra ${formatarMoeda(comissoes.totalMes)}.`);
     } else {
-      ganhos
-        .adicionarPontual(descricaoGanho, comissoes.totalMes)
-        .catch(console.error);
-      toast.sucesso("Lançado em Ganhos.");
+      toast.sucessoSe(
+        ganhos.adicionarPontual(descricaoGanho, comissoes.totalMes),
+        "Lançado em Ganhos."
+      );
     }
   }
 
@@ -380,8 +378,7 @@ export default function ComissoesPage() {
         perigo
         onConfirmar={() => {
           if (confirmandoExclusao) {
-            comissoes.remover(confirmandoExclusao);
-            toast.sucesso("Lançamento excluído.");
+            toast.sucessoSe(comissoes.remover(confirmandoExclusao), "Lançamento excluído.");
           }
           setConfirmandoExclusao(null);
         }}

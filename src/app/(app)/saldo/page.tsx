@@ -150,9 +150,8 @@ export default function SaldoPage() {
   }
 
   function salvarReserva() {
-    definirReservaMeta(novaReserva);
+    toast.sucessoSe(definirReservaMeta(novaReserva), "Meta de reserva atualizada.");
     setEditandoReserva(false);
-    toast.sucesso("Meta de reserva atualizada.");
   }
 
   function salvarSaldoInicial() {
@@ -569,8 +568,8 @@ function ItemGasto({
     id: string,
     dados: { descricao: string; valor: number; categoria: string }
   ) => void;
-  onEstornar: (id: string, motivo: string) => void;
-  onRemover: (id: string, motivo: string) => void;
+  onEstornar: (id: string, motivo: string) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
   mesFechado?: boolean;
 }) {
   const toast = useToast();
@@ -707,8 +706,7 @@ function ItemGasto({
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          onEstornar(gasto.id, motivo ?? "");
-          toast.sucesso("Gasto estornado.");
+          toast.sucessoSe(onEstornar(gasto.id, motivo ?? ""), "Gasto estornado.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
@@ -726,8 +724,7 @@ function ItemGasto({
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          onRemover(gasto.id, motivo ?? "");
-          toast.sucesso(bloqueado ? "Par estorno/original excluído." : "Gasto excluído.");
+          toast.sucessoSe(onRemover(gasto.id, motivo ?? ""), bloqueado ? "Par estorno/original excluído." : "Gasto excluído.");
           setConfirmandoExclusao(false);
         }}
         onCancelar={() => setConfirmandoExclusao(false)}

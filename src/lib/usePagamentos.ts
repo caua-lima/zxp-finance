@@ -52,7 +52,7 @@ export function usePagamentos(mes: string) {
     pago: boolean,
     dados: { nome: string; valor: number }
   ) {
-    if (!user) return;
+    if (!user) return false;
     const id = chave(mes, origem, itemId);
     const ref = doc(db, "usuarios", user.uid, "pagamentos", id);
     try {
@@ -69,8 +69,10 @@ export function usePagamentos(mes: string) {
         await deleteDoc(ref);
       }
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

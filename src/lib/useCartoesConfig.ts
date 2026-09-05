@@ -54,7 +54,7 @@ export function useCartoesConfig() {
     cartao: string,
     dados: { limite?: number; diaFechamento?: number; diaVencimento?: number }
   ) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await setDoc(doc(db, "usuarios", user.uid, "cartoesConfig", cartao), {
         nome: cartao,
@@ -63,8 +63,10 @@ export function useCartoesConfig() {
         diaVencimento: dados.diaVencimento ?? null,
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

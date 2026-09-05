@@ -41,7 +41,7 @@ export function useSaldo() {
   }, [user]);
 
   async function definir(valor: number) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await setDoc(
         doc(db, "usuarios", user.uid, "saldo", "atual"),
@@ -49,13 +49,15 @@ export function useSaldo() {
         { merge: true }
       );
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function definirReservaMeta(reservaMeta: number) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await setDoc(
         doc(db, "usuarios", user.uid, "saldo", "atual"),
@@ -63,8 +65,10 @@ export function useSaldo() {
         { merge: true }
       );
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

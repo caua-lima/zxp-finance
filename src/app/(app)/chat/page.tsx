@@ -104,8 +104,20 @@ export default function ChatPage() {
 
   const voz = useReconhecimentoVoz(interpretar);
 
-  function confirmar(m: Extract<Mensagem, { tipo: "confirmar" }>, categoria: string) {
-    adicionar(m.descricao, m.valor, categoria).catch(console.error);
+  async function confirmar(
+    m: Extract<Mensagem, { tipo: "confirmar" }>,
+    categoria: string
+  ) {
+    // Só vira "✓ salvo" depois que gravou de verdade. Marcar antes fazia a
+    // conversa dizer que anotou mesmo quando a escrita falhava.
+    const ok = await adicionar(m.descricao, m.valor, categoria);
+    if (!ok) {
+      adicionarMensagem({
+        tipo: "app",
+        texto: "Não consegui salvar esse gasto. Veja o aviso acima e tente de novo.",
+      });
+      return;
+    }
     // O saldo do Firestore só chega no próximo snapshot; o desconto aqui é
     // otimista pra a resposta ser imediata, e o valor real reaparece sozinho.
     const restante = aindaHoje === null ? null : aindaHoje - m.valor;

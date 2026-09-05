@@ -61,10 +61,10 @@ export default function AssinaturasPage() {
     setValor(0);
     setNaFatura(false);
     setDiaRenovacao("");
-    adicionar(nomeAparado, valor, cartao || undefined, naFatura, dia).catch(
-      console.error
+    toast.sucessoSe(
+      adicionar(nomeAparado, valor, cartao || undefined, naFatura, dia),
+      `"${nomeAparado}" adicionada.`
     );
-    toast.sucesso(`"${nomeAparado}" adicionada.`);
   }
 
   return (
@@ -219,9 +219,9 @@ function ItemAssinatura({
       diaRenovacao?: number;
       usoPercebido?: UsoPercebidoAssinatura;
     }
-  ) => void;
-  onRemover: (id: string, motivo: string) => void;
-  onAlternarAtiva: (id: string, ativa: boolean) => void;
+  ) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -240,16 +240,18 @@ function ItemAssinatura({
   function salvar() {
     const nomeAparado = nome.trim();
     if (!nomeAparado || !valor) return;
-    onEditar(assinatura.id, {
-      nome: nomeAparado,
-      valor,
-      cartao: cartao || undefined,
-      naFatura,
-      diaRenovacao: diaRenovacao ? parseInt(diaRenovacao, 10) : undefined,
-      usoPercebido: usoPercebido || undefined,
-    });
+    toast.sucessoSe(
+      onEditar(assinatura.id, {
+        nome: nomeAparado,
+        valor,
+        cartao: cartao || undefined,
+        naFatura,
+        diaRenovacao: diaRenovacao ? parseInt(diaRenovacao, 10) : undefined,
+        usoPercebido: usoPercebido || undefined,
+      }),
+      "Assinatura atualizada."
+    );
     setEditando(false);
-    toast.sucesso("Assinatura atualizada.");
   }
 
   if (editando) {
@@ -339,8 +341,7 @@ function ItemAssinatura({
           type="checkbox"
           checked={assinatura.ativa}
           onChange={(e) => {
-            onAlternarAtiva(assinatura.id, e.target.checked);
-            toast.sucesso(e.target.checked ? "Assinatura reativada." : "Assinatura arquivada.");
+            toast.sucessoSe(onAlternarAtiva(assinatura.id, e.target.checked), e.target.checked ? "Assinatura reativada." : "Assinatura arquivada.");
           }}
           className="h-5 w-5 shrink-0 accent-brand"
         />
@@ -386,8 +387,7 @@ function ItemAssinatura({
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          onRemover(assinatura.id, motivo ?? "");
-          toast.sucesso("Assinatura excluída.");
+          toast.sucessoSe(onRemover(assinatura.id, motivo ?? ""), "Assinatura excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

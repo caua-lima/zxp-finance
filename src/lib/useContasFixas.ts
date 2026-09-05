@@ -50,7 +50,7 @@ export function useContasFixas() {
     categoria: string,
     diaVencimento?: number
   ) {
-    if (!user) return;
+    if (!user) return false;
     try {
       await addDoc(collection(db, "usuarios", user.uid, "contasFixas"), {
         nome,
@@ -61,8 +61,10 @@ export function useContasFixas() {
         criadoEm: Date.now(),
       });
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -70,7 +72,7 @@ export function useContasFixas() {
     id: string,
     dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) {
-    if (!user) return;
+    if (!user) return false;
     const conta = contas.find((c) => c.id === id);
     try {
       const batch = writeBatch(db);
@@ -93,8 +95,10 @@ export function useContasFixas() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
@@ -105,12 +109,12 @@ export function useContasFixas() {
    * sobrevive na trilha de auditoria mesmo depois do documento sumir.
    */
   async function remover(id: string, motivo: string) {
-    if (!user) return;
+    if (!user) return false;
     const conta = contas.find((c) => c.id === id);
-    if (!conta) return;
+    if (!conta) return false;
     if (conta.ativa) {
       setErro("Arquive a conta antes de excluir definitivamente.");
-      return;
+      return false;
     }
     try {
       const batch = writeBatch(db);
@@ -125,13 +129,15 @@ export function useContasFixas() {
       batch.delete(ref);
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 
   async function alternarAtiva(id: string, ativa: boolean) {
-    if (!user) return;
+    if (!user) return false;
     const conta = contas.find((c) => c.id === id);
     try {
       const batch = writeBatch(db);
@@ -151,8 +157,10 @@ export function useContasFixas() {
       }
       await batch.commit();
       setErro(null);
+      return true;
     } catch (e) {
       setErro(mensagemErro(e));
+      return false;
     }
   }
 

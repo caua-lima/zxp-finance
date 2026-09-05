@@ -79,7 +79,7 @@ export default function PerfilPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    salvar({
+    toast.sucessoSe(salvar({
       dataNascimento: dataNascimento || undefined,
       escolaridade: escolaridade || undefined,
       tipoEscola: tipoEscola || undefined,
@@ -90,8 +90,7 @@ export default function PerfilPage() {
       contasProprias: contasProprias.trim() || undefined,
       biografia: biografia.trim() || undefined,
       rendaAproximada: rendaAproximada || undefined,
-    });
-    toast.sucesso("Perfil salvo.");
+    }), "Perfil salvo.");
   }
 
   if (loading) {

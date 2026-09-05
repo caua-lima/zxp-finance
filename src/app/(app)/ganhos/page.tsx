@@ -53,11 +53,11 @@ export default function GanhosPage() {
   }
 
   function alternarRecebido(g: Ganho, recebido: boolean) {
-    if (g.tipo === "recorrente") {
-      pagamentos.marcar("ganho", g.id, recebido, { nome: g.descricao, valor: g.valor });
-    } else {
-      marcarRecebidoPontual(g.id, recebido);
-    }
+    // recorrente e pontual guardam "recebido" em lugares diferentes, mas os
+    // dois caminhos precisam devolver se a gravação deu certo
+    return g.tipo === "recorrente"
+      ? pagamentos.marcar("ganho", g.id, recebido, { nome: g.descricao, valor: g.valor })
+      : marcarRecebidoPontual(g.id, recebido);
   }
 
   function handleSubmit(e: FormEvent) {
@@ -67,12 +67,11 @@ export default function GanhosPage() {
     setDescricao("");
     setValor(0);
     setSemImposto(false);
-    if (tipo === "recorrente") {
-      adicionarRecorrente(desc, valor, categoriaReceita || undefined, semImposto).catch(console.error);
-    } else {
-      adicionarPontual(desc, valor, categoriaReceita || undefined, true, semImposto).catch(console.error);
-    }
-    toast.sucesso(`"${desc}" adicionado.`);
+    const operacao =
+      tipo === "recorrente"
+        ? adicionarRecorrente(desc, valor, categoriaReceita || undefined, semImposto)
+        : adicionarPontual(desc, valor, categoriaReceita || undefined, true, semImposto);
+    toast.sucessoSe(operacao, `"${desc}" adicionado.`);
   }
 
   return (
@@ -225,7 +224,7 @@ function SecaoOrfaos({
   onRemover,
 }: {
   itens: Ganho[];
-  onRemover: (id: string) => void;
+  onRemover: (id: string) => Promise<boolean>;
 }) {
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const toast = useToast();
@@ -273,8 +272,7 @@ function SecaoOrfaos({
         perigo
         onConfirmar={() => {
           if (alvo) {
-            onRemover(alvo.id);
-            toast.sucesso("Documento excluído.");
+            toast.sucessoSe(onRemover(alvo.id), "Documento excluído.");
           }
           setConfirmandoId(null);
         }}
@@ -302,11 +300,11 @@ function Secao({
   onEditar: (
     id: string,
     dados: { descricao: string; valor: number; categoriaReceita?: string; semImposto?: boolean }
-  ) => void;
-  onRemover: (id: string, motivo: string) => void;
-  onAlternarAtivo?: (id: string, ativo: boolean) => void;
+  ) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onAlternarAtivo?: (id: string, ativo: boolean) => Promise<boolean>;
   estaRecebido: (g: Ganho) => boolean;
-  onAlternarRecebido: (g: Ganho, recebido: boolean) => void;
+  onAlternarRecebido: (g: Ganho, recebido: boolean) => Promise<boolean>;
 }) {
   return (
     <div>
@@ -347,11 +345,11 @@ function ItemGanho({
   onEditar: (
     id: string,
     dados: { descricao: string; valor: number; categoriaReceita?: string; semImposto?: boolean }
-  ) => void;
-  onRemover: (id: string, motivo: string) => void;
-  onAlternarAtivo?: (id: string, ativo: boolean) => void;
+  ) => Promise<boolean>;
+  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onAlternarAtivo?: (id: string, ativo: boolean) => Promise<boolean>;
   recebido: boolean;
-  onAlternarRecebido: (recebido: boolean) => void;
+  onAlternarRecebido: (recebido: boolean) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -368,9 +366,16 @@ function ItemGanho({
   function salvar() {
     const desc = descricao.trim();
     if (!desc || !valor) return;
-    onEditar(ganho.id, { descricao: desc, valor, categoriaReceita: categoriaReceita || undefined, semImposto });
+    toast.sucessoSe(
+      onEditar(ganho.id, {
+        descricao: desc,
+        valor,
+        categoriaReceita: categoriaReceita || undefined,
+        semImposto,
+      }),
+      "Ganho atualizado."
+    );
     setEditando(false);
-    toast.sucesso("Ganho atualizado.");
   }
 
   if (editando) {
@@ -438,8 +443,7 @@ function ItemGanho({
             type="checkbox"
             checked={estaAtivo}
             onChange={(e) => {
-              onAlternarAtivo(ganho.id, e.target.checked);
-              toast.sucesso(e.target.checked ? "Ganho reativado." : "Ganho arquivado.");
+              toast.sucessoSe(onAlternarAtivo(ganho.id, e.target.checked), e.target.checked ? "Ganho reativado." : "Ganho arquivado.");
             }}
             className="h-5 w-5 shrink-0 accent-brand"
           />
@@ -490,8 +494,7 @@ function ItemGanho({
         perigo
         pedirMotivo
         onConfirmar={(motivo) => {
-          onRemover(ganho.id, motivo ?? "");
-          toast.sucesso("Ganho excluído.");
+          toast.sucessoSe(onRemover(ganho.id, motivo ?? ""), "Ganho excluído.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
