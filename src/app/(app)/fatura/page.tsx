@@ -231,7 +231,7 @@ function ItemFatura({
           />
           <button
             onClick={salvarConfig}
-            className="col-span-3 min-h-[40px] rounded-xl bg-brand px-3 text-xs font-semibold text-[#10100E]"
+            className="col-span-3 min-h-[40px] rounded-xl bg-brand px-3 text-xs font-semibold text-on-brand"
           >
             Salvar configuração do cartão
           </button>

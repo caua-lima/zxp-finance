@@ -127,7 +127,7 @@ export default function AcessoPage() {
         <button
           type="submit"
           disabled={criando}
-          className="min-h-[44px] rounded-xl bg-brand px-4 text-sm font-semibold text-[#10100E] transition-colors hover:bg-brand-dark disabled:opacity-40"
+          className="min-h-[44px] rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-dark disabled:opacity-40"
         >
           {criando ? "Criando..." : "Criar login"}
         </button>
@@ -222,7 +222,7 @@ function ItemUsuario({
           <button
             onClick={salvar}
             disabled={salvando}
-            className="min-h-[40px] flex-1 rounded-xl bg-brand px-3 text-xs font-semibold text-[#10100E] disabled:opacity-40"
+            className="min-h-[40px] flex-1 rounded-xl bg-brand px-3 text-xs font-semibold text-on-brand disabled:opacity-40"
           >
             {salvando ? "Salvando..." : "Salvar"}
           </button>

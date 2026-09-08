@@ -227,7 +227,7 @@ export function Nav() {
                         >
                           <span
                             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                              ativo ? "bg-brand text-[#10100E]" : "bg-surface text-text-muted"
+                              ativo ? "bg-brand text-on-brand" : "bg-surface text-text-muted"
                             }`}
                           >
                             <Icon width={19} height={19} />

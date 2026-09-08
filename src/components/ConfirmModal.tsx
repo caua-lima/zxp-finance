@@ -77,7 +77,7 @@ export function ConfirmModal({
             className={`min-h-[44px] flex-1 rounded-xl px-3 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               perigo
                 ? "bg-negative text-white hover:bg-negative/85"
-                : "bg-brand text-[#10100E] hover:bg-brand-dark"
+                : "bg-brand text-on-brand hover:bg-brand-dark"
             }`}
           >
             {textoConfirmar}

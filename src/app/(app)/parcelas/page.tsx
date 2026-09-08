@@ -559,7 +559,7 @@ function ItemParcela({
         <div className="flex gap-2">
           <button
             onClick={salvar}
-            className="min-h-[44px] flex-1 rounded-xl bg-brand px-3 text-sm font-semibold text-[#10100E]"
+            className="min-h-[44px] flex-1 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand"
           >
             Salvar
           </button>

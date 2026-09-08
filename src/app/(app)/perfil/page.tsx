@@ -288,7 +288,7 @@ export default function PerfilPage() {
 
         <button
           type="submit"
-          className="min-h-[44px] w-full rounded-xl bg-brand px-4 text-sm font-semibold text-[#10100E] transition-colors hover:bg-brand-dark"
+          className="min-h-[44px] w-full rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-dark"
         >
           Salvar perfil
         </button>

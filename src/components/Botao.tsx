@@ -32,7 +32,7 @@ export function Botao({
 }) {
   const porVariante: Record<Variante, string> = {
     primario:
-      "bg-brand text-[#10100E] font-semibold hover:bg-brand-dark active:bg-brand-dark",
+      "bg-brand text-on-brand font-semibold hover:bg-brand-dark active:bg-brand-dark",
     secundario:
       "border border-line bg-surface text-text-muted font-medium hover:border-brand/40 hover:text-text active:bg-surface-2",
     fantasma: "text-brand font-medium hover:text-brand-dark active:opacity-70",

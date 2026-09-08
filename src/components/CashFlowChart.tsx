@@ -73,7 +73,7 @@ export function CashFlowChart({
               key={r}
               onClick={() => setRange(r)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                range === r ? "bg-brand text-[#0E0F0C]" : "text-text-muted hover:text-text"
+                range === r ? "bg-brand text-on-brand" : "text-text-muted hover:text-text"
               }`}
             >
               {r === "7" ? "7 dias" : "Mês"}
