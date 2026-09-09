@@ -17,6 +17,7 @@ import { BotaoIcone } from "@/components/BotaoIcone";
 import { IconExcluir } from "@/components/icons";
 import { hojeISO } from "@/lib/finance/calculations";
 import { diasAteVencimento } from "@/lib/finance/vencimentoFatura";
+import { vencimentoEfetivo } from "@/lib/finance/diasUteis";
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
@@ -105,6 +106,11 @@ function ItemFatura({
   const diasRestantes = config.diaVencimento
     ? diasAteVencimento(config.diaVencimento, mes, hojeISO())
     : null;
+  // quando o dia cadastrado cai em fim de semana ou feriado, a data real
+  // é outra — mostrar isso evita o susto de achar que a fatura atrasou
+  const vencimento = config.diaVencimento
+    ? vencimentoEfetivo(config.diaVencimento, mes)
+    : null;
 
   function salvarConfig() {
     toast.sucessoSe(
@@ -169,7 +175,10 @@ function ItemFatura({
       {config.diaVencimento ? (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface-2/50 px-3 py-2">
           <span className="text-xs text-text-muted">
-            🔔 Vence <strong className="text-text">dia {config.diaVencimento}</strong>
+            🔔 Vence{" "}
+            <strong className="text-text">
+              dia {Number(vencimento!.efetivo.split("-")[2])}
+            </strong>
             {diasRestantes !== null && fatura.valor > 0 && (
               <span
                 className={
@@ -191,9 +200,15 @@ function ItemFatura({
               </span>
             )}
           </span>
-          <span className="text-[11px] text-text-faint">
-            Aviso no celular 5 dias antes, 1 dia antes e no dia
-          </span>
+          {vencimento!.adiado ? (
+            <span className="text-[11px] text-text-faint">
+              {vencimento!.motivo} — o banco só processa no próximo dia útil
+            </span>
+          ) : (
+            <span className="text-[11px] text-text-faint">
+              Aviso no celular 5 dias antes, 1 dia antes e no dia
+            </span>
+          )}
         </div>
       ) : (
         <button

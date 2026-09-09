@@ -35,6 +35,12 @@ import { GrupoPorCategoria } from "./entries";
 import { calcularComissaoDoDia } from "./comissoes";
 import { compararRenda, MEDIA_NACIONAL } from "./benchmarkRenda";
 import { diasAteVencimento, deveAvisar, montarAviso } from "./vencimentoFatura";
+import {
+  feriadosBancarios,
+  ehDiaUtil,
+  proximoDiaUtil,
+  vencimentoEfetivo,
+} from "./diasUteis";
 import { saldoEstaVelho } from "./alerts";
 import {
   projetarRitmo,
@@ -487,11 +493,29 @@ describe("renda vs. média nacional (PNAD)", () => {
 });
 
 describe("vencimento de fatura", () => {
+  // dia 20/08/2026 é uma quinta-feira comum: sem fim de semana nem
+  // feriado no meio, a contagem é a distância pura em dias
   test("conta os dias certos até o vencimento", () => {
-    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-10"), 5);
-    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-14"), 1);
-    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-15"), 0);
-    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-16"), -1); // já venceu
+    assert.equal(diasAteVencimento(20, "2026-08", "2026-08-15"), 5);
+    assert.equal(diasAteVencimento(20, "2026-08", "2026-08-19"), 1);
+    assert.equal(diasAteVencimento(20, "2026-08", "2026-08-20"), 0);
+    assert.equal(diasAteVencimento(20, "2026-08", "2026-08-21"), -1); // já venceu
+  });
+
+  test("conta até o dia útil, não até o dia cadastrado", () => {
+    // vencimento dia 15/08/2026 é sábado — só é processado na segunda, 17
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-15"), 2);
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-17"), 0);
+    assert.equal(diasAteVencimento(15, "2026-08", "2026-08-18"), -1);
+  });
+
+  test("no domingo 06/09/2026 a fatura de dia 6 ainda não venceu (7 é feriado)", () => {
+    // o caso que motivou tudo isso: dia 6 é domingo, dia 7 é a
+    // Independência, então o vencimento real é terça, dia 8
+    assert.equal(diasAteVencimento(6, "2026-09", "2026-09-06"), 2);
+    assert.equal(diasAteVencimento(6, "2026-09", "2026-09-07"), 1);
+    assert.equal(diasAteVencimento(6, "2026-09", "2026-09-08"), 0);
+    assert.equal(diasAteVencimento(6, "2026-09", "2026-09-09"), -1);
   });
 
   test("dia 31 em mês de 30 dias cai no último dia do mês, não vaza pro mês seguinte", () => {
@@ -513,6 +537,93 @@ describe("vencimento de fatura", () => {
     assert.match(montarAviso("Nubank", "R$ 500,00", 1)!.titulo, /amanhã/);
     assert.match(montarAviso("Nubank", "R$ 500,00", 0)!.titulo, /hoje/);
     assert.equal(montarAviso("Nubank", "R$ 500,00", 3), null);
+  });
+});
+
+describe("calendário bancário brasileiro", () => {
+  test("pega os feriados nacionais fixos", () => {
+    const f = feriadosBancarios(2026);
+    for (const dia of [
+      "2026-01-01",
+      "2026-04-21",
+      "2026-05-01",
+      "2026-09-07",
+      "2026-10-12",
+      "2026-11-02",
+      "2026-11-15",
+      "2026-12-25",
+    ]) {
+      assert.ok(f.has(dia), `${dia} deveria ser feriado`);
+    }
+  });
+
+  test("calcula os feriados que dependem da Páscoa", () => {
+    // Páscoa de 2026 é 05/04
+    const f = feriadosBancarios(2026);
+    assert.ok(f.has("2026-02-16"), "segunda de carnaval");
+    assert.ok(f.has("2026-02-17"), "terça de carnaval");
+    assert.ok(f.has("2026-04-03"), "sexta-feira santa");
+    assert.ok(f.has("2026-06-04"), "corpus christi");
+    // e num ano com Páscoa bem diferente, pra provar que não é tabela fixa
+    const f2025 = feriadosBancarios(2025);
+    assert.ok(f2025.has("2025-03-03"), "carnaval 2025");
+    assert.ok(f2025.has("2025-04-18"), "sexta-feira santa 2025");
+  });
+
+  test("Consciência Negra só vale como feriado nacional a partir de 2024", () => {
+    assert.ok(feriadosBancarios(2026).has("2026-11-20"));
+    assert.ok(feriadosBancarios(2024).has("2024-11-20"));
+    assert.ok(!feriadosBancarios(2023).has("2023-11-20"));
+  });
+
+  test("fim de semana e feriado não são dia útil", () => {
+    assert.equal(ehDiaUtil("2026-09-04"), true); // sexta comum
+    assert.equal(ehDiaUtil("2026-09-05"), false); // sábado
+    assert.equal(ehDiaUtil("2026-09-06"), false); // domingo
+    assert.equal(ehDiaUtil("2026-09-07"), false); // Independência
+    assert.equal(ehDiaUtil("2026-09-08"), true); // terça
+  });
+
+  test("dia útil não é empurrado pra frente", () => {
+    assert.equal(proximoDiaUtil("2026-09-08"), "2026-09-08");
+  });
+
+  test("empurra pro próximo dia útil, pulando a emenda inteira", () => {
+    assert.equal(proximoDiaUtil("2026-09-05"), "2026-09-08"); // sáb → ter
+    assert.equal(proximoDiaUtil("2026-09-06"), "2026-09-08"); // dom → ter
+    assert.equal(proximoDiaUtil("2026-09-07"), "2026-09-08"); // feriado → ter
+  });
+
+  test("atravessa a virada de mês quando precisa", () => {
+    // 31/10/2026 é sábado, 1/11 domingo, 2/11 Finados → só dia 3
+    assert.equal(proximoDiaUtil("2026-10-31"), "2026-11-03");
+  });
+
+  test("explica por que o vencimento foi adiado", () => {
+    const feriado = vencimentoEfetivo(6, "2026-09");
+    assert.equal(feriado.original, "2026-09-06");
+    assert.equal(feriado.efetivo, "2026-09-08");
+    assert.equal(feriado.adiado, true);
+    assert.match(feriado.motivo!, /fim de semana/);
+
+    const naSegunda = vencimentoEfetivo(7, "2026-09");
+    assert.equal(naSegunda.efetivo, "2026-09-08");
+    assert.match(naSegunda.motivo!, /Independência/);
+  });
+
+  test("vencimento em dia útil não vira adiamento", () => {
+    const v = vencimentoEfetivo(8, "2026-09");
+    assert.equal(v.original, "2026-09-08");
+    assert.equal(v.efetivo, "2026-09-08");
+    assert.equal(v.adiado, false);
+    assert.equal(v.motivo, null);
+  });
+
+  test("dia maior que o mês continua caindo no último dia, e daí ajusta", () => {
+    // fevereiro de 2026 termina no sábado 28 → segunda, 2 de março
+    const v = vencimentoEfetivo(31, "2026-02");
+    assert.equal(v.original, "2026-02-28");
+    assert.equal(v.efetivo, "2026-03-02");
   });
 });
 

@@ -11,6 +11,7 @@ import {
   diaVencimentoNoMes,
 } from "@/lib/types";
 import { ultimoDiaMes, diaISOde } from "./calculations";
+import { vencimentoEfetivo } from "./diasUteis";
 
 /**
  * Traduz as coleções antigas (ganhos, contasFixas, assinaturas, parcelas,
@@ -82,8 +83,11 @@ export function contasFixasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: c.valor,
+        // boleto que cai em fim de semana ou feriado é pago no próximo
+        // dia útil sem juros — usar o dia cadastrado marcaria como
+        // atrasado algo que ainda está no prazo
         dueDate: c.diaVencimento
-          ? diaVencimentoNoMes(mes, c.diaVencimento)
+          ? vencimentoEfetivo(c.diaVencimento, mes).efetivo
           : ultimoDiaMes(mes),
         competenceMonth: mes,
         description: c.nome,
@@ -110,6 +114,8 @@ export function assinaturasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: a.valor,
+        // assinatura não pula pro dia útil: a cobrança é automática no
+        // cartão e acontece no domingo igual, não espera o banco abrir
         dueDate: a.diaRenovacao
           ? diaVencimentoNoMes(mes, a.diaRenovacao)
           : ultimoDiaMes(mes),
@@ -170,7 +176,7 @@ export function faturasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: f.valor,
-        dueDate: dia ? diaVencimentoNoMes(mes, dia) : ultimoDiaMes(mes),
+        dueDate: dia ? vencimentoEfetivo(dia, mes).efetivo : ultimoDiaMes(mes),
         competenceMonth: mes,
         description: `Fatura ${f.nome}`,
         categoryId: "cartao",

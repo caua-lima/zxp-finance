@@ -1,4 +1,4 @@
-import { diaVencimentoNoMes } from "@/lib/types";
+import { vencimentoEfetivo } from "./diasUteis";
 
 /**
  * Quantos dias faltam pro vencimento da fatura daquele mês. Positivo =
@@ -6,14 +6,19 @@ import { diaVencimentoNoMes } from "@/lib/types";
  * construtor local de Date (nunca parse de string como UTC) pelo mesmo
  * motivo do resto do app: `new Date("2026-08-15")` é meia-noite em UTC,
  * que em Brasília ainda é dia 14.
+ *
+ * Conta até o vencimento EFETIVO, não até o dia cadastrado no cartão:
+ * fatura que cai em fim de semana ou feriado só é processada no próximo
+ * dia útil. Sem isso o app dizia "venceu há 1 dia" num domingo em que
+ * ainda faltavam dois dias úteis pra pagar sem juros.
  */
 export function diasAteVencimento(
   diaVencimento: number,
   mes: string,
   hojeISO: string
 ): number {
-  const vencimentoISO = diaVencimentoNoMes(mes, diaVencimento);
-  const [anoV, mesV, diaV] = vencimentoISO.split("-").map(Number);
+  const { efetivo } = vencimentoEfetivo(diaVencimento, mes);
+  const [anoV, mesV, diaV] = efetivo.split("-").map(Number);
   const [anoH, mesH, diaH] = hojeISO.split("-").map(Number);
   const vencimento = new Date(anoV, mesV - 1, diaV);
   const hoje = new Date(anoH, mesH - 1, diaH);
