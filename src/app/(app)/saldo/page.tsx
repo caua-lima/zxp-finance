@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { formatarMoeda, mesPadrao, Gasto } from "@/lib/types";
+import { formatarMoeda, mesPadrao, arredondarCentavos, Gasto } from "@/lib/types";
 import {
   CATEGORIAS_GASTO,
   iconeCategoriaGasto,
@@ -85,7 +85,24 @@ export default function SaldoPage() {
     () => gastos.filter((g) => g.mes === mes),
     [gastos, mes]
   );
-  const totalDoMes = gastosDoMes.reduce((acc, g) => acc + g.valor, 0);
+  // Ajuste de conciliação não é gasto — é a correção do saldo quando o que
+  // você informou não bateu com o que o app esperava. Somar ele em "total
+  // gasto" fazia o card mostrar coisas como "-R$ 892,01 gastos" logo depois
+  // de informar o saldo inicial, que é justamente o oposto do que aconteceu.
+  const gastosReaisDoMes = useMemo(
+    () => gastosDoMes.filter((g) => !g.ajusteConciliacaoId),
+    [gastosDoMes]
+  );
+  const ajustesDoMes = useMemo(
+    () => gastosDoMes.filter((g) => g.ajusteConciliacaoId),
+    [gastosDoMes]
+  );
+  const totalDoMes = arredondarCentavos(
+    gastosReaisDoMes.reduce((acc, g) => acc + g.valor, 0)
+  );
+  const totalAjustes = arredondarCentavos(
+    ajustesDoMes.reduce((acc, g) => acc + g.valor, 0)
+  );
   const grupos = useMemo(() => agruparPorCategoria(gastosDoMes), [gastosDoMes]);
 
   const gastosDesdeReferencia = saldo
@@ -465,11 +482,31 @@ export default function SaldoPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-6 flex justify-between items-center">
-        <span className="text-sm text-text-muted">Total gasto no mês</span>
-        <span className="text-lg font-semibold text-gold">
-          {formatarMoeda(totalDoMes)}
-        </span>
+      <div className="rounded-2xl border border-line bg-surface p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-text-muted">Total gasto no mês</span>
+          <span className="text-lg font-semibold text-gold">
+            {formatarMoeda(totalDoMes)}
+          </span>
+        </div>
+        {/* Ajuste aparece à parte, e não some: é dinheiro que existiu de
+            verdade, só não foi gasto. Somado ao total viraria um número
+            sem sentido. */}
+        {ajustesDoMes.length > 0 && (
+          <div className="mt-2 flex items-center justify-between border-t border-line-soft pt-2">
+            <span className="text-xs text-text-faint">
+              Ajuste de conferência de saldo
+            </span>
+            <span
+              className={`text-sm font-medium ${
+                totalAjustes < 0 ? "text-positive" : "text-text-muted"
+              }`}
+            >
+              {totalAjustes < 0 ? "+" : "−"}
+              {formatarMoeda(Math.abs(totalAjustes))}
+            </span>
+          </div>
+        )}
       </div>
 
       {monthClose.fechado && (
