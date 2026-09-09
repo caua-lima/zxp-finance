@@ -11,6 +11,8 @@ import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
+import { useCaixinhas } from "@/lib/useCaixinhas";
+import { totalPorGasto } from "@/lib/finance/caixinhas";
 import {
   diasRestantesNoMes,
   calculateGastavelPorDia,
@@ -39,6 +41,7 @@ type Mensagem =
       descricao: string;
       categoria: string;
       restante: number | null;
+      guardado: number; // quanto foi pras caixinhas por causa deste gasto
     };
 
 /**
@@ -52,6 +55,7 @@ let proximoId = 1;
 export default function ChatPage() {
   const { saldo } = useSaldo();
   const { gastos, adicionar, erro } = useGastos();
+  const { caixinhas } = useCaixinhas();
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [texto, setTexto] = useState("");
   const fimRef = useRef<HTMLDivElement>(null);
@@ -121,6 +125,9 @@ export default function ChatPage() {
     // O saldo do Firestore só chega no próximo snapshot; o desconto aqui é
     // otimista pra a resposta ser imediata, e o valor real reaparece sozinho.
     const restante = aindaHoje === null ? null : aindaHoje - m.valor;
+    // as caixinhas se encheram junto com o gasto, no mesmo batch — mostrar
+    // aqui é o que faz o hábito aparecer em vez de acontecer escondido
+    const guardado = totalPorGasto(caixinhas);
     setMensagens((atual) =>
       atual.map((x) =>
         x.id === m.id
@@ -131,6 +138,7 @@ export default function ChatPage() {
               descricao: m.descricao,
               categoria,
               restante,
+              guardado,
             }
           : x
       )
@@ -271,6 +279,8 @@ export default function ChatPage() {
                 {iconeCategoriaGasto(m.categoria)} {m.categoria}
                 {m.restante !== null &&
                   ` · ainda pode gastar ${formatarMoeda(m.restante)} hoje`}
+                {m.guardado > 0 &&
+                  ` · 🐷 ${formatarMoeda(m.guardado)} guardado`}
               </p>
             </div>
           );

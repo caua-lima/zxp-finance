@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { formatarMoeda, mesPadrao, arredondarCentavos, Gasto } from "@/lib/types";
 import {
   CATEGORIAS_GASTO,
@@ -11,6 +12,8 @@ import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
 import { useConciliacoes } from "@/lib/useConciliacoes";
+import { useCaixinhas } from "@/lib/useCaixinhas";
+import { totalGuardado, totalPorGasto } from "@/lib/finance/caixinhas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -64,6 +67,7 @@ export default function SaldoPage() {
     remover,
   } = useGastos();
   const conciliacoes = useConciliacoes();
+  const { caixinhas } = useCaixinhas();
   const toast = useToast();
   const push = usePushNotifications();
   const monthClose = useMonthClose(mesPadrao());
@@ -78,6 +82,8 @@ export default function SaldoPage() {
   const [novaReserva, setNovaReserva] = useState(0);
 
   const mes = mesPadrao();
+  const guardadoNasCaixinhas = totalGuardado(caixinhas);
+  const guardaPorGasto = totalPorGasto(caixinhas);
   const loading = loadingSaldo || loadingGastos;
   const erro = erroSaldo || erroGastos || conciliacoes.erro;
 
@@ -157,7 +163,10 @@ export default function SaldoPage() {
       console.error
     );
     setUltimoRegistro(
-      `${formatarMoeda(interpretado.valor)} · ${interpretado.descricao} · ${iconeCategoriaGasto(categoria)} ${categoria}`
+      `${formatarMoeda(interpretado.valor)} · ${interpretado.descricao} · ${iconeCategoriaGasto(categoria)} ${categoria}` +
+        (guardaPorGasto > 0
+          ? ` · 🐷 ${formatarMoeda(guardaPorGasto)} guardado`
+          : "")
     );
   }
 
@@ -504,6 +513,23 @@ export default function SaldoPage() {
             >
               {totalAjustes < 0 ? "+" : "−"}
               {formatarMoeda(Math.abs(totalAjustes))}
+            </span>
+          </div>
+        )}
+        {/* Fica junto do total gasto de propósito: é o contrapeso. Toda vez
+            que o número de cima sobe, o de baixo sobe junto. */}
+        {caixinhas.length > 0 && (
+          <div className="mt-2 flex items-center justify-between border-t border-line-soft pt-2">
+            <Link
+              href="/caixinhas"
+              className="text-xs text-text-faint hover:text-brand"
+            >
+              🐷 Guardado nas caixinhas
+              {guardaPorGasto > 0 &&
+                ` · ${formatarMoeda(guardaPorGasto)} por gasto`}
+            </Link>
+            <span className="text-sm font-medium text-positive">
+              {formatarMoeda(guardadoNasCaixinhas)}
             </span>
           </div>
         )}

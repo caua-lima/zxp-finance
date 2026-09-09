@@ -217,6 +217,19 @@ export function IconMais(props: IconProps) {
   );
 }
 
+/** Cofrinho: um potinho com a fenda de enfiar a moeda em cima. */
+export function IconCaixinha(props: IconProps) {
+  return base(
+    <>
+      <path d="M4 10h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+      <path d="M9 7h6" />
+      <path d="M7 10 8.5 5.5a1 1 0 0 1 1-.5h5a1 1 0 0 1 1 .5L17 10" />
+      <path d="M12 13v3" />
+    </>,
+    props
+  );
+}
+
 export function IconPerfil(props: IconProps) {
   return base(
     <>

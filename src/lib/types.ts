@@ -85,6 +85,36 @@ export interface Gasto {
   estornadoEm?: number;
   estornoDeId?: string; // presente só na entrada de estorno — aponta pro gasto original
   ajusteConciliacaoId?: string; // presente só em gasto criado por ajuste de conciliação
+  /**
+   * Quanto foi guardado em cada caixinha por causa DESTE gasto, no formato
+   * {caixinhaId: valor}. Guardado no próprio lançamento pra que o estorno
+   * saiba exatamente o que devolver, mesmo que a configuração da caixinha
+   * tenha mudado depois.
+   */
+  guardado?: Record<string, number>;
+}
+
+/**
+ * Caixinha: um potinho de dinheiro guardado. A cada gasto registrado o app
+ * separa um valor fixo em cada caixinha ativa — mesmo num gasto de um
+ * centavo. É o "guarde um trocado toda vez que gastar" automatizado.
+ *
+ * Importante: caixinha NÃO desconta do saldo nem vira gasto. O dinheiro
+ * continua na conta; a caixinha só marca quanto dele já está prometido
+ * pra outra coisa. Se descontasse, a próxima "Conferir saldo" — onde você
+ * digita o saldo real do banco — acusaria uma diferença e criaria um
+ * ajuste do nada.
+ */
+export interface Caixinha {
+  id: string;
+  nome: string;
+  saldo: number; // quanto tem guardado hoje
+  porGasto: number; // quanto separa a cada gasto registrado
+  meta?: number | null; // objetivo opcional, só pra medir o progresso
+  ativa: boolean; // pausa sem apagar o que já foi guardado
+  depositos: number; // quantas vezes já guardou — explica o saldo
+  criadoEm: number;
+  atualizadoEm: number;
 }
 
 export type NivelEscolaridade =

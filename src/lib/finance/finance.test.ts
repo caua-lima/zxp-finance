@@ -10,6 +10,7 @@ import {
   MES_MINIMO,
   Parcela,
   Gasto,
+  Caixinha,
 } from "../types";
 import {
   calculateProjectedBalance,
@@ -41,6 +42,15 @@ import {
   proximoDiaUtil,
   vencimentoEfetivo,
 } from "./diasUteis";
+import {
+  caixinhasQueRecebem,
+  totalPorGasto,
+  totalGuardado,
+  depositoDoGasto,
+  faltaParaMeta,
+  progressoDaMeta,
+  gastosAteAMeta,
+} from "./caixinhas";
 import { saldoEstaVelho } from "./alerts";
 import {
   projetarRitmo,
@@ -624,6 +634,95 @@ describe("calendário bancário brasileiro", () => {
     const v = vencimentoEfetivo(31, "2026-02");
     assert.equal(v.original, "2026-02-28");
     assert.equal(v.efetivo, "2026-03-02");
+  });
+});
+
+describe("caixinhas", () => {
+  function caixinha(over: Partial<Caixinha> = {}): Caixinha {
+    return {
+      id: "c1",
+      nome: "Sair de casa",
+      saldo: 0,
+      porGasto: 0.1,
+      ativa: true,
+      depositos: 0,
+      criadoEm: 0,
+      atualizadoEm: 0,
+      ...over,
+    };
+  }
+
+  test("só caixinha ativa e com valor configurado recebe depósito", () => {
+    const lista = [
+      caixinha({ id: "a" }),
+      caixinha({ id: "b", ativa: false }),
+      caixinha({ id: "c", porGasto: 0 }),
+    ];
+    assert.deepEqual(
+      caixinhasQueRecebem(lista).map((c) => c.id),
+      ["a"]
+    );
+  });
+
+  test("soma quanto sai por gasto sem erro de ponto flutuante", () => {
+    // 0.1 + 0.2 dá 0.30000000000000004 em float puro
+    const lista = [caixinha({ id: "a", porGasto: 0.1 }), caixinha({ id: "b", porGasto: 0.2 })];
+    assert.equal(totalPorGasto(lista), 0.3);
+  });
+
+  test("caixinha pausada não entra no por-gasto, mas o que ela já tem continua contando", () => {
+    const lista = [
+      caixinha({ id: "a", porGasto: 0.1, saldo: 12.5 }),
+      caixinha({ id: "b", porGasto: 0.5, saldo: 30, ativa: false }),
+    ];
+    assert.equal(totalPorGasto(lista), 0.1);
+    assert.equal(totalGuardado(lista), 42.5);
+  });
+
+  test("o depósito sai como mapa de caixinha pra valor, pro estorno saber o que devolver", () => {
+    const lista = [
+      caixinha({ id: "a", porGasto: 0.1 }),
+      caixinha({ id: "b", porGasto: 1 }),
+      caixinha({ id: "c", porGasto: 5, ativa: false }),
+    ];
+    assert.deepEqual(depositoDoGasto(lista), { a: 0.1, b: 1 });
+  });
+
+  test("sem caixinha ativa o depósito é vazio, e não um objeto com zeros", () => {
+    assert.deepEqual(depositoDoGasto([caixinha({ ativa: false })]), {});
+    assert.deepEqual(depositoDoGasto([]), {});
+  });
+
+  test("sem meta não há progresso pra mostrar", () => {
+    const c = caixinha({ saldo: 50 });
+    assert.equal(progressoDaMeta(c), null);
+    assert.equal(faltaParaMeta(c), null);
+    assert.equal(gastosAteAMeta(c), null);
+  });
+
+  test("progresso e quanto falta pra meta", () => {
+    const c = caixinha({ saldo: 25, meta: 100 });
+    assert.equal(progressoDaMeta(c), 25);
+    assert.equal(faltaParaMeta(c), 75);
+  });
+
+  test("meta batida trava em 100% e não vira falta negativa", () => {
+    const c = caixinha({ saldo: 150, meta: 100 });
+    assert.equal(progressoDaMeta(c), 100);
+    assert.equal(faltaParaMeta(c), 0);
+    assert.equal(gastosAteAMeta(c), null); // não há contagem regressiva
+  });
+
+  test("estima quantos gastos ainda faltam pra bater a meta", () => {
+    // faltam R$ 75 guardando R$ 0,10 por gasto → 750 gastos
+    assert.equal(gastosAteAMeta(caixinha({ saldo: 25, meta: 100, porGasto: 0.1 })), 750);
+    // arredonda pra cima: 3 gastos de R$ 0,10 não fecham R$ 0,25
+    assert.equal(gastosAteAMeta(caixinha({ saldo: 0, meta: 0.25, porGasto: 0.1 })), 3);
+  });
+
+  test("caixinha pausada não estima contagem regressiva", () => {
+    const c = caixinha({ saldo: 0, meta: 100, ativa: false });
+    assert.equal(gastosAteAMeta(c), null);
   });
 });
 

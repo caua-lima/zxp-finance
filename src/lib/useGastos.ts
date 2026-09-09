@@ -4,18 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import {
   collection,
   onSnapshot,
-  addDoc,
   doc,
   writeBatch,
+  increment,
+  WriteBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Gasto, mesPadrao } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
+import { useCaixinhas } from "./useCaixinhas";
+import { depositoDoGasto } from "./finance/caixinhas";
 
 export function useGastos() {
   const { user } = useAuth();
+  const { caixinhas } = useCaixinhas();
   const [todos, setTodos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -42,16 +46,61 @@ export function useGastos() {
     [todos]
   );
 
+  /**
+   * Aplica um movimento nas caixinhas dentro de um batch que já existe.
+   * `sinal` é +1 pra guardar e -1 pra devolver. Só mexe em caixinha que
+   * ainda existe: se ela foi excluída, um update nela derrubaria o batch
+   * inteiro e junto com ele o lançamento do gasto, que é o dado que
+   * realmente importa aqui.
+   */
+  function aplicarNasCaixinhas(
+    batch: WriteBatch,
+    uid: string,
+    deposito: Record<string, number>,
+    sinal: 1 | -1
+  ) {
+    const agora = Date.now();
+    for (const [caixinhaId, valor] of Object.entries(deposito)) {
+      if (!caixinhas.some((c) => c.id === caixinhaId)) continue;
+      batch.update(doc(db, "usuarios", uid, "caixinhas", caixinhaId), {
+        saldo: increment(sinal * valor),
+        depositos: increment(sinal),
+        atualizadoEm: agora,
+      });
+    }
+  }
+
+  /**
+   * Registra o gasto e, no MESMO batch, guarda o valor configurado em cada
+   * caixinha ativa. Mesmo batch de propósito: guardar sem ter gastado, ou
+   * gastar sem ter guardado, deixaria os dois números se contradizendo sem
+   * jeito de saber qual está certo.
+   *
+   * Não existe gasto pequeno demais — um de R$ 0,01 guarda igual a um de
+   * R$ 800. Gasto zerado ou negativo não guarda: negativo aqui é estorno
+   * ou ajuste, não um gasto novo.
+   */
   async function adicionar(descricao: string, valor: number, categoria: string) {
     if (!user) return false;
     try {
-      await addDoc(collection(db, "usuarios", user.uid, "gastos"), {
+      const deposito = valor > 0 ? depositoDoGasto(caixinhas) : {};
+      const guardouAlgo = Object.keys(deposito).length > 0;
+
+      const batch = writeBatch(db);
+      const ref = doc(collection(db, "usuarios", user.uid, "gastos"));
+      batch.set(ref, {
         descricao,
         valor,
         categoria,
         mes: mesPadrao(),
         criadoEm: Date.now(),
+        // só grava a chave quando guardou de verdade: objeto vazio em todo
+        // gasto seria ruído em cima do dado mais numeroso do app
+        ...(guardouAlgo ? { guardado: deposito } : {}),
       });
+      aplicarNasCaixinhas(batch, user.uid, deposito, 1);
+      await batch.commit();
+
       setErro(null);
       return true;
     } catch (e) {
@@ -115,6 +164,12 @@ export function useGastos() {
         criadoEm: Date.now(),
         estornoDeId: id,
       });
+      // o gasto não aconteceu, então o que ele guardou também não deve
+      // ficar de pé — devolve exatamente o que tirou, e não o valor atual
+      // da caixinha, que pode ter sido reconfigurado desde então
+      if (original.guardado) {
+        aplicarNasCaixinhas(batch, user.uid, original.guardado, -1);
+      }
       anexarAuditLog(batch, user.uid, user.email, {
         action: "reversed",
         entityType: "gasto",
@@ -164,6 +219,11 @@ export function useGastos() {
           : `Exclusão definitiva de "${original.descricao}": ${motivo}`,
         before: estorno ? { original, estorno } : { ...original },
       });
+      // com estorno o depósito já foi devolvido lá; sem estorno, o gasto
+      // some agora e o que ele guardou precisa voltar junto
+      if (!estorno && original.guardado) {
+        aplicarNasCaixinhas(batch, user.uid, original.guardado, -1);
+      }
       batch.delete(doc(db, "usuarios", user.uid, "gastos", original.id));
       if (estorno) {
         batch.delete(doc(db, "usuarios", user.uid, "gastos", estorno.id));

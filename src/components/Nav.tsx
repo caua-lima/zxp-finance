@@ -21,6 +21,7 @@ import {
   IconMicrofone,
   IconPerfil,
   IconMais,
+  IconCaixinha,
   IconSair,
 } from "./icons";
 
@@ -68,6 +69,12 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
         label: "Checklist",
         Icon: IconChecklist,
         descricao: "Marcar contas conforme for pagando",
+      },
+      {
+        href: "/caixinhas",
+        label: "Caixinhas",
+        Icon: IconCaixinha,
+        descricao: "Guarda um trocado a cada gasto registrado",
       },
     ],
   },
