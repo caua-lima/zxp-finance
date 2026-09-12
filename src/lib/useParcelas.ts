@@ -9,7 +9,15 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Parcela, TipoParcela, mesPadrao, mesSeguinte, mesAnteriorDe, valorMinhaParte } from "./types";
+import {
+  Parcela,
+  TipoParcela,
+  VinculoDesejo,
+  mesPadrao,
+  mesSeguinte,
+  mesAnteriorDe,
+  valorMinhaParte,
+} from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
@@ -44,6 +52,12 @@ export function useParcelas() {
     [todas]
   );
 
+  /**
+   * `vinculoDesejo`, quando presente, é gravado como uma CÓPIA do item do
+   * Tasks no momento da criação — não uma referência viva. É o que faz
+   * "decidi financiar isso baseado em R$ 1.200" continuar verdadeiro
+   * mesmo que o preço do item mude depois lá.
+   */
   async function adicionar(
     nome: string,
     valorParcela: number,
@@ -53,7 +67,8 @@ export function useParcelas() {
     dividida?: boolean,
     naFatura?: boolean,
     cartao?: string,
-    mesReferencia?: string
+    mesReferencia?: string,
+    vinculoDesejo?: VinculoDesejo
   ) {
     if (!user) return false;
     try {
@@ -67,6 +82,7 @@ export function useParcelas() {
         naFatura: tipo === "cartao" ? !!naFatura : false,
         ...(tipo === "cartao" && cartao ? { cartao } : {}),
         mesReferencia: mesReferencia ?? mesPadrao(),
+        ...(vinculoDesejo ? { vinculoDesejo } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);

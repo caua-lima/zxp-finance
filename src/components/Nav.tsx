@@ -22,6 +22,7 @@ import {
   IconPerfil,
   IconMais,
   IconCaixinha,
+  IconConsultor,
   IconSair,
 } from "./icons";
 
@@ -75,6 +76,12 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
         label: "Caixinhas",
         Icon: IconCaixinha,
         descricao: "Guarda um trocado a cada gasto registrado",
+      },
+      {
+        href: "/consultor",
+        label: "Consultor",
+        Icon: IconConsultor,
+        descricao: "Pergunte se dá pra assumir um novo compromisso",
       },
     ],
   },

@@ -9,10 +9,13 @@ import {
   diferencaMeses,
   Parcela,
   TipoParcela,
+  VinculoDesejo,
   valorMinhaParte,
 } from "@/lib/types";
 import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 import { useParcelas } from "@/lib/useParcelas";
+import { useDesejosEmAberto } from "@/lib/useDesejosEmAberto";
+import { SeletorDesejo } from "@/components/SeletorDesejo";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -47,6 +50,8 @@ export default function ParcelasPage() {
   const [dividida, setDividida] = useState(false);
   const [naFatura, setNaFatura] = useState(false);
   const [mesInicio, setMesInicio] = useState(mesPadrao());
+  const [desejoId, setDesejoId] = useState("");
+  const desejos = useDesejosEmAberto();
   const toast = useToast();
 
   function handleSubmit(e: FormEvent) {
@@ -57,11 +62,21 @@ export default function ParcelasPage() {
     const vPagas = pagas ? Math.min(parseInt(pagas, 10), vTotal) : 0;
     const vRestantes = Math.max(0, vTotal - vPagas);
     setNome("");
+    const desejo = desejos.itens.find((d) => d.id === desejoId);
+    const vinculoDesejo: VinculoDesejo | undefined = desejo
+      ? {
+          taskId: desejo.id,
+          nome: desejo.nome,
+          precoCentavos: desejo.precoCentavos,
+          vinculadoEm: Date.now(),
+        }
+      : undefined;
     setValorParcela(0);
     setTotalParcelas("");
     setPagas("");
     setDividida(false);
     setNaFatura(false);
+    setDesejoId("");
     toast.sucessoSe(adicionar(
       nomeAparado,
       valorParcela,
@@ -71,7 +86,8 @@ export default function ParcelasPage() {
       dividida,
       naFatura,
       cartao || undefined,
-      mesInicio
+      mesInicio,
+      vinculoDesejo
     ), `"${nomeAparado}" adicionada.`);
     setMesInicio(mesPadrao());
   }
@@ -208,6 +224,12 @@ export default function ParcelasPage() {
           <p className="rotulo">Mês da 1ª parcela que você vai pagar</p>
           <MonthSelector mes={mesInicio} onChange={setMesInicio} />
         </div>
+
+        <SeletorDesejo
+          desejoId={desejoId}
+          onSelecionar={setDesejoId}
+          desejos={desejos}
+        />
 
         <Botao type="submit" larguraTotal>
           Adicionar parcela
@@ -595,6 +617,13 @@ function ItemParcela({
             )}
             {parcela.naFatura && <span>já na fatura do cartão</span>}
           </div>
+          {parcela.vinculoDesejo && (
+            <p className="mt-0.5 text-xs text-brand">
+              🎯 {parcela.vinculoDesejo.nome}
+              {parcela.vinculoDesejo.precoCentavos !== null &&
+                ` · ${formatarMoeda(parcela.vinculoDesejo.precoCentavos / 100)} no Tasks`}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span

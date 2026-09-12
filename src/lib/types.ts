@@ -34,6 +34,19 @@ export function diaVencimentoNoMes(mes: string, diaVencimento: number): string {
 
 export type TipoParcela = "cartao" | "financiamento";
 
+/**
+ * Cópia do desejo do ZXP Tasks no momento em que a parcela foi vinculada a
+ * ele. É cópia mesmo, não referência viva — cruzar os dois bancos a cada
+ * tela seria lento e frágil, e "decidi financiar baseado em R$ 1.200"
+ * continua verdadeiro mesmo que o preço do item mude depois no Tasks.
+ */
+export interface VinculoDesejo {
+  taskId: string;
+  nome: string;
+  precoCentavos: number | null;
+  vinculadoEm: number;
+}
+
 export interface Parcela {
   id: string;
   tipo: TipoParcela;
@@ -45,6 +58,7 @@ export interface Parcela {
   cartao?: string; // qual dos CARTOES_PREDEFINIDOS ela é cobrada (só quando tipo === "cartao")
   naFatura?: boolean; // já contabilizada dentro do valor lançado em "Fatura do cartão" — não soma de novo
   mesReferencia?: string; // mês em que "parcelasRestantes" é válido
+  vinculoDesejo?: VinculoDesejo; // presente só quando criada a partir de um item da lista de desejos do Tasks
   criadoEm: number;
 }
 

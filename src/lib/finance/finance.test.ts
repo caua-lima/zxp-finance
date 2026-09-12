@@ -51,6 +51,7 @@ import {
   progressoDaMeta,
   gastosAteAMeta,
 } from "./caixinhas";
+import { simularNovoCompromisso, ContextoSimulacao } from "./simulador";
 import { saldoEstaVelho } from "./alerts";
 import {
   projetarRitmo,
@@ -723,6 +724,97 @@ describe("caixinhas", () => {
   test("caixinha pausada não estima contagem regressiva", () => {
     const c = caixinha({ saldo: 0, meta: 100, ativa: false });
     assert.equal(gastosAteAMeta(c), null);
+  });
+});
+
+describe("simulador de viabilidade", () => {
+  function contexto(over: Partial<ContextoSimulacao> = {}): ContextoSimulacao {
+    return {
+      saldoAtual: 1000,
+      reservaMeta: 100,
+      rendaMensalLiquida: 2000,
+      despesasFixasMensais: 1500,
+      parcelasAtivas: [],
+      ...over,
+    };
+  }
+
+  test("sobra dinheiro todo mês: viável, sem mês ruim", () => {
+    // renda 2000, despesas fixas 1500, sobra 500/mês — uma parcela de 200
+    // ainda deixa 300 de sobra, bem acima da reserva de 100
+    const r = simularNovoCompromisso(contexto(), 200, 12);
+    assert.equal(r.viavel, true);
+    assert.equal(r.primeiroMesRuim, null);
+    assert.equal(r.motivo, null);
+    assert.equal(r.meses.length, 12);
+  });
+
+  test("aponta o primeiro mês em que o saldo fica negativo", () => {
+    // saldo 1000, sobra líquida 500/mês antes do novo peso; compromisso de
+    // 600/mês come 100 do saldo por mês — no mês 3 fica -800+1500(reserva
+    // não entra aqui, é so negativo mesmo)... calculado abaixo
+    const r = simularNovoCompromisso(
+      contexto({ saldoAtual: 200, reservaMeta: 0, rendaMensalLiquida: 1000, despesasFixasMensais: 1000 }),
+      150,
+      6
+    );
+    // cada mês: saldo += 1000 - 1000 - 150 = -150
+    // mês1: 200-150=50 · mês2: 50-150=-100 → inviável no mês 2
+    assert.equal(r.viavel, false);
+    assert.equal(r.primeiroMesRuim, 2);
+    assert.equal(r.motivo, "saldo_negativo");
+    assert.equal(r.meses[0].saldoFinal, 50);
+    assert.equal(r.meses[1].saldoFinal, -100);
+  });
+
+  test("saldo positivo mas abaixo da reserva também é inviável, com motivo diferente", () => {
+    const r = simularNovoCompromisso(
+      contexto({ saldoAtual: 500, reservaMeta: 300, rendaMensalLiquida: 1000, despesasFixasMensais: 1000 }),
+      150,
+      3
+    );
+    // mês1: 500-150=350 (>=300, ok) · mês2: 350-150=200 (<300 → ruim)
+    assert.equal(r.viavel, false);
+    assert.equal(r.primeiroMesRuim, 2);
+    assert.equal(r.motivo, "abaixo_da_reserva");
+  });
+
+  test("só marca o PRIMEIRO mês ruim, não repete a cada mês seguinte", () => {
+    const r = simularNovoCompromisso(
+      contexto({ saldoAtual: 100, rendaMensalLiquida: 500, despesasFixasMensais: 700 }),
+      0,
+      5
+    );
+    assert.equal(r.primeiroMesRuim, 1);
+    // mesmo com o saldo continuando negativo nos meses seguintes, o motivo
+    // e o número do mês não mudam
+    assert.equal(r.meses[4].saldoFinal < 0, true);
+  });
+
+  test("parcela já em andamento some da conta no mês em que ela termina", () => {
+    // uma parcela de 300 que só tem 2 meses restantes: nos meses 3+ ela
+    // não pesa mais, e o saldo passa a melhorar
+    const r = simularNovoCompromisso(
+      contexto({
+        saldoAtual: 0,
+        rendaMensalLiquida: 1000,
+        despesasFixasMensais: 500,
+        parcelasAtivas: [{ valorMensal: 300, mesesRestantes: 2 }],
+      }),
+      0,
+      4
+    );
+    // mês1: 0+1000-500-300=200 · mês2: 200+1000-500-300=400
+    // mês3 (parcela já não conta): 400+1000-500=900
+    assert.equal(r.meses[0].saldoFinal, 200);
+    assert.equal(r.meses[1].saldoFinal, 400);
+    assert.equal(r.meses[2].saldoFinal, 900);
+    assert.equal(r.meses[2].compromissosDoMes, 500);
+  });
+
+  test("compromisso de valor zero simula 'e se eu não assumisse nada'", () => {
+    const r = simularNovoCompromisso(contexto(), 0, 1);
+    assert.equal(r.meses[0].compromissosDoMes, 1500);
   });
 });
 

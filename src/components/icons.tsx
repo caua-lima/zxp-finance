@@ -230,6 +230,17 @@ export function IconCaixinha(props: IconProps) {
   );
 }
 
+/** Balão de conversa com um "certo" dentro — o consultor confirma ou não. */
+export function IconConsultor(props: IconProps) {
+  return base(
+    <>
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 20l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      <path d="m8.5 12 2 2 4-4.5" />
+    </>,
+    props
+  );
+}
+
 export function IconPerfil(props: IconProps) {
   return base(
     <>
