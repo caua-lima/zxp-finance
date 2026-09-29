@@ -1,12 +1,17 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { formatarMoeda, formatarMes, mesPadrao } from "@/lib/types";
+import { formatarMoeda, formatarMes, mesPadrao, mesSeguinte } from "@/lib/types";
 import { hojeISO } from "@/lib/finance/calculations";
 import { calcularComissaoDoDia } from "@/lib/finance/comissoes";
 import { useComissoes } from "@/lib/useComissoes";
 import { useComissaoConfig } from "@/lib/useComissaoConfig";
 import { useGanhos } from "@/lib/useGanhos";
+import { MoneyInput } from "@/components/MoneyInput";
+import {
+  comissaoPrevistaPara,
+  ehGanhoDeComissao,
+} from "@/lib/finance/comissaoPrevista";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -91,8 +96,13 @@ export default function ComissoesPage() {
   const [mes, setMes] = useState(mesPadrao());
   const comissoes = useComissoes(mes);
   const config = useComissaoConfig();
-  const ganhos = useGanhos(mes);
+  // comissão do mês selecionado cai no mês seguinte — é lá que ela vira
+  // entrada (prevista, e depois recebida)
+  const mesPagamento = mesSeguinte(mes);
+  const ganhos = useGanhos(mesPagamento);
   const toast = useToast();
+  const [registrandoRecebimento, setRegistrandoRecebimento] = useState(false);
+  const [valorRecebido, setValorRecebido] = useState(0);
 
   const [data, setData] = useState(hojeISO());
   const [reunioes, setReunioes] = useState("");
@@ -151,34 +161,25 @@ export default function ComissoesPage() {
     setEditandoValores(false);
   }
 
-  // O ganho de comissão do mês é identificado pela descrição. Se já existe,
-  // atualiza o valor em vez de criar outro — clicar duas vezes antes criava
-  // dois ganhos, inflando a receita do mês e distorcendo DRE, comparação com
-  // a média do IBGE e o alerta de fatura pesada (que divide fatura por renda).
-  const descricaoGanho = `Comissão (${formatarMes(mes)})`;
-  const ganhoExistente = ganhos.pontuais.find(
-    (g) => g.descricao === descricaoGanho && !g.arquivado
-  );
+  const prevista = comissaoPrevistaPara(mesPagamento, comissoes.todas);
+  const pagamentoLancado = ganhos.pontuais.find(ehGanhoDeComissao);
+  const nomeMesOrigem = formatarMes(mes).split(" ")[0].toLowerCase();
+  const nomeMesPagamento = formatarMes(mesPagamento).split(" ")[0].toLowerCase();
 
-  function lancarComoGanho() {
-    if (comissoes.totalMes <= 0) return;
-    if (ganhoExistente) {
-      if (ganhoExistente.valor === comissoes.totalMes) {
-        toast.sucesso("O ganho do mês já está com esse valor.");
-        return;
-      }
-      toast.sucessoSe(ganhos.editar(ganhoExistente.id, {
-        descricao: descricaoGanho,
-        valor: comissoes.totalMes,
-        categoriaReceita: ganhoExistente.categoriaReceita,
-        semImposto: ganhoExistente.semImposto,
-      }), `Ganho do mês atualizado pra ${formatarMoeda(comissoes.totalMes)}.`);
-    } else {
-      toast.sucessoSe(
-        ganhos.adicionarPontual(descricaoGanho, comissoes.totalMes),
-        "Lançado em Ganhos."
-      );
-    }
+  function abrirRecebimento() {
+    // abre com o bruto calculado — o valor que o cliente paga costuma
+    // ser o bruto; o imposto sai depois, no DRE
+    setValorRecebido(prevista?.bruto ?? comissoes.totalMes);
+    setRegistrandoRecebimento(true);
+  }
+
+  function confirmarRecebimento() {
+    if (valorRecebido <= 0) return;
+    toast.sucessoSe(
+      ganhos.adicionarPontual(`Comissão de ${nomeMesOrigem}`, valorRecebido, "Comissão", true),
+      `Comissão lançada como recebida em ${nomeMesPagamento}.`
+    );
+    setRegistrandoRecebimento(false);
   }
 
   return (
@@ -303,7 +304,7 @@ export default function ComissoesPage() {
         )}
       </div>
 
-      {/* resumo do mês */}
+      {/* resumo do mês — e quando esse dinheiro cai */}
       <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-4 mb-5 space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm text-text-muted">Total de {formatarMes(mes)}</span>
@@ -316,15 +317,61 @@ export default function ComissoesPage() {
           <span>{comissoes.totalVendasPerformance} venda(s) performance</span>
           <span>{comissoes.totalVendasAcelera} venda(s) acelera</span>
         </div>
-        {comissoes.totalMes > 0 && (
-          <button
-            onClick={lancarComoGanho}
-            className="rounded-lg py-1 text-left text-xs font-medium text-brand active:opacity-70"
-          >
-            {ganhoExistente
-              ? `Atualizar ganho do mês (hoje ${formatarMoeda(ganhoExistente.valor)}) →`
-              : "Lançar total como ganho do mês →"}
-          </button>
+
+        {prevista && (
+          <div className="border-t border-line-soft pt-2.5">
+            {pagamentoLancado ? (
+              <p className="text-xs text-positive">
+                ✓ Recebida em {nomeMesPagamento}: {formatarMoeda(pagamentoLancado.valor)} (lançada
+                em Ganhos)
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-text-muted">
+                    Cai em {nomeMesPagamento}, líquido
+                  </span>
+                  <span className="text-base font-semibold text-text">
+                    {formatarMoeda(prevista.liquido)}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-text-faint">
+                  {formatarMoeda(prevista.bruto)} − {formatarMoeda(prevista.imposto)} de imposto
+                  (6%). Já aparece como entrada prevista no Resumo de {nomeMesPagamento}.
+                </p>
+                {registrandoRecebimento ? (
+                  <div className="mt-2 space-y-2">
+                    <label className="rotulo">Quanto caiu (bruto)?</label>
+                    <MoneyInput
+                      value={valorRecebido}
+                      onChange={setValorRecebido}
+                      className="campo"
+                    />
+                    <div className="flex gap-2">
+                      <Botao onClick={confirmarRecebimento} larguraTotal tamanho="pequeno">
+                        Confirmar
+                      </Botao>
+                      <Botao
+                        onClick={() => setRegistrandoRecebimento(false)}
+                        variante="secundario"
+                        larguraTotal
+                        tamanho="pequeno"
+                      >
+                        Cancelar
+                      </Botao>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={abrirRecebimento}
+                    className="mt-1.5 rounded-lg py-1 text-left text-xs font-medium text-brand active:opacity-70"
+                  >
+                    Já caiu? Marcar como recebida →
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
 

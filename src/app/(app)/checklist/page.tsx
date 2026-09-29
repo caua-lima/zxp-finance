@@ -184,8 +184,8 @@ export default function ChecklistPage() {
   return (
     <div>
       <PageHeader
-        titulo="Checklist do mês"
-        descricao="Vá marcando conforme for pagando"
+        titulo="Contas a pagar"
+        descricao="Vá marcando o que já pagou no mês"
       />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro} />

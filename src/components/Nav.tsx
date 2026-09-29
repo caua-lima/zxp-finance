@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { Logo } from "./Logo";
 import {
   IconResumo,
-  IconAgenda,
   IconSaldo,
   IconGanhos,
   IconContas,
@@ -38,45 +37,8 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
   {
     titulo: "Visão geral",
     itens: [
-      { href: "/", label: "Resumo", Icon: IconResumo, descricao: "Saldo, entradas e alertas" },
-      { href: "/agenda", label: "Agenda", Icon: IconAgenda, descricao: "Tudo que vence, em ordem" },
-    ],
-  },
-  {
-    titulo: "Dia a dia",
-    itens: [
-      {
-        href: "/chat",
-        label: "Anotar gasto",
-        labelCurto: "Anotar",
-        Icon: IconMicrofone,
-        descricao: "Falar ou escrever o que gastou",
-      },
-      {
-        href: "/saldo",
-        label: "Saldo e gastos",
-        labelCurto: "Saldo",
-        Icon: IconSaldo,
-        descricao: "Registrar gasto e ver quanto pode gastar",
-      },
-      {
-        href: "/comissoes",
-        label: "Comissões",
-        Icon: IconComissoes,
-        descricao: "Lançar reuniões e vendas do dia",
-      },
-      {
-        href: "/checklist",
-        label: "Checklist",
-        Icon: IconChecklist,
-        descricao: "Marcar contas conforme for pagando",
-      },
-      {
-        href: "/caixinhas",
-        label: "Caixinhas",
-        Icon: IconCaixinha,
-        descricao: "Guarda um trocado a cada gasto registrado",
-      },
+      { href: "/", label: "Resumo", Icon: IconResumo, descricao: "O que entra, o que sai e o que sobra" },
+      { href: "/dre", label: "DRE do mês", labelCurto: "DRE", Icon: IconDre, descricao: "Pra onde foi o dinheiro" },
       {
         href: "/consultor",
         label: "Consultor",
@@ -86,19 +48,56 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
     ],
   },
   {
+    titulo: "Dia a dia",
+    itens: [
+      {
+        href: "/saldo",
+        label: "Saldo e gastos",
+        labelCurto: "Saldo",
+        Icon: IconSaldo,
+        descricao: "Registrar gasto e ver quanto pode gastar hoje",
+      },
+      {
+        href: "/comissoes",
+        label: "Comissões",
+        Icon: IconComissoes,
+        descricao: "Lançar reuniões e vendas do dia",
+      },
+      {
+        href: "/checklist",
+        label: "Contas a pagar",
+        labelCurto: "Contas",
+        Icon: IconChecklist,
+        descricao: "Marcar o que já pagou no mês",
+      },
+      {
+        href: "/caixinhas",
+        label: "Caixinhas",
+        Icon: IconCaixinha,
+        descricao: "Dinheiro guardado, rendendo o CDI",
+      },
+      {
+        href: "/chat",
+        label: "Anotar por voz",
+        labelCurto: "Anotar",
+        Icon: IconMicrofone,
+        descricao: "Falar ou escrever o que gastou, em conversa",
+      },
+    ],
+  },
+  {
     titulo: "Cadastros",
     itens: [
       { href: "/ganhos", label: "Ganhos", Icon: IconGanhos, descricao: "Salário e entradas do mês" },
-      { href: "/contas", label: "Contas fixas", labelCurto: "Contas", Icon: IconContas, descricao: "O que vence todo mês" },
-      { href: "/parcelas", label: "Parcelas", Icon: IconParcelas, descricao: "Compras parceladas e financiamentos" },
+      { href: "/contas", label: "Contas fixas", Icon: IconContas, descricao: "O que vence todo mês" },
+      { href: "/parcelas", label: "Parcelas", Icon: IconParcelas, descricao: "Quanto de parcela você tem ativa" },
       { href: "/assinaturas", label: "Assinaturas", Icon: IconAssinaturas, descricao: "Serviços recorrentes" },
       { href: "/fatura", label: "Fatura do cartão", labelCurto: "Fatura", Icon: IconFatura, descricao: "Valor e vencimento de cada cartão" },
     ],
   },
   {
-    titulo: "Análise e conta",
+    titulo: "Sua conta",
     itens: [
-      { href: "/dre", label: "DRE do mês", labelCurto: "DRE", Icon: IconDre, descricao: "Pra onde foi o dinheiro" },
       { href: "/perfil", label: "Perfil", Icon: IconPerfil, descricao: "Seu cenário, pra comparar com médias" },
       { href: "/acesso", label: "Acesso", Icon: IconAcesso, descricao: "Logins que entram no app" },
     ],
@@ -112,8 +111,8 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
  */
 const TABS_MOBILE: ItemNav[] = [
   { href: "/", label: "Resumo", Icon: IconResumo },
-  { href: "/chat", label: "Anotar", Icon: IconMicrofone },
   { href: "/saldo", label: "Saldo", Icon: IconSaldo },
+  { href: "/checklist", label: "Contas", Icon: IconChecklist },
   { href: "/comissoes", label: "Comissões", Icon: IconComissoes },
 ];
 
