@@ -7,6 +7,7 @@ import {
   mesPadrao,
   parcelasRestantesEm,
   diferencaMeses,
+  mesSeguinte,
   Parcela,
   TipoParcela,
   VinculoDesejo,
@@ -15,6 +16,7 @@ import {
 import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 import { useParcelas } from "@/lib/useParcelas";
 import { useDesejosEmAberto } from "@/lib/useDesejosEmAberto";
+import { resumoParcelasAtivas } from "@/lib/finance/resumoParcelas";
 import { SeletorDesejo } from "@/components/SeletorDesejo";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -22,7 +24,6 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
-import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
@@ -33,7 +34,6 @@ export default function ParcelasPage() {
     parcelas,
     loading,
     erro,
-    total,
     adicionar,
     editar,
     remover,
@@ -53,6 +53,8 @@ export default function ParcelasPage() {
   const [desejoId, setDesejoId] = useState("");
   const desejos = useDesejosEmAberto();
   const toast = useToast();
+  const [criando, setCriando] = useState(false);
+  const resumo = resumoParcelasAtivas(parcelas, mesPadrao());
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -77,6 +79,7 @@ export default function ParcelasPage() {
     setDividida(false);
     setNaFatura(false);
     setDesejoId("");
+    setCriando(false);
     toast.sucessoSe(adicionar(
       nomeAparado,
       valorParcela,
@@ -106,9 +109,59 @@ export default function ParcelasPage() {
       />
       <ErroBanner mensagem={erro} />
 
+      {/* O que importa primeiro: quanto de parcela você tem DE FATO, somando
+          também as que estão dentro da fatura do cartão. O total antigo
+          deixava essas de fora e só mostrava o carro. */}
+      <div className="mb-4 rounded-2xl border border-brand/25 bg-surface-elevated p-4">
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+          Parcelas ativas
+        </p>
+        <div className="mt-1 flex items-baseline justify-between gap-3">
+          <p className="text-3xl font-bold tracking-tight text-gold">
+            {formatarMoeda(resumo.mensalSuaParte)}
+            <span className="text-sm font-medium text-text-faint">/mês</span>
+          </p>
+          <p className="text-sm text-text-muted">
+            {resumo.quantidade} parcela{resumo.quantidade === 1 ? "" : "s"}
+          </p>
+        </div>
+        {resumo.quantidade > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-line-soft pt-3 text-xs">
+            <div>
+              <p className="text-text-faint">No cartão</p>
+              <p className="font-medium">{formatarMoeda(resumo.mensalNoCartao)}/mês</p>
+            </div>
+            <div>
+              <p className="text-text-faint">Fora do cartão</p>
+              <p className="font-medium">{formatarMoeda(resumo.mensalForaDoCartao)}/mês</p>
+            </div>
+            <div>
+              <p className="text-text-faint">Falta pagar no total</p>
+              <p className="font-medium">{formatarMoeda(resumo.faltaPagar)}</p>
+            </div>
+            <div>
+              <p className="text-text-faint">Livre de parcelas em</p>
+              <p className="font-medium">
+                {resumo.ultimoMes ? formatarMes(mesSeguinte(resumo.ultimoMes)) : "—"}
+              </p>
+            </div>
+          </div>
+        )}
+        <p className="mt-2 text-[11px] text-text-faint">
+          Valores na sua parte (metade quando é dividida).
+        </p>
+      </div>
+
+      {!criando && (
+        <Botao onClick={() => setCriando(true)} larguraTotal className="mb-4">
+          + Nova parcela
+        </Botao>
+      )}
+
+      {criando && (
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-3"
+        className="rounded-2xl border border-brand/40 bg-surface p-4 mb-4 space-y-3"
       >
         <div className="grid grid-cols-2 gap-1.5">
           <button
@@ -231,17 +284,16 @@ export default function ParcelasPage() {
           desejos={desejos}
         />
 
-        <Botao type="submit" larguraTotal>
-          Adicionar parcela
-        </Botao>
+        <div className="flex gap-2">
+          <Botao type="submit" larguraTotal>
+            Adicionar parcela
+          </Botao>
+          <Botao onClick={() => setCriando(false)} variante="secundario" larguraTotal>
+            Cancelar
+          </Botao>
+        </div>
       </form>
-
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-4 flex justify-between items-center">
-        <span className="text-sm text-text-muted">Total mensal em parcelas</span>
-        <span className="text-lg font-semibold text-gold">
-          {formatarMoeda(total)}
-        </span>
-      </div>
+      )}
 
       <p className="text-xs text-text-faint mb-1 px-1">
         Navegue pelo mês pra ver o vencimento de cada parcela
@@ -251,10 +303,9 @@ export default function ParcelasPage() {
       {loading ? (
         <SkeletonLista linhas={4} />
       ) : parcelas.length === 0 ? (
-        <EmptyState
-          mensagem="Nenhuma parcela cadastrada."
-          alvoId="parcelas-form-nome"
-        />
+        <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-sm text-text-faint">
+          Nenhuma parcela cadastrada.
+        </p>
       ) : (
         <div className="space-y-5">
           <GrupoParcelas
