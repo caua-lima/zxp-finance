@@ -103,3 +103,16 @@ export function converterSerieBcb(
     })
     .filter((t) => Number.isFinite(t.taxa) && t.taxa > 0);
 }
+
+/**
+ * Dia anterior, no calendário. Um valor informado hoje começa a render
+ * pela taxa de hoje (que só cai amanhã), então o "rendido até" de um
+ * saldo recém-informado é ontem.
+ */
+export function diaAnterior(iso: string): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const d = new Date(ano, mes - 1, dia - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}

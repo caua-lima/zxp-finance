@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { formatarMoeda, Caixinha } from "@/lib/types";
+import { formatarMoeda, formatarMes, mesPadrao, Caixinha } from "@/lib/types";
 import { useCaixinhas } from "@/lib/useCaixinhas";
+import { useRendimentoAutomatico } from "@/lib/useRendimentoAutomatico";
 import {
   totalGuardado,
   totalPorGasto,
@@ -15,7 +16,6 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
-import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
@@ -33,24 +33,38 @@ export default function CaixinhasPage() {
     remover,
   } = useCaixinhas();
   const toast = useToast();
+  const cdi = useRendimentoAutomatico();
 
+  const [criando, setCriando] = useState(false);
   const [nome, setNome] = useState("");
   const [saldo, setSaldo] = useState(0);
-  const [porGasto, setPorGasto] = useState(0);
+  const [porGasto, setPorGasto] = useState(0.1);
   const [meta, setMeta] = useState(0);
+  const [percentualCdi, setPercentualCdi] = useState("100");
 
+  const mes = mesPadrao();
   const guardado = totalGuardado(caixinhas);
   const porTransacao = totalPorGasto(caixinhas);
+  const rendeuNoMes = caixinhas.reduce((acc, c) => acc + (c.rendimentoPorMes?.[mes] ?? 0), 0);
+  const formularioAberto = criando || (!loading && caixinhas.length === 0);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const nomeAparado = nome.trim();
-    if (!nomeAparado || porGasto <= 0) return;
-    const dados = { nome: nomeAparado, saldo, porGasto, meta: meta || undefined };
+    if (!nomeAparado) return;
+    const dados = {
+      nome: nomeAparado,
+      saldo,
+      porGasto,
+      meta: meta || undefined,
+      percentualCdi: Number(percentualCdi) || 0,
+    };
     setNome("");
     setSaldo(0);
-    setPorGasto(0);
+    setPorGasto(0.1);
     setMeta(0);
+    setPercentualCdi("100");
+    setCriando(false);
     toast.sucessoSe(criar(dados), `Caixinha "${nomeAparado}" criada.`);
   }
 
@@ -58,85 +72,101 @@ export default function CaixinhasPage() {
     <div>
       <PageHeader
         titulo="Caixinhas"
-        descricao="Guarda um trocado sozinho toda vez que você registra um gasto"
+        descricao="Seus cofrinhos, rendendo o CDI e recebendo um trocado a cada gasto"
       />
       <ErroBanner mensagem={erro} />
 
-      {/* O resumo vem antes do formulário: depois da primeira caixinha
-          criada, o que você abre essa tela pra ver é o quanto já juntou. */}
-      <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-text-muted">Total guardado</span>
-          <span className="text-2xl font-semibold text-positive">
-            {formatarMoeda(guardado)}
-          </span>
-        </div>
-        {porTransacao > 0 && (
-          <p className="mt-2 border-t border-line-soft pt-2 text-xs text-text-faint">
-            A cada gasto que você registrar, {formatarMoeda(porTransacao)} vai
-            pras caixinhas — não importa se o gasto foi de R$ 0,01 ou de R$ 800.
+      {/* o que você abre essa tela pra ver: quanto já juntou e quanto rendeu */}
+      <div className="mb-4 rounded-2xl border border-brand/25 bg-surface-elevated p-4">
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+          Total guardado
+        </p>
+        <p className="mt-0.5 text-3xl font-bold tracking-tight text-positive">
+          {formatarMoeda(guardado)}
+        </p>
+        <div className="mt-3 space-y-1 border-t border-line-soft pt-3 text-xs text-text-muted">
+          <p>
+            Rendimento em {formatarMes(mes).split(" ")[0].toLowerCase()}:{" "}
+            <strong className="text-positive">+{formatarMoeda(rendeuNoMes)}</strong>
+            {cdi && (
+              <span className="text-text-faint">
+                {" "}
+                · CDI hoje ~{cdi.anual.toFixed(2).replace(".", ",")}% ao ano
+              </span>
+            )}
           </p>
-        )}
-      </div>
-
-      {/* O aviso mais importante da tela: caixinha é marcação, não
-          transferência. Sem isso ele somaria duas vezes o mesmo dinheiro
-          quando fosse conferir o saldo do banco. */}
-      <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-muted">
-        <strong className="text-text">Caixinha não tira do seu saldo.</strong> O
-        dinheiro continua na conta — a caixinha só marca quanto dele já tem
-        dono. Assim, quando você conferir o saldo do banco, os números batem.
-        Se quiser separar de verdade, faça a transferência no app do banco.
-      </div>
-
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-4 mb-5 space-y-3"
-      >
-        <div>
-          <label htmlFor="caixinha-form-nome" className="rotulo">
-            Nome da caixinha
-          </label>
-          <input
-            id="caixinha-form-nome"
-            placeholder="ex: Sair de casa"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            className="campo"
-          />
+          {porTransacao > 0 && (
+            <p>
+              A cada gasto registrado, +{formatarMoeda(porTransacao)} vai pras caixinhas.
+            </p>
+          )}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+      </div>
+
+      {formularioAberto ? (
+        <form
+          onSubmit={handleSubmit}
+          className="mb-5 space-y-3 rounded-2xl border border-brand/40 bg-surface p-4"
+        >
           <div>
-            <label className="rotulo">Quanto já tem guardado</label>
-            <MoneyInput value={saldo} onChange={setSaldo} className="campo" />
-          </div>
-          <div>
-            <label className="rotulo">Guarda quanto por gasto</label>
-            <MoneyInput
-              value={porGasto}
-              onChange={setPorGasto}
+            <label htmlFor="caixinha-form-nome" className="rotulo">
+              Nome da caixinha
+            </label>
+            <input
+              id="caixinha-form-nome"
+              placeholder="ex: Viagem, Reserva, Carro"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
               className="campo"
             />
           </div>
-        </div>
-        <div>
-          <label className="rotulo">Meta (opcional)</label>
-          <MoneyInput value={meta} onChange={setMeta} className="campo" />
-        </div>
-        <Botao type="submit" larguraTotal disabled={!nome.trim() || porGasto <= 0}>
-          Criar caixinha
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="rotulo">Quanto já tem nela</label>
+              <MoneyInput value={saldo} onChange={setSaldo} className="campo" />
+            </div>
+            <div>
+              <label className="rotulo">Rende quanto do CDI (%)</label>
+              <input
+                inputMode="numeric"
+                value={percentualCdi}
+                onChange={(e) => setPercentualCdi(e.target.value.replace(/\D/g, ""))}
+                className="campo"
+              />
+            </div>
+            <div>
+              <label className="rotulo">Guarda por gasto</label>
+              <MoneyInput value={porGasto} onChange={setPorGasto} className="campo" />
+            </div>
+            <div>
+              <label className="rotulo">Meta (opcional)</label>
+              <MoneyInput value={meta} onChange={setMeta} className="campo" />
+            </div>
+          </div>
+          <p className="text-[11px] text-text-faint">
+            Cofrinho do Mercado Pago rende 100% do CDI. &quot;Guarda por gasto&quot; = quanto separa a cada
+            gasto registrado (0 = só rende, não recebe depósito).
+          </p>
+          <div className="flex gap-2">
+            <Botao type="submit" larguraTotal disabled={!nome.trim()}>
+              Criar caixinha
+            </Botao>
+            {caixinhas.length > 0 && (
+              <Botao onClick={() => setCriando(false)} variante="secundario" larguraTotal>
+                Cancelar
+              </Botao>
+            )}
+          </div>
+        </form>
+      ) : (
+        <Botao onClick={() => setCriando(true)} larguraTotal className="mb-4">
+          + Nova caixinha
         </Botao>
-      </form>
+      )}
 
       {loading ? (
         <SkeletonLista linhas={3} />
-      ) : caixinhas.length === 0 ? (
-        <EmptyState
-          mensagem="Nenhuma caixinha ainda. Comece com uma de R$ 0,10 por gasto e veja onde chega."
-          alvoId="caixinha-form-nome"
-          textoAcao="Criar a primeira"
-        />
-      ) : (
+      ) : caixinhas.length === 0 ? null : (
         <ul className="space-y-2">
           {caixinhas.map((c) => (
             <ItemCaixinha
@@ -150,6 +180,24 @@ export default function CaixinhasPage() {
           ))}
         </ul>
       )}
+
+      <details className="mt-6 rounded-2xl border border-line bg-surface px-4 py-3 text-xs text-text-muted">
+        <summary className="cursor-pointer text-sm">Como as caixinhas funcionam</summary>
+        <div className="mt-2 space-y-2 leading-relaxed">
+          <p>
+            <strong className="text-text">Rendimento:</strong> todo dia útil o app soma o CDI do
+            dia (taxa oficial do Banco Central) no saldo de cada caixinha, no percentual que você
+            configurou. É o valor bruto — o imposto de renda só sai quando você resgata, igual no
+            Mercado Pago.
+          </p>
+          <p>
+            <strong className="text-text">Saldo e caixinhas são separados:</strong> quando for
+            atualizar o saldo, digite o disponível da conta, sem o que está nos cofrinhos. Os
+            centavos que vão pra caixinha a cada gasto não são descontados do saldo aqui — a
+            diferença some na próxima vez que você atualizar.
+          </p>
+        </div>
+      </details>
     </div>
   );
 }
@@ -164,7 +212,7 @@ function ItemCaixinha({
   caixinha: Caixinha;
   onEditar: (
     id: string,
-    dados: { nome: string; porGasto: number; meta?: number }
+    dados: { nome: string; porGasto: number; meta?: number; percentualCdi?: number }
   ) => Promise<boolean>;
   onAjustarSaldo: (id: string, novoSaldo: number) => Promise<boolean>;
   onAlternarAtiva: (id: string) => Promise<boolean>;
@@ -176,7 +224,10 @@ function ItemCaixinha({
   const [porGasto, setPorGasto] = useState(caixinha.porGasto);
   const [meta, setMeta] = useState(caixinha.meta ?? 0);
   const [saldo, setSaldo] = useState(caixinha.saldo);
+  const [percentualCdi, setPercentualCdi] = useState(String(caixinha.percentualCdi ?? 100));
   const toast = useToast();
+  const rendeuNoMes = caixinha.rendimentoPorMes?.[mesPadrao()] ?? 0;
+  const pctCdi = caixinha.percentualCdi ?? 100;
 
   const progresso = progressoDaMeta(caixinha);
   const falta = faltaParaMeta(caixinha);
@@ -184,9 +235,14 @@ function ItemCaixinha({
 
   function salvar() {
     const nomeAparado = nome.trim();
-    if (!nomeAparado || porGasto <= 0) return;
+    if (!nomeAparado || porGasto < 0) return;
     toast.sucessoSe(
-      onEditar(caixinha.id, { nome: nomeAparado, porGasto, meta: meta || undefined }),
+      onEditar(caixinha.id, {
+        nome: nomeAparado,
+        porGasto,
+        meta: meta || undefined,
+        percentualCdi: Number(percentualCdi) || 0,
+      }),
       "Caixinha atualizada."
     );
     if (saldo !== caixinha.saldo) {
@@ -220,9 +276,20 @@ function ItemCaixinha({
             />
           </div>
         </div>
-        <div>
-          <label className="rotulo">Meta (0 = sem meta)</label>
-          <MoneyInput value={meta} onChange={setMeta} className="campo" />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="rotulo">Meta (0 = sem meta)</label>
+            <MoneyInput value={meta} onChange={setMeta} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Rende % do CDI</label>
+            <input
+              inputMode="numeric"
+              value={percentualCdi}
+              onChange={(e) => setPercentualCdi(e.target.value.replace(/\D/g, ""))}
+              className="campo"
+            />
+          </div>
         </div>
         <div className="flex gap-2">
           <Botao onClick={salvar} tamanho="pequeno">
@@ -234,6 +301,7 @@ function ItemCaixinha({
               setPorGasto(caixinha.porGasto);
               setMeta(caixinha.meta ?? 0);
               setSaldo(caixinha.saldo);
+              setPercentualCdi(String(caixinha.percentualCdi ?? 100));
               setEditando(false);
             }}
             variante="secundario"
@@ -263,9 +331,17 @@ function ItemCaixinha({
             )}
           </p>
           <p className="mt-0.5 text-xs text-text-faint">
-            {caixinha.ativa
-              ? `${formatarMoeda(caixinha.porGasto)} por gasto`
-              : "não guarda enquanto estiver pausada"}
+            {pctCdi > 0 ? `rende ${pctCdi}% do CDI` : "não rende"}
+            {rendeuNoMes > 0 && (
+              <span className="text-positive"> · +{formatarMoeda(rendeuNoMes)} no mês</span>
+            )}
+          </p>
+          <p className="text-xs text-text-faint">
+            {!caixinha.ativa
+              ? "depósito por gasto pausado"
+              : caixinha.porGasto > 0
+              ? `+${formatarMoeda(caixinha.porGasto)} a cada gasto`
+              : "sem depósito por gasto"}
             {caixinha.depositos > 0 && ` · ${caixinha.depositos} depósitos`}
           </p>
         </div>

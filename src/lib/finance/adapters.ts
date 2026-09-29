@@ -49,6 +49,9 @@ export function ganhosParaEntries(
 ): FinancialEntry[] {
   const entries: FinancialEntry[] = [];
   for (const g of ganhos) {
+    // ganho sem tipo (sobra de edição manual no Firestore) passava pelos
+    // dois filtros abaixo e entrava como "a receber" em TODO mês
+    if (g.tipo !== "recorrente" && g.tipo !== "pontual") continue;
     if (g.tipo === "recorrente" && g.ativo === false) continue;
     if (g.tipo === "pontual" && (g.mes !== mes || g.arquivado)) continue;
     const recebido =

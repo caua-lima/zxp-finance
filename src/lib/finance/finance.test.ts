@@ -36,6 +36,7 @@ import {
   assinaturasParaEntries,
   faturasParaEntries,
   faturasPrevistasParaEntries,
+  ganhosParaEntries,
 } from "./adapters";
 import {
   comissaoPrevistaPara,
@@ -1200,6 +1201,13 @@ describe("saldo de agora e compromissos do mês", () => {
   });
 });
 
+describe("ganho sem tipo", () => {
+  test("não entra como 'a receber' em todo mês", () => {
+    const orfao = { id: "x", descricao: "Salário", valor: 2600, mes: "2026-08", criadoEm: 0 } as unknown as Ganho;
+    assert.deepEqual(ganhosParaEntries([orfao], "2026-10", () => false), []);
+  });
+});
+
 describe("saldo de outro mês", () => {
   // meio-dia em Brasília, pra o teste não depender da virada de fuso
   const meioDia = (iso: string) => new Date(`${iso}T15:00:00Z`).getTime();
@@ -1519,6 +1527,8 @@ describe("interpretar frase de gasto", () => {
     ["paguei 50 no mercado", 50, "mercado", "Alimentação"],
     ["torrei 200 no rolê", 200, "rolê", "Lazer"],
     ["almoço 42", 42, "almoço", "Alimentação"],
+    // é o exemplo que a tela de Saldo mostra no campo — tem que funcionar
+    ["25 almoço", 25, "almoço", "Alimentação"],
     ["comprei um lanche de 25", 25, "lanche", "Alimentação"],
     ["R$ 15,50 no uber", 15.5, "uber", "Transporte"],
     ["foi 12 no café", 12, "café", "Alimentação"],

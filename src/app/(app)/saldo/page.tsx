@@ -2,7 +2,13 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { formatarMoeda, mesPadrao, arredondarCentavos, Gasto } from "@/lib/types";
+import {
+  formatarMoeda,
+  formatarMes,
+  mesPadrao,
+  arredondarCentavos,
+  Gasto,
+} from "@/lib/types";
 import {
   CATEGORIAS_GASTO,
   iconeCategoriaGasto,
@@ -11,51 +17,59 @@ import {
 import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
-import { useConciliacoes } from "@/lib/useConciliacoes";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { totalGuardado, totalPorGasto } from "@/lib/finance/caixinhas";
+import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
+import { useRendimentoAutomatico } from "@/lib/useRendimentoAutomatico";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { ConferirSaldoModal } from "@/components/ConferirSaldoModal";
 import { useToast } from "@/components/Toast";
 import { SkeletonLista } from "@/components/Skeleton";
-import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
-import { BotaoIcone, AcoesItem } from "@/components/BotaoIcone";
-import { IconEditar, IconExcluir, IconEstornar } from "@/components/icons";
+import { IconMicrofone } from "@/components/icons";
 import {
   diasRestantesNoMes,
   calculateGastavelPorDia,
   calculateGastoDoDia,
+  calcularSaldoAtual,
   hojeISO,
+  diaISOde,
 } from "@/lib/finance/calculations";
 import { projetarRitmo } from "@/lib/finance/ritmo";
 import { avaliarDiasFechados, resumirConquistas } from "@/lib/finance/conquistas";
 import { usePushNotifications } from "@/lib/usePushNotifications";
 import { useMonthClose } from "@/lib/useMonthClose";
 
-function agruparPorCategoria(gastos: Gasto[]) {
-  const grupos = new Map<string, Gasto[]>();
-  for (const g of gastos) {
-    const lista = grupos.get(g.categoria) ?? [];
-    lista.push(g);
-    grupos.set(g.categoria, lista);
-  }
-  const ordem = CATEGORIAS_GASTO as readonly string[];
-  return [...grupos.entries()].sort(
-    (a, b) => ordem.indexOf(a[0]) - ordem.indexOf(b[0])
+const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+function rotuloDoDia(dia: string, hoje: string): string {
+  const [ano, mes, d] = dia.split("-").map(Number);
+  const data = new Date(ano, mes - 1, d);
+  const [aH, mH, dH] = hoje.split("-").map(Number);
+  const diferenca = Math.round(
+    (new Date(aH, mH - 1, dH).getTime() - data.getTime()) / 86400000
   );
+  if (diferenca === 0) return "Hoje";
+  if (diferenca === 1) return "Ontem";
+  return `${DIAS_SEMANA[data.getDay()]}, ${String(d).padStart(2, "0")}/${String(mes).padStart(2, "0")}`;
 }
 
+/**
+ * Tela do dia a dia: quanto tem na conta, quanto pode gastar hoje, e
+ * registrar gasto. Refeita pra ser só isso — antes tinha conquistas,
+ * meta, notificação, histórico de conciliação e ajustes com sinal
+ * invertido tudo empilhado na mesma coluna.
+ */
 export default function SaldoPage() {
   const {
     saldo,
     loading: loadingSaldo,
     erro: erroSaldo,
-    definir,
+    atualizar,
     definirReservaMeta,
+    definirPercentualCdi,
   } = useSaldo();
   const {
     gastos,
@@ -66,499 +80,264 @@ export default function SaldoPage() {
     estornar,
     remover,
   } = useGastos();
-  const conciliacoes = useConciliacoes();
   const { caixinhas } = useCaixinhas();
+  const cdi = useRendimentoAutomatico();
   const toast = useToast();
-  const push = usePushNotifications();
   const monthClose = useMonthClose(mesPadrao());
 
   const [texto, setTexto] = useState("");
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
   const [avisoParcial, setAvisoParcial] = useState<string | null>(null);
-  const [definindoInicial, setDefinindoInicial] = useState(false);
-  const [saldoInicial, setSaldoInicial] = useState(0);
-  const [conferindo, setConferindo] = useState(false);
-  const [editandoReserva, setEditandoReserva] = useState(false);
-  const [novaReserva, setNovaReserva] = useState(0);
+  const [atualizandoSaldo, setAtualizandoSaldo] = useState(false);
 
   const mes = mesPadrao();
-  const guardadoNasCaixinhas = totalGuardado(caixinhas);
-  const guardaPorGasto = totalPorGasto(caixinhas);
-  const loading = loadingSaldo || loadingGastos;
-  const erro = erroSaldo || erroGastos || conciliacoes.erro;
-
-  const gastosDoMes = useMemo(
-    () => gastos.filter((g) => g.mes === mes),
-    [gastos, mes]
-  );
-  // Ajuste de conciliação não é gasto — é a correção do saldo quando o que
-  // você informou não bateu com o que o app esperava. Somar ele em "total
-  // gasto" fazia o card mostrar coisas como "-R$ 892,01 gastos" logo depois
-  // de informar o saldo inicial, que é justamente o oposto do que aconteceu.
-  const gastosReaisDoMes = useMemo(
-    () => gastosDoMes.filter((g) => !g.ajusteConciliacaoId),
-    [gastosDoMes]
-  );
-  const ajustesDoMes = useMemo(
-    () => gastosDoMes.filter((g) => g.ajusteConciliacaoId),
-    [gastosDoMes]
-  );
-  const totalDoMes = arredondarCentavos(
-    gastosReaisDoMes.reduce((acc, g) => acc + g.valor, 0)
-  );
-  const totalAjustes = arredondarCentavos(
-    ajustesDoMes.reduce((acc, g) => acc + g.valor, 0)
-  );
-  const grupos = useMemo(() => agruparPorCategoria(gastosDoMes), [gastosDoMes]);
-
-  const gastosDesdeReferencia = saldo
-    ? gastos.filter((g) => g.criadoEm > saldo.atualizadoEm)
-    : [];
-  const saldoAtual = saldo
-    ? saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.valor, 0)
-    : null;
-
   const hoje = hojeISO();
+  const loading = loadingSaldo || loadingGastos;
+  const erro = erroSaldo || erroGastos;
+
+  const saldoAtual = calcularSaldoAtual(saldo, gastos);
   const reservaMeta = saldo?.reservaMeta ?? 0;
   const diasRestantes = diasRestantesNoMes(hoje);
   const gastavelPorDia = calculateGastavelPorDia(saldoAtual, reservaMeta, diasRestantes);
-
   const totalGastoHoje = calculateGastoDoDia(gastos, hoje);
-  const aindaPodeGastarHoje = gastavelPorDia === null ? null : gastavelPorDia - totalGastoHoje;
-
-  // "Previsão de chegada": onde o ritmo já praticado neste mês te deixa no
-  // dia 30. O orçamento diário sozinho não avisa que dá pra estourar um
-  // pouquinho todo dia e só descobrir isso no dia 25. Sem useMemo de
-  // propósito — é um filter + reduce sobre os gastos do mês, e o compilador
-  // do React memoiza sozinho.
-  const projecao = projetarRitmo(saldoAtual, reservaMeta, gastos, mes, hoje);
-
-  // O lado positivo: dias fechados dentro do orçamento e quanto isso já
-  // sobrou. Antes o app só falava quando algo dava errado.
-  const diasAvaliados =
-    gastavelPorDia !== null
-      ? avaliarDiasFechados(gastos, gastavelPorDia, mes, hoje)
-      : [];
+  const aindaPodeGastarHoje =
+    gastavelPorDia === null ? null : arredondarCentavos(gastavelPorDia - totalGastoHoje);
+  const semDinheiroLivre = saldoAtual !== null && saldoAtual - reservaMeta <= 0;
+  const projecao = semDinheiroLivre
+    ? null
+    : projetarRitmo(saldoAtual, reservaMeta, gastos, mes, hoje);
   const conquistas =
-    gastavelPorDia !== null ? resumirConquistas(diasAvaliados, gastavelPorDia) : null;
+    gastavelPorDia && gastavelPorDia > 0
+      ? resumirConquistas(avaliarDiasFechados(gastos, gastavelPorDia, mes, hoje), gastavelPorDia)
+      : null;
+  const rendeuNoMes = saldo?.rendimentoPorMes?.[mes] ?? 0;
+  const guardaPorGasto = totalPorGasto(caixinhas);
+
+  // Ajuste de conciliação não é gasto (é correção de saldo antiga) — fica
+  // fora da lista e do total. Com "Atualizar saldo" ele nem existe mais.
+  const gastosDoMes = useMemo(
+    () => gastos.filter((g) => g.mes === mes && !g.ajusteConciliacaoId),
+    [gastos, mes]
+  );
+  const totalDoMes = arredondarCentavos(
+    gastosDoMes.reduce((acc, g) => acc + g.valor, 0)
+  );
+  const porDia = useMemo(() => {
+    const grupos = new Map<string, Gasto[]>();
+    for (const g of gastosDoMes) {
+      const dia = diaISOde(g.criadoEm);
+      grupos.set(dia, [...(grupos.get(dia) ?? []), g]);
+    }
+    return [...grupos.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [gastosDoMes]);
+
+  const voz = useReconhecimentoVoz((falado) => registrar(falado));
+
+  function registrar(frase: string) {
+    const interpretado = parseGastoTexto(frase);
+    if (!interpretado.valor || !interpretado.descricao) {
+      setTexto(frase);
+      setAvisoParcial('Não entendi o valor. Tenta assim: "25 almoço" ou "gastei 100 de gasolina".');
+      setUltimoRegistro(null);
+      return;
+    }
+    const categoria = inferirCategoriaGasto(interpretado.descricao);
+    setTexto("");
+    setAvisoParcial(null);
+    const descricao = interpretado.descricao;
+    const valor = interpretado.valor;
+    adicionar(descricao, valor, categoria).then((ok) => {
+      if (!ok) return;
+      setUltimoRegistro(
+        `${formatarMoeda(valor)} · ${descricao} · ${iconeCategoriaGasto(categoria)} ${categoria}` +
+          (guardaPorGasto > 0 ? ` · 🐷 +${formatarMoeda(guardaPorGasto)}` : "")
+      );
+    });
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const frase = texto.trim();
-    if (!frase) return;
-
-    const interpretado = parseGastoTexto(frase);
-    if (!interpretado.valor || !interpretado.descricao) {
-      setAvisoParcial(
-        'Não consegui entender direito. Tenta algo como "Gastei 100 reais de gasolina".'
-      );
-      setUltimoRegistro(null);
-      return;
-    }
-
-    const categoria = inferirCategoriaGasto(interpretado.descricao);
-    setTexto("");
-    setAvisoParcial(null);
-    adicionar(interpretado.descricao, interpretado.valor, categoria).catch(
-      console.error
-    );
-    setUltimoRegistro(
-      `${formatarMoeda(interpretado.valor)} · ${interpretado.descricao} · ${iconeCategoriaGasto(categoria)} ${categoria}` +
-        (guardaPorGasto > 0
-          ? ` · 🐷 ${formatarMoeda(guardaPorGasto)} guardado`
-          : "")
-    );
-  }
-
-  function abrirEdicaoReserva() {
-    setNovaReserva(reservaMeta);
-    setEditandoReserva(true);
-  }
-
-  function salvarReserva() {
-    toast.sucessoSe(definirReservaMeta(novaReserva), "Meta de reserva atualizada.");
-    setEditandoReserva(false);
-  }
-
-  function salvarSaldoInicial() {
-    definir(saldoInicial);
-    setDefinindoInicial(false);
+    if (frase) registrar(frase);
   }
 
   return (
     <div>
-      <PageHeader
-        titulo="Saldo e gastos"
-        descricao="Registre o que gastou e veja quanto ainda dá pra gastar hoje"
-      />
-      <ErroBanner mensagem={erro} />
+      <PageHeader titulo="Saldo e gastos" />
+      <ErroBanner mensagem={erro || voz.erro} />
 
-      {/* PRIMEIRO USO — sem saldo não existe orçamento diário */}
-      {saldo === null ? (
-        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-5 mb-4">
-          <p className="text-sm font-medium">Comece informando quanto você tem</p>
-          <p className="mt-1 mb-3 text-xs text-text-faint">
-            Depois de pagar as contas do mês, coloque aqui o que sobrou na conta.
-            É desse valor que sai o quanto você pode gastar por dia.
-          </p>
-          {definindoInicial ? (
-            <div className="space-y-2">
-              <MoneyInput
-                value={saldoInicial}
-                onChange={setSaldoInicial}
-                className="campo text-center text-lg font-semibold"
-              />
-              <div className="flex gap-2">
-                <Botao onClick={salvarSaldoInicial} larguraTotal>
-                  Salvar
-                </Botao>
-                <Botao
-                  onClick={() => setDefinindoInicial(false)}
-                  variante="secundario"
-                  larguraTotal
-                >
-                  Cancelar
-                </Botao>
-              </div>
-            </div>
-          ) : (
-            <Botao onClick={() => setDefinindoInicial(true)} larguraTotal>
-              Definir saldo
-            </Botao>
-          )}
-        </div>
+      {loading ? (
+        <SkeletonLista linhas={3} />
+      ) : saldo === null ? (
+        <PrimeiroSaldo onSalvar={(valor) => atualizar(valor, null)} />
       ) : (
-        /* DESTAQUE — é o número que importa no dia a dia */
-        <div className="rounded-2xl border border-brand/25 bg-surface-elevated p-5 mb-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
-            Ainda posso gastar hoje
-          </p>
-          <p
-            className={`mt-1 text-4xl font-bold tracking-tight ${
-              aindaPodeGastarHoje === null
-                ? "text-text-faint"
-                : aindaPodeGastarHoje >= 0
-                ? "text-brand"
-                : "text-negative"
-            }`}
-          >
-            {aindaPodeGastarHoje === null ? "—" : formatarMoeda(aindaPodeGastarHoje)}
-          </p>
-
-          {gastavelPorDia !== null && gastavelPorDia > 0 && (
-            <>
-              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-2">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    totalGastoHoje > gastavelPorDia ? "bg-negative" : "bg-brand"
-                  }`}
-                  style={{
-                    width: `${Math.min(100, Math.max(0, (totalGastoHoje / gastavelPorDia) * 100))}%`,
-                  }}
-                />
-              </div>
-              <div className="mt-1.5 flex justify-between text-[11px] text-text-faint">
-                <span>Já gastei {formatarMoeda(totalGastoHoje)}</span>
-                <span>Meta do dia {formatarMoeda(gastavelPorDia)}</span>
-              </div>
-            </>
-          )}
-
-          {/* previsão de chegada — para onde o ritmo atual te leva */}
-          {projecao && (
-            <div className="mt-3 border-t border-line-soft pt-3">
-              {projecao.diaQueZera ? (
-                <p className="text-xs font-medium text-negative">
-                  ⚠ No seu ritmo, o dinheiro acaba dia{" "}
-                  {projecao.diaQueZera.split("-")[2]}
-                </p>
-              ) : projecao.batendoMeta ? (
-                <p className="text-xs font-medium text-positive">
-                  ✓ No seu ritmo, o mês fecha com{" "}
-                  {formatarMoeda(projecao.sobraProjetada)}
-                </p>
-              ) : (
-                <p className="text-xs font-medium text-gold">
-                  ⚠ No seu ritmo, sobra {formatarMoeda(projecao.sobraProjetada)} —{" "}
-                  {formatarMoeda(reservaMeta - projecao.sobraProjetada)} abaixo da
-                  sua meta
-                </p>
-              )}
-              <p className="mt-1 text-[11px] text-text-faint">
-                Média de {formatarMoeda(projecao.gastoMedioDiario)}/dia até aqui ·{" "}
-                {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} restante
-                {diasRestantes === 1 ? "" : "s"}
+        <div className="mb-3 rounded-2xl border border-brand/25 bg-surface-elevated p-4">
+          {/* saldo na conta */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+                Na conta agora
+              </p>
+              <p
+                className={`mt-0.5 text-2xl font-bold tracking-tight ${
+                  saldoAtual !== null && saldoAtual < 0 ? "text-negative" : "text-text"
+                }`}
+              >
+                {formatarMoeda(saldoAtual ?? 0)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-text-faint">
+                atualizado{" "}
+                {new Date(saldo.atualizadoEm).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}
+                {rendeuNoMes > 0 && (
+                  <span className="text-positive"> · rendeu +{formatarMoeda(rendeuNoMes)} no mês</span>
+                )}
               </p>
             </div>
-          )}
+            <Botao onClick={() => setAtualizandoSaldo(true)} variante="secundario" tamanho="pequeno">
+              Atualizar
+            </Botao>
+          </div>
+
+          {/* quanto pode gastar hoje — o número do dia */}
+          <div className="mt-4 border-t border-line-soft pt-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+              Pode gastar hoje
+            </p>
+            {semDinheiroLivre ? (
+              <>
+                <p className="mt-0.5 text-4xl font-bold tracking-tight text-text-faint">
+                  {formatarMoeda(0)}
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-text-muted">
+                  {saldoAtual !== null && saldoAtual <= 0
+                    ? "Saldo zerado. Quando o dinheiro entrar, toque em Atualizar e coloque o valor da conta."
+                    : `Seu saldo está abaixo dos ${formatarMoeda(reservaMeta)} que você quer guardar.`}
+                </p>
+              </>
+            ) : aindaPodeGastarHoje !== null && aindaPodeGastarHoje < 0 ? (
+              <>
+                <p className="mt-0.5 text-2xl font-bold tracking-tight text-negative">
+                  Passou {formatarMoeda(-aindaPodeGastarHoje)} do limite
+                </p>
+                <p className="mt-1 text-xs text-text-muted">
+                  Limite de hoje era {formatarMoeda(gastavelPorDia ?? 0)}. Amanhã ele se ajusta
+                  sozinho ao que sobrou.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-0.5 text-4xl font-bold tracking-tight text-brand">
+                  {formatarMoeda(aindaPodeGastarHoje ?? 0)}
+                </p>
+                {gastavelPorDia !== null && gastavelPorDia > 0 && (
+                  <>
+                    <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full bg-brand transition-all"
+                        style={{
+                          width: `${Math.min(100, (totalGastoHoje / gastavelPorDia) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-text-faint">
+                      Gastou {formatarMoeda(totalGastoHoje)} de {formatarMoeda(gastavelPorDia)} ·{" "}
+                      {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} até o fim do mês
+                    </p>
+                  </>
+                )}
+              </>
+            )}
+
+            {projecao && (
+              <p
+                className={`mt-2 text-xs font-medium ${
+                  projecao.diaQueZera
+                    ? "text-negative"
+                    : projecao.batendoMeta
+                    ? "text-positive"
+                    : "text-gold"
+                }`}
+              >
+                {projecao.diaQueZera
+                  ? `⚠ No seu ritmo, o dinheiro acaba dia ${projecao.diaQueZera.split("-")[2]}`
+                  : `${projecao.batendoMeta ? "✓" : "⚠"} No seu ritmo, o mês fecha com ${formatarMoeda(
+                      projecao.sobraProjetada
+                    )}`}
+              </p>
+            )}
+            {conquistas && conquistas.sequencia >= 2 && (
+              <p className="mt-1 text-xs text-positive">
+                🔥 {conquistas.sequencia} dias seguidos dentro do limite
+              </p>
+            )}
+          </div>
         </div>
       )}
 
-      {saldo !== null && saldoAtual !== null && (
-        <ConferirSaldoModal
-          aberto={conferindo}
-          saldoEsperado={saldoAtual}
-          onRegistrar={async (params) => {
-            const resultado = await conciliacoes.registrar(params);
-            if (!resultado) return;
-            if (resultado.diferenca === 0) toast.sucesso("Saldo conferido — bate certinho.");
-            else if (resultado.ajusteCriado) toast.sucesso("Ajuste de conciliação registrado.");
-            else toast.sucesso("Conferência adiada — nada foi alterado.");
-          }}
-          onFechar={() => setConferindo(false)}
-        />
-      )}
-
-      {/* REGISTRO RÁPIDO — ação mais frequente da tela, fica logo abaixo do número
-          e acima de tudo mais, pra não precisar rolar pra lançar um gasto */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-line bg-surface p-3 mb-3"
-      >
+      {/* registrar — a ação mais frequente, logo abaixo do número */}
+      <form onSubmit={handleSubmit} className="mb-4 rounded-2xl border border-line bg-surface p-3">
         <label htmlFor="saldo-form-texto" className="rotulo px-1">
-          Registrar um gasto
+          Registrar gasto
         </label>
         <div className="flex gap-2">
           <input
             id="saldo-form-texto"
-            placeholder='Ex: "Gastei 100 de gasolina"'
-            value={texto}
+            placeholder={voz.ouvindo ? "Ouvindo..." : 'Ex: "25 almoço"'}
+            value={voz.parcial || texto}
             onChange={(e) => setTexto(e.target.value)}
             className="campo flex-1"
+            autoComplete="off"
           />
-          <Botao type="submit" className="shrink-0 px-5">
+          {voz.suportado && (
+            <button
+              type="button"
+              onClick={voz.ouvindo ? voz.parar : voz.ouvir}
+              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar o gasto"}
+              className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border transition-colors md:h-[42px] md:w-[42px] ${
+                voz.ouvindo
+                  ? "animate-pulse border-negative bg-negative-soft text-negative"
+                  : "border-line bg-surface-2 text-text-muted active:bg-surface"
+              }`}
+            >
+              <IconMicrofone width={19} height={19} />
+            </button>
+          )}
+          <Botao type="submit" className="shrink-0 px-4">
             Salvar
           </Botao>
         </div>
+        {ultimoRegistro && !avisoParcial && (
+          <p className="mt-2 px-1 text-xs text-positive">✓ {ultimoRegistro}</p>
+        )}
+        {avisoParcial && <p className="mt-2 px-1 text-xs text-gold">{avisoParcial}</p>}
       </form>
 
-      {/* CONQUISTAS — só aparece quando há o que comemorar de verdade */}
-      {conquistas && conquistas.diasFechados > 0 && (
-        <div className="mb-3 rounded-2xl border border-positive/25 bg-positive-soft/40 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-positive">
-                {conquistas.sequencia >= 2
-                  ? `${conquistas.sequencia} dias seguidos no controle`
-                  : `${conquistas.diasNoControle} de ${conquistas.diasFechados} dias no controle`}
-              </p>
-              <p className="mt-0.5 text-[11px] text-text-faint">
-                {conquistas.economiaAcumulada > 0
-                  ? `Você já economizou ${formatarMoeda(conquistas.economiaAcumulada)} em relação ao seu limite diário`
-                  : "Dia fechado gastando menos que o limite conta como um dia no controle"}
-              </p>
-            </div>
-            {conquistas.sequencia >= 3 && (
-              <span className="shrink-0 text-2xl" aria-hidden="true">
-                🔥
-              </span>
-            )}
-          </div>
-
-          {/* pontinhos: um por dia fechado do mês */}
-          {conquistas.diasFechados <= 31 && (
-            <div className="mt-3 flex flex-wrap gap-1" aria-hidden="true">
-              {diasAvaliados.map((d) => (
-                <span
-                  key={d.dia}
-                  title={`Dia ${d.dia.split("-")[2]}: ${formatarMoeda(d.gasto)}`}
-                  className={`h-2 w-2 rounded-full ${
-                    d.dentroDoOrcamento ? "bg-positive" : "bg-negative/50"
-                  }`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* SALDO, META E NOTIFICAÇÃO */}
-      {saldo !== null && (
-        <div className="rounded-2xl border border-line bg-surface p-4 mb-3">
-          {editandoReserva ? (
-            <div className="space-y-2">
-              <label className="rotulo">
-                Quanto você quer que sobre até o fim do mês?
-              </label>
-              <MoneyInput
-                value={novaReserva}
-                onChange={setNovaReserva}
-                className="campo"
-              />
-              <div className="flex gap-2">
-                <Botao onClick={salvarReserva} larguraTotal>
-                  Salvar meta
-                </Botao>
-                <Botao
-                  onClick={() => setEditandoReserva(false)}
-                  variante="secundario"
-                  larguraTotal
-                >
-                  Cancelar
-                </Botao>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-text-muted">Saldo agora</span>
-                <span
-                  className={`text-base font-semibold ${
-                    saldoAtual !== null && saldoAtual >= 0 ? "text-text" : "text-negative"
-                  }`}
-                >
-                  {saldoAtual === null ? "—" : formatarMoeda(saldoAtual)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-text-muted">Quero que sobre</span>
-                <button
-                  onClick={abrirEdicaoReserva}
-                  className="rounded-lg px-2 py-1 text-sm font-medium text-brand active:bg-surface-2"
-                >
-                  {reservaMeta > 0 ? formatarMoeda(reservaMeta) : "definir →"}
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-2 border-t border-line-soft pt-2.5">
-                <span className="text-[11px] text-text-faint">
-                  Conferido em{" "}
-                  {new Date(saldo.atualizadoEm).toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}
-                </span>
-                <Botao
-                  onClick={() => setConferindo(true)}
-                  variante="secundario"
-                  tamanho="pequeno"
-                >
-                  Conferir saldo
-                </Botao>
-              </div>
-              {push.suportado && (
-                <div className="flex items-center justify-between gap-2 border-t border-line-soft pt-2.5">
-                  <span className="text-[11px] text-text-faint">
-                    Aviso diário no celular
-                    {push.permissao === "denied" && " · bloqueado no navegador"}
-                  </span>
-                  <button
-                    onClick={() => {
-                      if (push.ativo) {
-                        push.desativar().then(() => toast.sucesso("Notificação desativada."));
-                      } else {
-                        push.ativar().then(() => {
-                          if (push.permissao !== "denied") toast.sucesso("Notificação diária ativada.");
-                        });
-                      }
-                    }}
-                    disabled={push.carregando || push.permissao === "denied"}
-                    className={`shrink-0 rounded-lg px-2 py-1 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
-                      push.ativo ? "text-negative" : "text-brand"
-                    }`}
-                  >
-                    {push.carregando ? "..." : push.ativo ? "Desativar" : "Ativar"}
-                  </button>
-                </div>
-              )}
-              {push.precisaInstalar && (
-                <div className="border-t border-line-soft pt-2.5">
-                  <p className="text-[11px] font-medium text-gold">
-                    Pra receber aviso no celular, instale o app
-                  </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-text-faint">
-                    No iPhone a notificação só funciona com o app na tela de
-                    início. Toque em <strong>Compartilhar</strong> (o quadrado com
-                    a seta pra cima) e depois em{" "}
-                    <strong>Adicionar à Tela de Início</strong>. Abra por lá e o
-                    botão de ativar aparece aqui.
-                  </p>
-                </div>
-              )}
-              {push.erro && <p className="text-xs text-negative">{push.erro}</p>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {ultimoRegistro && (
-        <div className="mb-4 rounded-xl border border-brand/30 bg-brand-soft px-4 py-3 text-sm text-brand">
-          Registrado: {ultimoRegistro}
-        </div>
-      )}
-      {avisoParcial && (
-        <div className="mb-4 rounded-xl border border-gold/30 bg-gold-soft px-4 py-3 text-sm text-gold">
-          {avisoParcial}
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-6">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-text-muted">Total gasto no mês</span>
-          <span className="text-lg font-semibold text-gold">
-            {formatarMoeda(totalDoMes)}
-          </span>
-        </div>
-        {/* Ajuste aparece à parte, e não some: é dinheiro que existiu de
-            verdade, só não foi gasto. Somado ao total viraria um número
-            sem sentido. */}
-        {ajustesDoMes.length > 0 && (
-          <div className="mt-2 flex items-center justify-between border-t border-line-soft pt-2">
-            <span className="text-xs text-text-faint">
-              Ajuste de conferência de saldo
-            </span>
-            <span
-              className={`text-sm font-medium ${
-                totalAjustes < 0 ? "text-positive" : "text-text-muted"
-              }`}
-            >
-              {totalAjustes < 0 ? "+" : "−"}
-              {formatarMoeda(Math.abs(totalAjustes))}
-            </span>
-          </div>
-        )}
-        {/* Fica junto do total gasto de propósito: é o contrapeso. Toda vez
-            que o número de cima sobe, o de baixo sobe junto. */}
-        {caixinhas.length > 0 && (
-          <div className="mt-2 flex items-center justify-between border-t border-line-soft pt-2">
-            <Link
-              href="/caixinhas"
-              className="text-xs text-text-faint hover:text-brand"
-            >
-              🐷 Guardado nas caixinhas
-              {guardaPorGasto > 0 &&
-                ` · ${formatarMoeda(guardaPorGasto)} por gasto`}
-            </Link>
-            <span className="text-sm font-medium text-positive">
-              {formatarMoeda(guardadoNasCaixinhas)}
-            </span>
-          </div>
-        )}
+      {/* gastos do mês, por dia */}
+      <div className="mb-2 flex items-baseline justify-between px-1">
+        <h2 className="text-sm font-medium text-text-muted">
+          Gastos de {formatarMes(mes).split(" ")[0].toLowerCase()}
+        </h2>
+        <span className="text-sm font-semibold text-gold">{formatarMoeda(totalDoMes)}</span>
       </div>
-
-      {monthClose.fechado && (
-        <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
-          🔒 Mês fechado — estornar gasto deste mês fica bloqueado. Reabra na
-          aba DRE pra corrigir algo.
-        </div>
-      )}
 
       {loading ? (
         <SkeletonLista linhas={4} />
-      ) : gastosDoMes.length === 0 ? (
-        <EmptyState mensagem="Nenhum gasto registrado neste mês." alvoId="saldo-form-texto" />
+      ) : porDia.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-sm text-text-faint">
+          Nenhum gasto neste mês ainda.
+        </p>
       ) : (
-        <div className="space-y-5">
-          {grupos.map(([categoria, itens]) => (
-            <div key={categoria}>
-              <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="text-sm font-medium text-text-muted">
-                  {iconeCategoriaGasto(categoria)} {categoria}
-                </h2>
-                <span className="text-xs text-text-faint">
-                  {formatarMoeda(itens.reduce((acc, g) => acc + g.valor, 0))}
-                </span>
+        <div className="space-y-4">
+          {porDia.map(([dia, itens]) => (
+            <div key={dia}>
+              <div className="mb-1.5 flex items-center justify-between px-1 text-xs text-text-faint">
+                <span>{rotuloDoDia(dia, hoje)}</span>
+                <span>{formatarMoeda(itens.reduce((acc, g) => acc + g.valor, 0))}</span>
               </div>
-              <ul className="space-y-2">
+              <ul className="divide-y divide-line-soft overflow-hidden rounded-2xl border border-line bg-surface">
                 {itens.map((g) => (
                   <ItemGasto
                     key={g.id}
@@ -575,50 +354,218 @@ export default function SaldoPage() {
         </div>
       )}
 
-      {conciliacoes.historico.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-sm font-medium text-text-muted mb-2">
-            Histórico de conciliações
-          </h2>
-          <ul className="space-y-2">
-            {conciliacoes.historico.slice(0, 10).map((c) => (
-              <li
-                key={c.id}
-                className="rounded-xl border border-line bg-surface px-4 py-3 text-sm"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-text-muted">
-                    {new Date(c.criadoEm).toLocaleDateString("pt-BR")}
-                  </span>
-                  <span
-                    className={
-                      c.diferenca === 0
-                        ? "text-positive"
-                        : c.diferenca > 0
-                        ? "text-positive"
-                        : "text-negative"
-                    }
-                  >
-                    {c.diferenca === 0
-                      ? "sem diferença"
-                      : `${c.diferenca > 0 ? "+" : ""}${formatarMoeda(c.diferenca)}`}
-                  </span>
-                </div>
-                <p className="text-xs text-text-faint mt-1">
-                  informado {formatarMoeda(c.saldoInformado)} · esperado{" "}
-                  {formatarMoeda(c.saldoEsperado)}
-                  {c.ajusteCriado && " · ajuste criado"}
-                  {c.responsavelEmail && ` · ${c.responsavelEmail}`}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {caixinhas.length > 0 && (
+        <Link
+          href="/caixinhas"
+          className="mt-4 flex items-center justify-between rounded-2xl border border-line bg-surface px-4 py-3 text-sm active:bg-surface-2"
+        >
+          <span className="text-text-muted">🐷 Guardado nas caixinhas</span>
+          <span className="font-medium text-positive">{formatarMoeda(totalGuardado(caixinhas))}</span>
+        </Link>
+      )}
+
+      {saldo !== null && (
+        <Configuracoes
+          reservaMeta={reservaMeta}
+          percentualCdi={saldo.percentualCdi ?? 100}
+          cdiAnual={cdi?.anual ?? null}
+          onSalvarReserva={(v) => toast.sucessoSe(definirReservaMeta(v), "Reserva atualizada.")}
+          onSalvarCdi={(v) => toast.sucessoSe(definirPercentualCdi(v), "Rendimento atualizado.")}
+        />
+      )}
+
+      {atualizandoSaldo && saldoAtual !== null && (
+        <AtualizarSaldo
+          saldoAtual={saldoAtual}
+          onSalvar={(valor) => {
+            toast.sucessoSe(
+              atualizar(valor, saldoAtual),
+              valor === 0 ? "Saldo zerado." : `Saldo atualizado pra ${formatarMoeda(valor)}.`
+            );
+            setAtualizandoSaldo(false);
+          }}
+          onFechar={() => setAtualizandoSaldo(false)}
+        />
       )}
     </div>
   );
 }
 
+function PrimeiroSaldo({ onSalvar }: { onSalvar: (valor: number) => Promise<boolean> }) {
+  const [valor, setValor] = useState(0);
+  const toast = useToast();
+  return (
+    <div className="mb-3 rounded-2xl border border-brand/25 bg-surface-elevated p-5">
+      <p className="text-sm font-medium">Quanto você tem na conta agora?</p>
+      <p className="mt-1 mb-3 text-xs text-text-faint">
+        É desse valor que sai quanto você pode gastar por dia. Pode ser zero.
+      </p>
+      <MoneyInput value={valor} onChange={setValor} className="campo text-center text-lg font-semibold" />
+      <Botao
+        onClick={() => toast.sucessoSe(onSalvar(valor), "Saldo definido.")}
+        larguraTotal
+        className="mt-2"
+      >
+        Salvar saldo
+      </Botao>
+    </div>
+  );
+}
+
+/**
+ * Atualizar saldo = o valor digitado vira o saldo, e ponto. Sem "ajuste
+ * de conciliação", sem gasto negativo aparecendo na lista. "Zerar" é o
+ * atalho pro caso de começar do zero.
+ */
+function AtualizarSaldo({
+  saldoAtual,
+  onSalvar,
+  onFechar,
+}: {
+  saldoAtual: number;
+  onSalvar: (valor: number) => void;
+  onFechar: () => void;
+}) {
+  const [valor, setValor] = useState(Math.max(0, saldoAtual));
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Atualizar saldo"
+    >
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+        <p className="text-base font-semibold">Quanto tem na conta agora?</p>
+        <p className="mt-1 text-xs text-text-faint">
+          Olhe no app do banco e digite o valor. Ele vira o seu saldo — sem ajuste, sem conta
+          escondida.
+        </p>
+        <MoneyInput
+          value={valor}
+          onChange={setValor}
+          className="campo mt-3 text-center text-lg font-semibold"
+        />
+        <div className="mt-3 flex gap-2">
+          <Botao onClick={() => onSalvar(valor)} larguraTotal>
+            Salvar
+          </Botao>
+          <Botao onClick={onFechar} variante="secundario" larguraTotal>
+            Cancelar
+          </Botao>
+        </div>
+        <button
+          onClick={() => onSalvar(0)}
+          className="mt-3 w-full rounded-xl py-2 text-sm font-medium text-negative active:bg-negative-soft"
+        >
+          Zerar saldo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Configuracoes({
+  reservaMeta,
+  percentualCdi,
+  cdiAnual,
+  onSalvarReserva,
+  onSalvarCdi,
+}: {
+  reservaMeta: number;
+  percentualCdi: number;
+  cdiAnual: number | null;
+  onSalvarReserva: (v: number) => void;
+  onSalvarCdi: (v: number) => void;
+}) {
+  const push = usePushNotifications();
+  const toast = useToast();
+  const [reserva, setReserva] = useState(reservaMeta);
+  const [cdi, setCdi] = useState(String(percentualCdi));
+  const rendimentoAnual = cdiAnual !== null ? (cdiAnual * (Number(cdi) || 0)) / 100 : null;
+
+  return (
+    <details className="mt-6 rounded-2xl border border-line bg-surface px-4 py-3">
+      <summary className="cursor-pointer text-sm text-text-muted">Configurações do saldo</summary>
+      <div className="mt-3 space-y-4">
+        <div>
+          <label className="rotulo">Quero que sobre no fim do mês</label>
+          <div className="flex gap-2">
+            <MoneyInput value={reserva} onChange={setReserva} className="campo flex-1" />
+            <Botao
+              onClick={() => onSalvarReserva(reserva)}
+              disabled={reserva === reservaMeta}
+              variante="secundario"
+            >
+              Salvar
+            </Botao>
+          </div>
+          <p className="mt-1 text-[11px] text-text-faint">
+            Sai do cálculo de quanto pode gastar por dia.
+          </p>
+        </div>
+
+        <div>
+          <label className="rotulo">A conta rende quanto do CDI? (%)</label>
+          <div className="flex gap-2">
+            <input
+              inputMode="numeric"
+              value={cdi}
+              onChange={(e) => setCdi(e.target.value.replace(/\D/g, ""))}
+              className="campo flex-1"
+            />
+            <Botao
+              onClick={() => onSalvarCdi(Number(cdi) || 0)}
+              disabled={Number(cdi) === percentualCdi}
+              variante="secundario"
+            >
+              Salvar
+            </Botao>
+          </div>
+          <p className="mt-1 text-[11px] text-text-faint">
+            Mercado Pago rende 100% do CDI.
+            {rendimentoAnual !== null &&
+              ` Hoje isso dá ~${rendimentoAnual.toFixed(2).replace(".", ",")}% ao ano (bruto).`}{" "}
+            O rendimento entra sozinho todo dia útil. 0 = não rende.
+          </p>
+        </div>
+
+        {push.suportado && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm text-text-muted">
+              Aviso diário no celular
+              {push.permissao === "denied" && (
+                <span className="block text-[11px] text-text-faint">bloqueado no navegador</span>
+              )}
+            </span>
+            <Botao
+              onClick={() => {
+                if (push.ativo) push.desativar().then(() => toast.sucesso("Aviso desativado."));
+                else push.ativar();
+              }}
+              disabled={push.carregando || push.permissao === "denied"}
+              variante="secundario"
+              tamanho="pequeno"
+            >
+              {push.carregando ? "..." : push.ativo ? "Desativar" : "Ativar"}
+            </Botao>
+          </div>
+        )}
+        {push.precisaInstalar && (
+          <p className="text-[11px] leading-relaxed text-text-faint">
+            Pra receber aviso no iPhone, instale o app: <strong>Compartilhar</strong> →{" "}
+            <strong>Adicionar à Tela de Início</strong>, e abra por lá.
+          </p>
+        )}
+        {push.erro && <p className="text-xs text-negative">{push.erro}</p>}
+      </div>
+    </details>
+  );
+}
+
+/**
+ * Item da lista: só descrição e valor. Tocar abre as ações — antes eram
+ * três ícones em cada linha, e a lista virava uma parede de botões.
+ */
 function ItemGasto({
   gasto,
   onEditar,
@@ -630,14 +577,15 @@ function ItemGasto({
   onEditar: (
     id: string,
     dados: { descricao: string; valor: number; categoria: string }
-  ) => void;
+  ) => Promise<boolean>;
   onEstornar: (id: string, motivo: string) => Promise<boolean>;
   onRemover: (id: string, motivo: string) => Promise<boolean>;
   mesFechado?: boolean;
 }) {
   const toast = useToast();
+  const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState(false);
-  const [confirmando, setConfirmando] = useState(false);
+  const [confirmandoEstorno, setConfirmandoEstorno] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   const [descricao, setDescricao] = useState(gasto.descricao);
   const [valor, setValor] = useState(gasto.valor);
@@ -647,48 +595,32 @@ function ItemGasto({
   const bloqueado = gasto.estornado || ehEstorno;
 
   function salvar() {
-    const descAparada = descricao.trim();
-    if (!descAparada || !valor) return;
-    onEditar(gasto.id, { descricao: descAparada, valor, categoria });
+    const desc = descricao.trim();
+    if (!desc || !valor) return;
+    toast.sucessoSe(onEditar(gasto.id, { descricao: desc, valor, categoria }), "Gasto atualizado.");
     setEditando(false);
+    setAberto(false);
   }
 
   if (editando) {
     return (
-      <li className="rounded-xl border border-brand/40 bg-surface p-4 space-y-3">
-        <div>
-          <label className="rotulo">Descrição</label>
-          <input
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-            className="campo"
-          />
-        </div>
+      <li className="space-y-2 bg-surface-2/40 p-3">
+        <input value={descricao} onChange={(e) => setDescricao(e.target.value)} className="campo" />
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="rotulo">Valor</label>
-            <MoneyInput value={valor} onChange={setValor} className="campo" />
-          </div>
-          <div>
-            <label className="rotulo">Categoria</label>
-            <select
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
-              className="campo"
-            >
-              {CATEGORIAS_GASTO.map((c) => (
-                <option key={c} value={c}>
-                  {iconeCategoriaGasto(c)} {c}
-                </option>
-              ))}
-            </select>
-          </div>
+          <MoneyInput value={valor} onChange={setValor} className="campo" />
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="campo">
+            {CATEGORIAS_GASTO.map((c) => (
+              <option key={c} value={c}>
+                {iconeCategoriaGasto(c)} {c}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex gap-2">
-          <Botao onClick={salvar} larguraTotal>
+          <Botao onClick={salvar} larguraTotal tamanho="pequeno">
             Salvar
           </Botao>
-          <Botao onClick={() => setEditando(false)} variante="secundario" larguraTotal>
+          <Botao onClick={() => setEditando(false)} variante="secundario" larguraTotal tamanho="pequeno">
             Cancelar
           </Botao>
         </div>
@@ -697,97 +629,90 @@ function ItemGasto({
   }
 
   return (
-    <li
-      className={`flex items-center gap-2 rounded-xl border pl-4 pr-2 py-2 ${
-        bloqueado
-          ? "border-line-soft bg-surface-2/50"
-          : "border-line bg-surface"
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-sm ${
-            gasto.estornado
-              ? "line-through text-text-faint"
-              : ehEstorno
-              ? "italic text-text-faint"
-              : ""
+    <li>
+      <button
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-surface-2"
+      >
+        <span className="shrink-0 text-base" aria-hidden="true">
+          {iconeCategoriaGasto(gasto.categoria)}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate text-sm ${
+            gasto.estornado ? "text-text-faint line-through" : ehEstorno ? "italic text-text-faint" : ""
           }`}
         >
           {gasto.descricao}
-        </p>
-        {(gasto.estornado || ehEstorno) && (
-          <span
-            className={`text-[10px] uppercase tracking-wide ${
-              gasto.estornado ? "text-negative" : "text-info"
-            }`}
-          >
-            {gasto.estornado ? "estornado" : "estorno"}
-          </span>
-        )}
-      </div>
-      <span
-        className={`shrink-0 text-sm font-medium ${
-          gasto.valor < 0 ? "text-positive" : bloqueado ? "text-text-faint" : "text-gold"
-        }`}
-      >
-        {formatarMoeda(gasto.valor)}
-      </span>
-      <AcoesItem>
-        {!bloqueado && (
-          <>
-            <BotaoIcone label="Editar gasto" onClick={() => setEditando(true)}>
-              <IconEditar width={17} height={17} />
-            </BotaoIcone>
-            <BotaoIcone
-              label={
-                mesFechado
-                  ? "Mês fechado — reabra na aba DRE pra estornar"
-                  : "Estornar (mantém no histórico e devolve o valor)"
-              }
-              onClick={() => setConfirmando(true)}
-              disabled={mesFechado}
-            >
-              <IconEstornar width={17} height={17} />
-            </BotaoIcone>
-          </>
-        )}
-        <BotaoIcone
-          label="Excluir gasto"
-          tom="perigo"
-          onClick={() => setConfirmandoExclusao(true)}
+        </span>
+        <span
+          className={`shrink-0 text-sm font-medium ${
+            gasto.valor < 0 ? "text-positive" : bloqueado ? "text-text-faint" : "text-text"
+          }`}
         >
-          <IconExcluir width={17} height={17} />
-        </BotaoIcone>
-      </AcoesItem>
+          {formatarMoeda(gasto.valor)}
+        </span>
+      </button>
+
+      {aberto && (
+        <div className="flex gap-2 px-3.5 pb-3">
+          {!bloqueado && (
+            <>
+              <Botao onClick={() => setEditando(true)} variante="secundario" tamanho="pequeno">
+                Editar
+              </Botao>
+              <Botao
+                onClick={() => setConfirmandoEstorno(true)}
+                disabled={mesFechado}
+                variante="secundario"
+                tamanho="pequeno"
+              >
+                Estornar
+              </Botao>
+            </>
+          )}
+          <Botao
+            onClick={() => setConfirmandoExclusao(true)}
+            variante="fantasma"
+            tamanho="pequeno"
+            className="text-negative!"
+          >
+            Excluir
+          </Botao>
+        </div>
+      )}
 
       <ConfirmModal
-        aberto={confirmando}
+        aberto={confirmandoEstorno}
         titulo="Estornar gasto"
-        descricao={`"${gasto.descricao}" continua no histórico, mas um lançamento de estorno devolve ${formatarMoeda(gasto.valor)} pro seu saldo.`}
+        descricao={`"${gasto.descricao}" continua no histórico, mas um estorno devolve ${formatarMoeda(
+          gasto.valor
+        )} pro seu saldo. Use quando o dinheiro voltou (devolução, reembolso).`}
         textoConfirmar="Estornar"
-        perigo
         pedirMotivo
         onConfirmar={(motivo) => {
           toast.sucessoSe(onEstornar(gasto.id, motivo ?? ""), "Gasto estornado.");
-          setConfirmando(false);
+          setConfirmandoEstorno(false);
+          setAberto(false);
         }}
-        onCancelar={() => setConfirmando(false)}
+        onCancelar={() => setConfirmandoEstorno(false)}
       />
 
       <ConfirmModal
         aberto={confirmandoExclusao}
-        titulo="Excluir definitivamente"
+        titulo="Excluir gasto"
         descricao={
           bloqueado
-            ? `"${gasto.estornado ? gasto.descricao : gasto.descricao.replace(/^Estorno: /, "")}" e o estorno dele serão apagados juntos, de vez — isso não pode ser desfeito. Como as duas metades já se cancelam, o saldo não muda.`
-            : `"${gasto.descricao}" será apagado de vez — isso não pode ser desfeito. Se quer manter o histórico e só corrigir o saldo, use "Estornar" em vez de excluir.`
+            ? "Esse gasto e o estorno dele são apagados juntos. Como um cancela o outro, o saldo não muda."
+            : `"${gasto.descricao}" some de vez — use quando lançou errado. Se o dinheiro voltou, use Estornar.`
         }
         textoConfirmar="Excluir"
         perigo
-        pedirMotivo
-        onConfirmar={(motivo) => {
-          toast.sucessoSe(onRemover(gasto.id, motivo ?? ""), bloqueado ? "Par estorno/original excluído." : "Gasto excluído.");
+        onConfirmar={() => {
+          toast.sucessoSe(
+            onRemover(gasto.id, "excluído na tela de saldo"),
+            bloqueado ? "Gasto e estorno excluídos." : "Gasto excluído."
+          );
           setConfirmandoExclusao(false);
         }}
         onCancelar={() => setConfirmandoExclusao(false)}
