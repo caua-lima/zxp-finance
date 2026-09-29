@@ -361,7 +361,90 @@ export function calculateGastavelPorDia(
   diasRestantes: number
 ): number | null {
   if (saldoAtual === null || diasRestantes <= 0) return null;
-  return arredondarCentavos((saldoAtual - reservaMeta) / diasRestantes);
+  // Nunca negativo: saldo zerado com uma reserva de R$ 100 dava "pode
+  // gastar -R$ 50 hoje", que não significa nada. Sem dinheiro livre, o
+  // limite é zero — a explicação de por quê fica na tela.
+  return Math.max(0, arredondarCentavos((saldoAtual - reservaMeta) / diasRestantes));
+}
+
+/**
+ * Saldo de agora: o último valor que você informou, menos o que foi
+ * gastado depois disso. É a mesma conta em toda tela — antes o Resumo
+ * mostrava só o valor informado, sem descontar os gastos lançados depois,
+ * e os dois lugares discordavam.
+ */
+export function calcularSaldoAtual(
+  saldo: { valor: number; atualizadoEm: number } | null,
+  gastos: Gasto[]
+): number | null {
+  if (!saldo) return null;
+  const gastoDepois = gastos
+    .filter((g) => g.criadoEm > saldo.atualizadoEm)
+    .reduce((acc, g) => acc + g.valor, 0);
+  return arredondarCentavos(saldo.valor - gastoDepois);
+}
+
+export interface LinhaCompromisso {
+  chave: "contas" | "parcelas" | "faturas" | "assinaturas";
+  titulo: string;
+  total: number;
+  pago: number;
+  falta: number;
+  itens: number;
+  /** Quanto disso é estimado pelo app (fatura prevista), não lançado. */
+  estimado: number;
+}
+
+const LINHAS_COMPROMISSO: Array<{
+  chave: LinhaCompromisso["chave"];
+  titulo: string;
+  source: FinancialEntry["source"];
+}> = [
+  { chave: "contas", titulo: "Contas fixas", source: "fixed_cost" },
+  { chave: "parcelas", titulo: "Parcelas fora do cartão", source: "installment" },
+  { chave: "faturas", titulo: "Faturas de cartão", source: "card_bill" },
+  { chave: "assinaturas", titulo: "Assinaturas fora do cartão", source: "subscription" },
+];
+
+/**
+ * "Quanto eu tenho que pagar este mês, e de quê?" — os compromissos
+ * recorrentes do mês separados por tipo, com o que já foi pago e o que
+ * falta. Gasto do dia a dia fica de fora: isso aqui é o que já estava
+ * comprometido antes do mês começar.
+ */
+export function resumoCompromissos(
+  entries: FinancialEntry[],
+  competenceMonth: string
+): { linhas: LinhaCompromisso[]; total: number; pago: number; falta: number } {
+  const linhas = LINHAS_COMPROMISSO.map(({ chave, titulo, source }) => {
+    const doTipo = entries.filter(
+      (e) =>
+        e.competenceMonth === competenceMonth &&
+        e.type === "expense" &&
+        e.source === source &&
+        isEntryActive(e)
+    );
+    const total = arredondarCentavos(doTipo.reduce((acc, e) => acc + e.amount, 0));
+    const pago = arredondarCentavos(
+      doTipo.filter(isEntryPaid).reduce((acc, e) => acc + e.amount, 0)
+    );
+    const estimado = arredondarCentavos(
+      doTipo.filter((e) => e.estimado).reduce((acc, e) => acc + e.amount, 0)
+    );
+    return {
+      chave,
+      titulo,
+      total,
+      pago,
+      falta: arredondarCentavos(total - pago),
+      itens: doTipo.length,
+      estimado,
+    };
+  }).filter((l) => l.itens > 0);
+
+  const total = arredondarCentavos(linhas.reduce((acc, l) => acc + l.total, 0));
+  const pago = arredondarCentavos(linhas.reduce((acc, l) => acc + l.pago, 0));
+  return { linhas, total, pago, falta: arredondarCentavos(total - pago) };
 }
 
 /**

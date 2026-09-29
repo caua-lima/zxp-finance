@@ -11,6 +11,9 @@ import {
   Parcela,
   Gasto,
   Caixinha,
+  Comissao,
+  Ganho,
+  Assinatura,
 } from "../types";
 import {
   calculateProjectedBalance,
@@ -25,12 +28,36 @@ import {
   calculatePendingExpenses,
   hojeISO,
   diaISOde,
+  calcularSaldoAtual,
+  resumoCompromissos,
 } from "./calculations";
 import {
   parcelasParaEntries,
   assinaturasParaEntries,
   faturasParaEntries,
+  faturasPrevistasParaEntries,
 } from "./adapters";
+import {
+  comissaoPrevistaPara,
+  comissaoPrevistaParaEntries,
+  ehGanhoDeComissao,
+} from "./comissaoPrevista";
+import {
+  composicaoFaturaPrevista,
+  devePreverFatura,
+  CARTAO_NAO_INFORMADO,
+} from "./faturaPrevista";
+import {
+  parcelasAPagarDesde,
+  mesDaUltimaParcela,
+  resumoParcelasAtivas,
+} from "./resumoParcelas";
+import {
+  calcularRendimento,
+  cdiAnual,
+  somarPorMes,
+  converterSerieBcb,
+} from "./rendimento";
 import { sugerirCrescimentoCategorias, compararComBenchmarkIBGE } from "./sugestoes";
 import { GrupoPorCategoria } from "./entries";
 import { calcularComissaoDoDia } from "./comissoes";
@@ -815,6 +842,361 @@ describe("simulador de viabilidade", () => {
   test("compromisso de valor zero simula 'e se eu não assumisse nada'", () => {
     const r = simularNovoCompromisso(contexto(), 0, 1);
     assert.equal(r.meses[0].compromissosDoMes, 1500);
+  });
+});
+
+describe("comissão prevista pro mês seguinte", () => {
+  function comissao(data: string, valorTotal: number): Comissao {
+    return {
+      id: data,
+      data,
+      mes: data.slice(0, 7),
+      reunioes: 0,
+      vendasPerformance: 0,
+      vendasAcelera: 0,
+      valorTotal,
+      criadoEm: 0,
+      atualizadoEm: 0,
+    };
+  }
+  function ganho(over: Partial<Ganho>): Ganho {
+    return { id: "g", tipo: "pontual", descricao: "x", valor: 0, criadoEm: 0, ...over };
+  }
+
+  test("o que foi lançado em setembro cai em outubro, já sem o imposto", () => {
+    const p = comissaoPrevistaPara("2026-10", [
+      comissao("2026-09-01", 100),
+      comissao("2026-09-02", 150),
+      comissao("2026-10-01", 999), // outubro não entra na previsão de outubro
+    ]);
+    assert.equal(p?.mesOrigem, "2026-09");
+    assert.equal(p?.bruto, 250);
+    assert.equal(p?.imposto, 15); // 6%
+    assert.equal(p?.liquido, 235);
+    assert.equal(p?.dias, 2);
+  });
+
+  test("sem comissão lançada no mês anterior, não há previsão", () => {
+    assert.equal(comissaoPrevistaPara("2026-10", [comissao("2026-08-10", 100)]), null);
+  });
+
+  test("vira entrada prevista (não recebida) no mês seguinte", () => {
+    const entries = comissaoPrevistaParaEntries([comissao("2026-09-01", 100)], [], "2026-10");
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].type, "income");
+    assert.equal(entries[0].status, "planned");
+    assert.equal(entries[0].amount, 94);
+    assert.equal(entries[0].competenceMonth, "2026-10");
+    assert.equal(entries[0].estimado, true);
+  });
+
+  test("some quando o pagamento real da comissão é lançado em Ganhos", () => {
+    const recebida = ganho({ mes: "2026-10", categoriaReceita: "Comissão", valor: 2500 });
+    assert.deepEqual(
+      comissaoPrevistaParaEntries([comissao("2026-09-01", 100)], [recebida], "2026-10"),
+      []
+    );
+  });
+
+  test("reconhece pagamento de comissão pela categoria ou pela descrição", () => {
+    assert.equal(ehGanhoDeComissao(ganho({ categoriaReceita: "Comissão" })), true);
+    assert.equal(ehGanhoDeComissao(ganho({ descricao: "Comissão de setembro" })), true);
+    assert.equal(ehGanhoDeComissao(ganho({ descricao: "comissao" })), true);
+    assert.equal(ehGanhoDeComissao(ganho({ descricao: "Salário" })), false);
+    // recorrente não é pagamento de comissão, e arquivado não conta
+    assert.equal(
+      ehGanhoDeComissao(ganho({ tipo: "recorrente", categoriaReceita: "Comissão" })),
+      false
+    );
+    assert.equal(ehGanhoDeComissao(ganho({ categoriaReceita: "Comissão", arquivado: true })), false);
+  });
+});
+
+describe("fatura prevista", () => {
+  function parcela(over: Partial<Parcela>): Parcela {
+    return {
+      id: "p",
+      tipo: "cartao",
+      nome: "Parcela",
+      valorParcela: 100,
+      totalParcelas: 10,
+      parcelasRestantes: 5,
+      naFatura: true,
+      cartao: "Nubank CNPJ",
+      mesReferencia: "2026-09",
+      criadoEm: 0,
+      ...over,
+    };
+  }
+  function assinatura(over: Partial<Assinatura>): Assinatura {
+    return {
+      id: "a",
+      nome: "Spotify",
+      valor: 20,
+      ativa: true,
+      naFatura: true,
+      cartao: "Nubank CNPJ",
+      criadoEm: 0,
+      ...over,
+    } as Assinatura;
+  }
+
+  test("soma parcelas e assinaturas daquele cartão, com o valor cheio da parcela", () => {
+    const prevista = composicaoFaturaPrevista(
+      "Nubank CNPJ",
+      "2026-10",
+      [
+        parcela({ id: "1", valorParcela: 134.26, dividida: true }), // cartão cobra cheio
+        parcela({ id: "2", cartao: "Inter" }), // outro cartão
+        parcela({ id: "3", naFatura: false }), // fora da fatura
+        parcela({ id: "4", parcelasRestantes: 1 }), // acabou em setembro
+      ],
+      [assinatura({}), assinatura({ id: "b", ativa: false })]
+    );
+    assert.equal(prevista.total, 154.26);
+    assert.equal(prevista.itens.length, 2);
+  });
+
+  test("parcela na fatura sem cartão informado fica num grupo próprio", () => {
+    const prevista = composicaoFaturaPrevista(
+      CARTAO_NAO_INFORMADO,
+      "2026-10",
+      [parcela({ cartao: undefined, valorParcela: 34.39 }), parcela({ id: "2" })],
+      [assinatura({})]
+    );
+    assert.equal(prevista.total, 34.39);
+  });
+
+  test("mês passado nunca é previsto; mês que vem sempre é", () => {
+    assert.equal(devePreverFatura("2026-08", "2026-09-29", 5), false);
+    assert.equal(devePreverFatura("2026-10", "2026-09-29", 5), true);
+  });
+
+  test("no mês atual, só prevê cartão cujo vencimento ainda não passou", () => {
+    assert.equal(devePreverFatura("2026-09", "2026-09-29", 10), false);
+    assert.equal(devePreverFatura("2026-09", "2026-09-05", 10), true);
+    assert.equal(devePreverFatura("2026-09", "2026-09-29"), true); // sem dia: fim do mês
+  });
+
+  test("vira compromisso de outubro quando a fatura real ainda não foi lançada", () => {
+    const entries = faturasPrevistasParaEntries(
+      [],
+      [parcela({ valorParcela: 239.62 })],
+      [],
+      "2026-10",
+      () => false,
+      { "Nubank CNPJ": 5 },
+      "2026-09-29"
+    );
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].amount, 239.62);
+    assert.equal(entries[0].status, "pending");
+    assert.equal(entries[0].estimado, true);
+    assert.equal(entries[0].dueDate, "2026-10-05"); // segunda-feira, dia útil
+  });
+
+  test("fatura real lançada substitui a prevista daquele cartão", () => {
+    const entries = faturasPrevistasParaEntries(
+      [{ id: "2026-10__Nubank CNPJ", nome: "Nubank CNPJ", valor: 700, mes: "2026-10", criadoEm: 1 }],
+      [parcela({})],
+      [],
+      "2026-10",
+      () => false,
+      {},
+      "2026-09-29"
+    );
+    assert.equal(entries.length, 0);
+  });
+
+  test("marcada como paga no checklist, a prevista também aparece paga", () => {
+    const entries = faturasPrevistasParaEntries(
+      [],
+      [parcela({})],
+      [],
+      "2026-10",
+      (origem, id) => origem === "fatura" && id === "2026-10__Nubank CNPJ",
+      {},
+      "2026-09-29"
+    );
+    assert.equal(entries[0].status, "paid");
+  });
+});
+
+describe("resumo de parcelas ativas", () => {
+  function parcela(over: Partial<Parcela>): Parcela {
+    return {
+      id: "p",
+      tipo: "cartao",
+      nome: "Parcela",
+      valorParcela: 100,
+      totalParcelas: 10,
+      parcelasRestantes: 5,
+      mesReferencia: "2026-09",
+      criadoEm: 0,
+      ...over,
+    };
+  }
+
+  test("conta quantas faltam a partir do mês, e parcela futura continua contando", () => {
+    assert.equal(parcelasAPagarDesde(parcela({}), "2026-09"), 5);
+    assert.equal(parcelasAPagarDesde(parcela({}), "2026-11"), 3);
+    assert.equal(parcelasAPagarDesde(parcela({ mesReferencia: "2026-12" }), "2026-09"), 5);
+    assert.equal(parcelasAPagarDesde(parcela({}), "2027-06"), 0);
+  });
+
+  test("último mês de cobrança", () => {
+    assert.equal(mesDaUltimaParcela(parcela({}), "2026-09"), "2027-01");
+    assert.equal(mesDaUltimaParcela(parcela({ parcelasRestantes: 1 }), "2026-09"), "2026-09");
+    assert.equal(mesDaUltimaParcela(parcela({ parcelasRestantes: 0 }), "2026-09"), null);
+  });
+
+  test("soma TODAS as ativas, inclusive as que estão dentro da fatura", () => {
+    const r = resumoParcelasAtivas(
+      [
+        parcela({
+          id: "carro",
+          tipo: "financiamento",
+          valorParcela: 997,
+          parcelasRestantes: 27,
+          mesReferencia: "2026-08",
+        }),
+        parcela({
+          id: "viagem",
+          valorParcela: 134.26,
+          dividida: true,
+          naFatura: true,
+          parcelasRestantes: 9,
+        }),
+        parcela({ id: "quitada", parcelasRestantes: 0 }),
+      ],
+      "2026-10"
+    );
+    assert.equal(r.quantidade, 2);
+    assert.equal(r.mensalForaDoCartao, 997);
+    assert.equal(r.mensalNoCartao, 67.13);
+    assert.equal(r.mensalSuaParte, 1064.13);
+    // carro: 25 restantes em outubro · viagem: 8 restantes, metade de 134,26
+    assert.equal(r.faltaPagar, Math.round((997 * 25 + 67.13 * 8) * 100) / 100);
+    assert.equal(r.ultimoMes, "2028-10");
+  });
+
+  test("sem parcela ativa, tudo zerado", () => {
+    const r = resumoParcelasAtivas([parcela({ parcelasRestantes: 0 })], "2026-10");
+    assert.equal(r.quantidade, 0);
+    assert.equal(r.faltaPagar, 0);
+    assert.equal(r.ultimoMes, null);
+  });
+});
+
+describe("rendimento pelo CDI", () => {
+  const taxas = [
+    { data: "2026-09-24", taxa: 0.05 },
+    { data: "2026-09-25", taxa: 0.05 },
+    { data: "2026-09-28", taxa: 0.05 },
+    { data: "2026-09-29", taxa: 0.05 },
+  ];
+
+  test("rende só os dias úteis entre o último dia rendido e ontem", () => {
+    const r = calcularRendimento(1000, taxas, "2026-09-24", "2026-09-29", 100);
+    // 25 e 28 (24 já rendeu; 29 é hoje, ainda não caiu)
+    assert.equal(r.diasUteis, 2);
+    assert.equal(r.ultimoDia, "2026-09-28");
+    assert.equal(r.rendimento, Math.round((1000 * 1.0005 * 1.0005 - 1000) * 100) / 100);
+  });
+
+  test("percentual do CDI escala o rendimento", () => {
+    const cheio = calcularRendimento(10000, taxas, "2026-09-01", "2026-09-30", 100);
+    const metade = calcularRendimento(10000, taxas, "2026-09-01", "2026-09-30", 50);
+    assert.ok(metade.rendimento < cheio.rendimento);
+    assert.ok(Math.abs(metade.rendimento * 2 - cheio.rendimento) < 0.05);
+  });
+
+  test("saldo zerado não rende, mas os dias avançam (nada retroativo depois)", () => {
+    const r = calcularRendimento(0, taxas, "2026-09-01", "2026-09-30", 100);
+    assert.equal(r.rendimento, 0);
+    assert.equal(r.ultimoDia, "2026-09-29");
+  });
+
+  test("sem dia novo, nada muda", () => {
+    const r = calcularRendimento(1000, taxas, "2026-09-29", "2026-09-30", 100);
+    assert.equal(r.ultimoDia, null);
+    assert.equal(r.rendimento, 0);
+  });
+
+  test("separa o rendimento pelo mês em que rendeu", () => {
+    const r = calcularRendimento(
+      1000,
+      [
+        { data: "2026-09-30", taxa: 0.05 },
+        { data: "2026-10-01", taxa: 0.05 },
+      ],
+      "2026-09-29",
+      "2026-10-02",
+      100
+    );
+    assert.deepEqual(Object.keys(r.porMes).sort(), ["2026-09", "2026-10"]);
+    assert.deepEqual(somarPorMes({ "2026-09": 1 }, { "2026-09": 0.5, "2026-10": 2 }), {
+      "2026-09": 1.5,
+      "2026-10": 2,
+    });
+  });
+
+  test("CDI de 0,050788% ao dia é ~13,65% ao ano", () => {
+    const anual = cdiAnual(0.050788);
+    assert.ok(anual > 13.6 && anual < 13.7, `veio ${anual}`);
+  });
+
+  test("converte a série do Banco Central", () => {
+    assert.deepEqual(
+      converterSerieBcb([
+        { data: "28/09/2026", valor: "0.050788" },
+        { data: "29/09/2026", valor: "lixo" },
+      ]),
+      [{ data: "2026-09-28", taxa: 0.050788 }]
+    );
+  });
+});
+
+describe("saldo de agora e compromissos do mês", () => {
+  test("saldo de agora desconta só o que foi gasto depois de informar o saldo", () => {
+    const gastos = [
+      { id: "1", descricao: "a", valor: 30, categoria: "x", mes: "2026-10", criadoEm: 100 },
+      { id: "2", descricao: "b", valor: 50, categoria: "x", mes: "2026-10", criadoEm: 300 },
+    ] as Gasto[];
+    assert.equal(calcularSaldoAtual({ valor: 1000, atualizadoEm: 200 }, gastos), 950);
+    assert.equal(calcularSaldoAtual(null, gastos), null);
+  });
+
+  test("saldo abaixo da reserva não vira limite diário negativo", () => {
+    assert.equal(calculateGastavelPorDia(0, 100, 2), 0);
+    assert.equal(calculateGastavelPorDia(50, 100, 10), 0);
+  });
+
+  test("separa o que tem pra pagar por tipo, com pago e o que falta", () => {
+    const entries = [
+      entry({ id: "1", source: "fixed_cost", amount: 100, status: "paid", competenceMonth: "2026-10" }),
+      entry({ id: "2", source: "fixed_cost", amount: 54.99, competenceMonth: "2026-10" }),
+      entry({ id: "3", source: "installment", amount: 997, competenceMonth: "2026-10" }),
+      entry({
+        id: "4",
+        source: "card_bill",
+        amount: 588.81,
+        competenceMonth: "2026-10",
+        estimado: true,
+      }),
+      // gasto do dia a dia não é compromisso
+      entry({ id: "5", source: "manual", amount: 20, status: "paid", competenceMonth: "2026-10" }),
+      entry({ id: "6", type: "income", source: "income", amount: 2600, competenceMonth: "2026-10" }),
+    ];
+    const r = resumoCompromissos(entries, "2026-10");
+    assert.deepEqual(
+      r.linhas.map((l) => l.chave),
+      ["contas", "parcelas", "faturas"]
+    );
+    assert.equal(r.total, 1740.8);
+    assert.equal(r.pago, 100);
+    assert.equal(r.falta, 1640.8);
+    assert.equal(r.linhas.find((l) => l.chave === "faturas")?.estimado, 588.81);
   });
 });
 

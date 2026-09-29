@@ -11,6 +11,7 @@ import { useCartoesConfig } from "@/lib/useCartoesConfig";
 import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { useSaldo } from "@/lib/useSaldo";
+import { useComissoes } from "@/lib/useComissoes";
 import { construirFinancialEntries } from "./adapters";
 import {
   calculateAvailableBalance,
@@ -19,6 +20,8 @@ import {
   calculatePendingExpenses,
   calculateUpcomingCommitments,
   calculateDailyCashFlow,
+  calcularSaldoAtual,
+  resumoCompromissos,
   ultimoDiaMes,
   hojeISO,
 } from "./calculations";
@@ -42,6 +45,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
   const gastosHook = useGastos();
   const pagamentos = usePagamentos(mes);
   const saldoHook = useSaldo();
+  const comissoes = useComissoes(mes);
 
   const loading =
     ganhos.loading ||
@@ -52,7 +56,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     cartoesConfig.loading ||
     gastosHook.loading ||
     pagamentos.loading ||
-    saldoHook.loading;
+    saldoHook.loading ||
+    comissoes.loading;
 
   const erro =
     ganhos.erro ||
@@ -63,7 +68,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     cartoesConfig.erro ||
     gastosHook.erro ||
     pagamentos.erro ||
-    saldoHook.erro;
+    saldoHook.erro ||
+    comissoes.erro;
 
   const diaVencimentoPorCartao = useMemo(() => {
     const mapa: Record<string, number> = {};
@@ -85,6 +91,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       estaPago: pagamentos.estaPago,
       mes,
       diaVencimentoPorCartao,
+      comissoes: comissoes.todas,
     });
   }, [
     loading,
@@ -98,9 +105,12 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     pagamentos.estaPago,
     mes,
     diaVencimentoPorCartao,
+    comissoes.todas,
   ]);
 
-  const saldoReal = saldoHook.saldo ? saldoHook.saldo.valor : null;
+  // mesma conta da tela de Saldo: valor informado menos o que foi gasto
+  // depois — antes o Resumo mostrava só o valor informado
+  const saldoReal = calcularSaldoAtual(saldoHook.saldo, gastosHook.gastos);
   const saldoDisponivel = calculateAvailableBalance(saldoReal);
   const fluxoDoMes = useMemo(
     () => calculateMonthlyCashFlow(entries, mes),
@@ -118,6 +128,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     () => calculatePendingExpenses(entries, mes),
     [entries, mes]
   );
+
+  const compromissos = useMemo(() => resumoCompromissos(entries, mes), [entries, mes]);
 
   const proximosVencimentos = useMemo(
     () => calculateUpcomingCommitments(entries, hojeISO(), 30).slice(0, 5),
@@ -203,6 +215,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     fluxoDoMes,
     entradasPendentes,
     compromissosPendentes,
+    compromissos,
     fluxoDiario,
     proximosVencimentos,
     distribuicaoGastos,

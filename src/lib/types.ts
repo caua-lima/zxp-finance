@@ -129,6 +129,12 @@ export interface Caixinha {
   depositos: number; // quantas vezes já guardou — explica o saldo
   criadoEm: number;
   atualizadoEm: number;
+  /** Quanto do CDI a caixinha rende (100 = 100% do CDI, o do Mercado Pago). Ausente = 100; 0 = não rende. */
+  percentualCdi?: number;
+  /** Último dia ("AAAA-MM-DD") cujo rendimento já foi somado ao saldo. */
+  rendimentoAte?: string;
+  /** Rendimento somado por mês ("AAAA-MM" → R$), só pra mostrar quanto rendeu. */
+  rendimentoPorMes?: Record<string, number>;
 }
 
 export type NivelEscolaridade =
@@ -384,4 +390,10 @@ export interface FinancialEntry {
   archivedAt?: number;
   cancelledAt?: number;
   cancelledReason?: string;
+  /**
+   * Valor estimado pelo app, não lançado por você: fatura prevista (montada
+   * das parcelas e assinaturas já conhecidas do cartão) ou comissão do mês
+   * anterior que ainda vai cair. Some sozinho quando o valor real é lançado.
+   */
+  estimado?: boolean;
 }

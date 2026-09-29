@@ -110,6 +110,7 @@ export function useComissoes(mes: string) {
   }
 
   return {
+    todas,
     doMes,
     loading,
     erro,

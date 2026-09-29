@@ -15,6 +15,8 @@ import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { usePagamentos, OrigemItem } from "@/lib/usePagamentos";
 import { useCartoesConfig } from "@/lib/useCartoesConfig";
 import { hojeISO } from "@/lib/finance/calculations";
+import { vencimentoEfetivo } from "@/lib/finance/diasUteis";
+import { faturasPrevistasParaEntries } from "@/lib/finance/adapters";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -29,6 +31,8 @@ interface ItemChecklist {
   valor: number;
   /** Dia do mês em que vence, quando cadastrado. Ordena a lista e marca atraso. */
   diaVencimento?: number;
+  /** Valor estimado pelo app (fatura prevista), não lançado. */
+  estimado?: boolean;
 }
 
 export default function ChecklistPage() {
@@ -93,27 +97,40 @@ export default function ChecklistPage() {
         };
       });
 
-    const itensFaturas: ItemChecklist[] = faturas.faturas
-      .filter((f) => f.valor > 0)
-      .map((f) => {
-        const vinculadas = parcelas.parcelas.filter(
-          (p) => p.tipo === "cartao" && p.cartao === f.nome
-        );
-        return {
+    const diaPorCartao: Record<string, number> = {};
+    for (const c of cartoesConfig.configs) {
+      if (c.diaVencimento) diaPorCartao[c.nome] = c.diaVencimento;
+    }
+
+    const itensFaturas: ItemChecklist[] = [
+      ...faturas.faturas
+        .filter((f) => f.valor > 0)
+        .map((f) => ({
           id: f.id,
           origem: "fatura" as const,
           nome: f.nome,
-          detalhe:
-            vinculadas.length > 0
-              ? `dá baixa em ${vinculadas.length} parcela${
-                  vinculadas.length > 1 ? "s" : ""
-                } desse cartão`
-              : undefined,
           valor: f.valor,
-          diaVencimento: cartoesConfig.configs.find((c) => c.nome === f.nome)
-            ?.diaVencimento,
-        };
-      });
+          diaVencimento: diaPorCartao[f.nome],
+        })),
+      // cartão sem fatura lançada ainda: entra a prevista (parcelas e
+      // assinaturas já conhecidas dele). Mesmo id de pagamento da real.
+      ...faturasPrevistasParaEntries(
+        faturas.faturas,
+        parcelas.parcelas,
+        assinaturas.assinaturas,
+        mes,
+        () => false,
+        diaPorCartao
+      ).map((e) => ({
+        id: `${mes}__${e.cardId}`,
+        origem: "fatura" as const,
+        nome: e.cardId ?? "Cartão",
+        detalhe: "prevista · lance o valor real em Fatura",
+        valor: e.amount,
+        diaVencimento: e.cardId ? diaPorCartao[e.cardId] : undefined,
+        estimado: true,
+      })),
+    ];
 
     // Dentro de cada grupo, o que vence antes vem antes — no começo do mês a
     // pergunta é "qual pago primeiro", e ordem de cadastro não responde isso.
@@ -137,28 +154,19 @@ export default function ChecklistPage() {
   ]);
 
   const hoje = hojeISO();
-  const diaDeHoje = Number(hoje.split("-")[2]);
   const ehMesCorrente = mes === hoje.slice(0, 7);
 
+  // Pagar a fatura não mexe mais nas parcelas do cartão: o app já conta
+  // uma parcela por mês sozinho (ver parcelasRestantesEm). Dar baixa aqui
+  // também avançava a parcela duas vezes quando a fatura era marcada fora
+  // do mês de referência, e fazia a fatura prevista encolher sozinha
+  // depois de marcada como paga.
   function alternarPago(item: ItemChecklist, marcado: boolean) {
     if (monthClose.fechado) return;
     pagamentos.marcar(item.origem, item.id, marcado, {
       nome: item.nome,
       valor: item.valor,
     });
-
-    if (item.origem === "fatura") {
-      const vinculadas = parcelas.parcelas.filter(
-        (p) => p.tipo === "cartao" && p.cartao === item.nome
-      );
-      for (const p of vinculadas) {
-        if (marcado && p.parcelasRestantes > 0) {
-          parcelas.darBaixa(p.id);
-        } else if (!marcado && p.parcelasRestantes < p.totalParcelas) {
-          parcelas.reverterBaixa(p.id);
-        }
-      }
-    }
   }
 
   const todosItens = grupos.flatMap((g) => g.itens);
@@ -268,11 +276,16 @@ export default function ChecklistPage() {
                       const pago = pagamentos.estaPago(item.origem, item.id);
                       // Só marca atraso no mês corrente: navegando pra um mês
                       // futuro nada está atrasado, e num passado tudo estaria.
+                      // Vencimento efetivo: caindo em fim de semana ou
+                      // feriado, só vence no próximo dia útil — comparar o
+                      // dia cadastrado direto acusava atraso que não existia.
+                      const venceEm =
+                        item.diaVencimento !== undefined
+                          ? vencimentoEfetivo(item.diaVencimento, mes).efetivo
+                          : null;
                       const atrasada =
-                        !pago &&
-                        ehMesCorrente &&
-                        item.diaVencimento !== undefined &&
-                        item.diaVencimento < diaDeHoje;
+                        !pago && ehMesCorrente && venceEm !== null && venceEm < hoje;
+                      const diaQueVence = venceEm ? Number(venceEm.split("-")[2]) : null;
                       return (
                         <li key={`${item.origem}-${item.id}`}>
                           <label
@@ -305,14 +318,14 @@ export default function ChecklistPage() {
                                   {item.nome}
                                 </p>
                                 <p className="truncate text-xs text-text-faint">
-                                  {item.diaVencimento !== undefined && (
+                                  {diaQueVence !== null && (
                                     <span className={atrasada ? "font-medium text-negative" : ""}>
                                       {atrasada
-                                        ? `venceu dia ${item.diaVencimento}`
-                                        : `vence dia ${item.diaVencimento}`}
+                                        ? `venceu dia ${diaQueVence}`
+                                        : `vence dia ${diaQueVence}`}
                                     </span>
                                   )}
-                                  {item.diaVencimento !== undefined && item.detalhe && " · "}
+                                  {diaQueVence !== null && item.detalhe && " · "}
                                   {item.detalhe}
                                 </p>
                               </div>

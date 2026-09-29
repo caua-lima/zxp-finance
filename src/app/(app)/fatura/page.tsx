@@ -5,6 +5,9 @@ import { mesPadrao, formatarMoeda, FaturaCartao } from "@/lib/types";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { useCartoesConfig, CartaoConfig } from "@/lib/useCartoesConfig";
 import { useMonthClose } from "@/lib/useMonthClose";
+import { useParcelas } from "@/lib/useParcelas";
+import { useAssinaturas } from "@/lib/useAssinaturas";
+import { usePagamentos } from "@/lib/usePagamentos";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -18,52 +21,98 @@ import { IconExcluir } from "@/components/icons";
 import { hojeISO } from "@/lib/finance/calculations";
 import { diasAteVencimento } from "@/lib/finance/vencimentoFatura";
 import { vencimentoEfetivo } from "@/lib/finance/diasUteis";
+import {
+  composicaoFaturaPrevista,
+  devePreverFatura,
+  FaturaPrevista,
+} from "@/lib/finance/faturaPrevista";
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
   const { faturas, loading, erro, total, salvar, excluir } = useFaturasCartao(mes);
   const cartoesConfig = useCartoesConfig();
   const monthClose = useMonthClose(mes);
+  const parcelas = useParcelas();
+  const assinaturas = useAssinaturas();
+  const pagamentos = usePagamentos(mes);
+  const hoje = hojeISO();
+
+  const cartoes = faturas.map((f) => {
+    const config = cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome };
+    const prevista =
+      f.valor > 0 || !devePreverFatura(mes, hoje, config.diaVencimento)
+        ? null
+        : composicaoFaturaPrevista(f.nome, mes, parcelas.parcelas, assinaturas.assinaturas);
+    return {
+      fatura: f,
+      config,
+      prevista: prevista && prevista.total > 0 ? prevista : null,
+      pago: pagamentos.estaPago("fatura", f.id),
+    };
+  });
+  // cartão sem nada no mês (sem fatura, sem previsão e sem dia de
+  // vencimento) só ocupa espaço — fica recolhido no fim
+  const emUso = cartoes.filter((c) => c.fatura.valor > 0 || c.prevista || c.config.diaVencimento);
+  const semUso = cartoes.filter((c) => !emUso.includes(c));
+  const totalPrevisto = cartoes.reduce((acc, c) => acc + (c.prevista?.total ?? 0), 0);
+
+  function renderizar(c: (typeof cartoes)[number]) {
+    return (
+      <ItemFatura
+        key={`${mes}-${c.fatura.nome}`}
+        fatura={c.fatura}
+        config={c.config}
+        prevista={c.prevista}
+        pago={c.pago}
+        mes={mes}
+        onSalvar={salvar}
+        onExcluir={excluir}
+        onSalvarConfig={cartoesConfig.salvar}
+        bloqueado={monthClose.fechado}
+      />
+    );
+  }
 
   return (
     <div>
-      <PageHeader
-        titulo="Fatura do cartão"
-        descricao="Lance o valor total de cada cartão neste mês"
-      />
+      <PageHeader titulo="Fatura do cartão" descricao="Valor e vencimento de cada cartão no mês" />
       <MonthSelector mes={mes} onChange={setMes} />
-      <ErroBanner mensagem={erro || cartoesConfig.erro || monthClose.erro} />
+      <ErroBanner mensagem={erro || cartoesConfig.erro || monthClose.erro || pagamentos.erro} />
       {monthClose.fechado && (
         <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
-          🔒 Mês fechado — lançar fatura fica bloqueado. Reabra na aba DRE
-          pra corrigir algo.
+          🔒 Mês fechado — lançar fatura fica bloqueado. Reabra na aba DRE pra corrigir algo.
         </div>
       )}
 
-      <div className="rounded-2xl border border-line bg-surface p-4 mb-6 flex justify-between items-center">
-        <span className="text-sm text-text-muted">Total em faturas do mês</span>
-        <span className="text-lg font-semibold text-gold">
-          {formatarMoeda(total)}
-        </span>
+      <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-text-muted">Faturas lançadas</span>
+          <span className="text-lg font-semibold text-gold">{formatarMoeda(total)}</span>
+        </div>
+        {totalPrevisto > 0 && (
+          <div className="mt-2 flex items-center justify-between border-t border-line-soft pt-2">
+            <span className="text-xs text-text-faint">+ previstas (ainda não lançadas)</span>
+            <span className="text-sm font-medium text-text-muted">
+              {formatarMoeda(totalPrevisto)}
+            </span>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <SkeletonLista linhas={3} />
       ) : (
-        <ul className="space-y-3">
-          {faturas.map((f) => (
-            <ItemFatura
-              key={`${mes}-${f.nome}`}
-              fatura={f}
-              config={cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome }}
-              mes={mes}
-              onSalvar={salvar}
-              onExcluir={excluir}
-              onSalvarConfig={cartoesConfig.salvar}
-              bloqueado={monthClose.fechado}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-3">{emUso.map(renderizar)}</ul>
+          {semUso.length > 0 && (
+            <details className="mt-4">
+              <summary className="cursor-pointer px-1 text-xs text-text-faint">
+                Outros cartões ({semUso.length})
+              </summary>
+              <ul className="mt-2 space-y-3">{semUso.map(renderizar)}</ul>
+            </details>
+          )}
+        </>
       )}
     </div>
   );
@@ -72,6 +121,8 @@ export default function FaturaPage() {
 function ItemFatura({
   fatura,
   config,
+  prevista,
+  pago,
   mes,
   onSalvar,
   onExcluir,
@@ -80,6 +131,8 @@ function ItemFatura({
 }: {
   fatura: FaturaCartao;
   config: CartaoConfig;
+  prevista: FaturaPrevista | null;
+  pago: boolean;
   mes: string;
   onSalvar: (cartao: string, valor: number) => Promise<boolean>;
   onExcluir: (cartao: string) => Promise<boolean>;
@@ -102,15 +155,13 @@ function ItemFatura({
   );
   const toast = useToast();
 
-  const percentualUsado = config.limite ? (fatura.valor / config.limite) * 100 : null;
+  const valorDoMes = fatura.valor > 0 ? fatura.valor : prevista?.total ?? 0;
+  const percentualUsado = config.limite ? (valorDoMes / config.limite) * 100 : null;
   const diasRestantes = config.diaVencimento
     ? diasAteVencimento(config.diaVencimento, mes, hojeISO())
     : null;
-  // quando o dia cadastrado cai em fim de semana ou feriado, a data real
-  // é outra — mostrar isso evita o susto de achar que a fatura atrasou
-  const vencimento = config.diaVencimento
-    ? vencimentoEfetivo(config.diaVencimento, mes)
-    : null;
+  // caindo em fim de semana ou feriado, a data real é outra
+  const vencimento = config.diaVencimento ? vencimentoEfetivo(config.diaVencimento, mes) : null;
 
   function salvarConfig() {
     toast.sucessoSe(
@@ -124,15 +175,41 @@ function ItemFatura({
     setEditandoConfig(false);
   }
 
+  // Situação do vencimento: fatura paga no checklist nunca mais aparece
+  // como "venceu há X dias" — era isso que acusava o Nubank de atrasado.
+  let situacao: { texto: string; cor: string } | null = null;
+  if (pago) situacao = { texto: "✓ paga", cor: "text-positive" };
+  else if (diasRestantes !== null && valorDoMes > 0)
+    situacao =
+      diasRestantes < 0
+        ? { texto: `venceu há ${Math.abs(diasRestantes)} dia(s)`, cor: "text-negative" }
+        : diasRestantes === 0
+        ? { texto: "vence hoje", cor: "text-gold" }
+        : diasRestantes === 1
+        ? { texto: "vence amanhã", cor: "text-gold" }
+        : { texto: `em ${diasRestantes} dias`, cor: diasRestantes <= 5 ? "text-gold" : "text-text-faint" };
+
   return (
-    <li className="rounded-xl border border-line bg-surface px-4 py-3">
-      <p className="mb-2 truncate text-sm font-medium">💳 {fatura.nome}</p>
-      <div className="flex items-center gap-2">
-        <MoneyInput
-          value={valor}
-          onChange={setValor}
-          className="campo flex-1 text-right font-semibold"
-        />
+    <li
+      className={`rounded-2xl border bg-surface px-4 py-3 ${
+        pago ? "border-positive/25" : "border-line"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-sm font-medium">💳 {fatura.nome}</p>
+        {situacao && <span className={`shrink-0 text-xs font-medium ${situacao.cor}`}>{situacao.texto}</span>}
+      </div>
+
+      {vencimento && (
+        <p className="mt-0.5 text-[11px] text-text-faint">
+          Vence dia {Number(vencimento.efetivo.split("-")[2])}
+          {vencimento.adiado && ` (${vencimento.motivo})`}
+          {config.diaFechamento ? ` · fecha dia ${config.diaFechamento}` : ""}
+        </p>
+      )}
+
+      <div className="mt-2.5 flex items-center gap-2">
+        <MoneyInput value={valor} onChange={setValor} className="campo flex-1 text-right font-semibold" />
         <Botao
           onClick={() => {
             toast.sucessoSe(onSalvar(fatura.nome, valor), `Fatura de "${fatura.nome}" atualizada.`);
@@ -154,102 +231,73 @@ function ItemFatura({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-text-faint">
+      {prevista && (
+        <div className="mt-2 rounded-xl bg-surface-2/60 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-text-muted">
+              Prevista: <strong className="text-text">{formatarMoeda(prevista.total)}</strong>
+            </span>
+            <button
+              onClick={() => setValor(prevista.total)}
+              disabled={bloqueado}
+              className="text-xs font-medium text-brand disabled:opacity-40"
+            >
+              usar esse valor
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-text-faint">
+            {prevista.itens.map((i) => `${i.nome} ${formatarMoeda(i.valor)}`).join(" · ")}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-faint">
         {config.limite ? (
           <span className={percentualUsado! >= 80 ? "text-negative" : ""}>
             {percentualUsado!.toFixed(0)}% do limite ({formatarMoeda(config.limite)})
           </span>
-        ) : (
-          <span>Limite não informado</span>
-        )}
-        {config.diaFechamento && <span>fecha dia {config.diaFechamento}</span>}
+        ) : null}
         <button
           onClick={() => setEditandoConfig((v) => !v)}
           className="text-brand hover:text-brand-dark"
         >
-          {editandoConfig ? "fechar" : "configurar cartão"}
+          {editandoConfig
+            ? "fechar"
+            : config.diaVencimento
+            ? "configurar cartão"
+            : "+ dia de vencimento (pra avisar no celular)"}
         </button>
       </div>
 
-      {/* vencimento em destaque — é o que dispara a notificação no celular */}
-      {config.diaVencimento ? (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface-2/50 px-3 py-2">
-          <span className="text-xs text-text-muted">
-            🔔 Vence{" "}
-            <strong className="text-text">
-              dia {Number(vencimento!.efetivo.split("-")[2])}
-            </strong>
-            {diasRestantes !== null && fatura.valor > 0 && (
-              <span
-                className={
-                  diasRestantes < 0
-                    ? "text-negative"
-                    : diasRestantes <= 5
-                    ? "text-gold"
-                    : "text-text-faint"
-                }
-              >
-                {" · "}
-                {diasRestantes < 0
-                  ? `venceu há ${Math.abs(diasRestantes)} dia(s)`
-                  : diasRestantes === 0
-                  ? "é hoje"
-                  : diasRestantes === 1
-                  ? "amanhã"
-                  : `em ${diasRestantes} dias`}
-              </span>
-            )}
-          </span>
-          {vencimento!.adiado ? (
-            <span className="text-[11px] text-text-faint">
-              {vencimento!.motivo} — o banco só processa no próximo dia útil
-            </span>
-          ) : (
-            <span className="text-[11px] text-text-faint">
-              Aviso no celular 5 dias antes, 1 dia antes e no dia
-            </span>
-          )}
-        </div>
-      ) : (
-        <button
-          onClick={() => setEditandoConfig(true)}
-          className="mt-2 w-full rounded-lg border border-dashed border-line px-3 py-2 text-left text-xs text-text-faint hover:border-brand/40 hover:text-text-muted transition-colors"
-        >
-          + Adicionar dia de vencimento{" "}
-          <span className="text-text-faint">
-            — sem isso não dá pra avisar você no celular antes de vencer
-          </span>
-        </button>
-      )}
-
       {editandoConfig && (
-        <div className="grid grid-cols-3 gap-2 mt-2">
-          <MoneyInput
-            value={limite}
-            onChange={setLimite}
-            placeholder="Limite"
-            className="campo"
-          />
-          <input
-            placeholder="Dia fecha"
-            inputMode="numeric"
-            value={diaFechamento}
-            onChange={(e) => setDiaFechamento(e.target.value)}
-            className="campo"
-          />
-          <input
-            placeholder="Dia vence"
-            inputMode="numeric"
-            value={diaVencimento}
-            onChange={(e) => setDiaVencimento(e.target.value)}
-            className="campo"
-          />
-          <button
-            onClick={salvarConfig}
-            className="col-span-3 min-h-[40px] rounded-xl bg-brand px-3 text-xs font-semibold text-on-brand"
-          >
-            Salvar configuração do cartão
-          </button>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <div>
+            <label className="rotulo">Limite</label>
+            <MoneyInput value={limite} onChange={setLimite} className="campo" />
+          </div>
+          <div>
+            <label className="rotulo">Dia fecha</label>
+            <input
+              inputMode="numeric"
+              value={diaFechamento}
+              onChange={(e) => setDiaFechamento(e.target.value)}
+              className="campo"
+            />
+          </div>
+          <div>
+            <label className="rotulo">Dia vence</label>
+            <input
+              inputMode="numeric"
+              value={diaVencimento}
+              onChange={(e) => setDiaVencimento(e.target.value)}
+              className="campo"
+            />
+          </div>
+          <div className="col-span-3">
+            <Botao onClick={salvarConfig} larguraTotal tamanho="pequeno">
+              Salvar configuração do cartão
+            </Botao>
+          </div>
         </div>
       )}
 

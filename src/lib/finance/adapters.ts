@@ -5,13 +5,21 @@ import {
   Parcela,
   FaturaCartao,
   Gasto,
+  Comissao,
   FinancialEntry,
   parcelasRestantesEm,
   valorMinhaParte,
   diaVencimentoNoMes,
 } from "@/lib/types";
-import { ultimoDiaMes, diaISOde } from "./calculations";
+import { ultimoDiaMes, diaISOde, hojeISO as hojeNoBrasil } from "./calculations";
 import { vencimentoEfetivo } from "./diasUteis";
+import {
+  composicaoFaturaPrevista,
+  devePreverFatura,
+  CARTAO_NAO_INFORMADO,
+} from "./faturaPrevista";
+import { comissaoPrevistaParaEntries } from "./comissaoPrevista";
+import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 
 /**
  * Traduz as coleções antigas (ganhos, contasFixas, assinaturas, parcelas,
@@ -188,6 +196,59 @@ export function faturasParaEntries(
     });
 }
 
+/**
+ * Fatura prevista pra cada cartão sem fatura lançada no mês (ver
+ * faturaPrevista.ts). Mesmo id de pagamento da fatura real
+ * (`<mes>__<cartão>`), então marcar como paga no checklist vale pras duas.
+ */
+export function faturasPrevistasParaEntries(
+  faturas: FaturaCartao[],
+  parcelas: Parcela[],
+  assinaturas: Assinatura[],
+  mes: string,
+  estaPago: EstaPago,
+  diaVencimentoPorCartao: Record<string, number> = {},
+  hojeISO: string = hojeNoBrasil()
+): FinancialEntry[] {
+  const lancadas = new Set(
+    faturas.filter((f) => f.mes === mes && f.valor > 0).map((f) => f.nome)
+  );
+
+  const cartoes = new Set<string>(CARTOES_PREDEFINIDOS);
+  for (const p of parcelas) if (p.naFatura && p.cartao) cartoes.add(p.cartao);
+  for (const a of assinaturas) if (a.naFatura && a.cartao) cartoes.add(a.cartao);
+  // parcela "na fatura" sem cartão informado: só dá pra prever enquanto
+  // nenhuma fatura real do mês foi lançada — ela pode estar em qualquer uma
+  if (lancadas.size === 0) cartoes.add(CARTAO_NAO_INFORMADO);
+
+  const entries: FinancialEntry[] = [];
+  for (const cartao of cartoes) {
+    if (lancadas.has(cartao)) continue;
+    const dia = diaVencimentoPorCartao[cartao];
+    if (!devePreverFatura(mes, hojeISO, dia)) continue;
+    const prevista = composicaoFaturaPrevista(cartao, mes, parcelas, assinaturas);
+    if (prevista.total <= 0) continue;
+
+    const idPagamento = `${mes}__${cartao}`;
+    entries.push({
+      id: `fatura-prevista__${idPagamento}`,
+      type: "expense",
+      status: estaPago("fatura", idPagamento) ? "paid" : "pending",
+      amount: prevista.total,
+      dueDate: dia ? vencimentoEfetivo(dia, mes).efetivo : ultimoDiaMes(mes),
+      competenceMonth: mes,
+      description: `Fatura ${cartao} (prevista)`,
+      categoryId: "cartao",
+      cardId: cartao,
+      source: "card_bill",
+      createdAt: 0,
+      updatedAt: 0,
+      estimado: true,
+    });
+  }
+  return entries;
+}
+
 export function gastosParaEntries(gastos: Gasto[], mes: string): FinancialEntry[] {
   return gastos
     .filter((g) => g.mes === mes)
@@ -219,6 +280,9 @@ export interface DadosFinanceiros {
   estaPago: EstaPago;
   mes: string;
   diaVencimentoPorCartao?: Record<string, number>;
+  /** Comissões diárias lançadas — viram entrada prevista do mês seguinte. */
+  comissoes?: Comissao[];
+  hojeISO?: string;
 }
 
 export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEntry[] {
@@ -233,6 +297,18 @@ export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEnt
       dados.estaPago,
       dados.diaVencimentoPorCartao
     ),
+    ...faturasPrevistasParaEntries(
+      dados.faturas,
+      dados.parcelas,
+      dados.assinaturas,
+      dados.mes,
+      dados.estaPago,
+      dados.diaVencimentoPorCartao,
+      dados.hojeISO
+    ),
+    ...(dados.comissoes
+      ? comissaoPrevistaParaEntries(dados.comissoes, dados.ganhos, dados.mes)
+      : []),
     ...gastosParaEntries(dados.gastos, dados.mes),
   ];
 }
