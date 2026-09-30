@@ -1,34 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verificarChamador } from "@/lib/verificarChamador";
+import { verificarChamadorAtivo } from "@/lib/verificarChamador";
 import { listarDesejosEmAberto } from "@/lib/tasksBridge";
+import { recursoLiberado } from "@/lib/autorizacao";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mensagemDeErro(e: unknown, padrao: string): string {
-  if (e instanceof Error) return e.message;
-  return padrao;
-}
-
 /**
- * Proxy autenticado pro ZXP Tasks: o navegador chama isto (com o próprio
- * login do Finance), e é este servidor — nunca o cliente — que carrega o
- * segredo compartilhado da ponte. Usado ao criar uma parcela, pra oferecer
- * "vincular a um desejo".
+ * Proxy pro ZXP Tasks. A ponte usa UM segredo e UMA conta do Tasks — não
+ * existe vínculo por cliente (auditoria S06). Então fica desligada pra
+ * todo mundo, e só UIDs listados em TASKS_BRIDGE_UIDS (o dono daquele
+ * quadro do Tasks) conseguem usar. Liberar pra outros clientes exige
+ * vínculo individual antes.
  */
 export async function GET(req: NextRequest) {
-  try {
-    const chamador = await verificarChamador(req);
-    if (!chamador) {
-      return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
-    }
-
-    const itens = await listarDesejosEmAberto();
-    return NextResponse.json({ itens });
-  } catch (e) {
+  const acesso = await verificarChamadorAtivo(req);
+  if (!acesso.ok) return acesso.resposta;
+  if (!recursoLiberado(acesso.identidade.uid, process.env.TASKS_BRIDGE_UIDS)) {
     return NextResponse.json(
-      { erro: mensagemDeErro(e, "Erro ao buscar desejos no Tasks.") },
-      { status: 502 }
+      { erro: "A integração com o ZXP Tasks não está habilitada pra sua conta." },
+      { status: 403 }
     );
+  }
+  try {
+    return NextResponse.json({ itens: await listarDesejosEmAberto() });
+  } catch {
+    return NextResponse.json({ erro: "Não consegui falar com o ZXP Tasks agora." }, { status: 502 });
   }
 }

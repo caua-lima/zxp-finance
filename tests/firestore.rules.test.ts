@@ -1,0 +1,208 @@
+/**
+ * Testes das regras do Firestore no emulador (auditoria S03/S04, F11,
+ * matriz de aceite 1 e 8). Roda com:
+ *
+ *   npm run test:regras
+ *
+ * que sobe o emulador do Firestore (projeto de demonstração, sem tocar em
+ * produção) e executa este arquivo. Usuários sintéticos: A e B.
+ */
+import { test, describe, before, after, beforeEach } from "node:test";
+import {
+  initializeTestEnvironment,
+  assertFails,
+  assertSucceeds,
+  RulesTestEnvironment,
+} from "@firebase/rules-unit-testing";
+import { readFileSync } from "node:fs";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  addDoc,
+} from "firebase/firestore";
+
+let env: RulesTestEnvironment;
+
+const gastoValido = {
+  descricao: "almoço",
+  valor: 30,
+  categoria: "Alimentação",
+  mes: "2026-10",
+  data: "2026-10-02",
+  criadoEm: 1,
+};
+
+before(async () => {
+  env = await initializeTestEnvironment({
+    projectId: "demo-zxp",
+    firestore: { rules: readFileSync("firestore.rules", "utf8") },
+  });
+});
+
+after(async () => {
+  await env?.cleanup();
+});
+
+beforeEach(async () => {
+  await env.clearFirestore();
+});
+
+const dbDe = (uid: string) => env.authenticatedContext(uid).firestore();
+const anonimo = () => env.unauthenticatedContext().firestore();
+
+describe("isolamento entre clientes (matriz 1)", () => {
+  test("A lê e escreve os próprios gastos", async () => {
+    const db = dbDe("userA");
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/gastos/g1"), gastoValido));
+    await assertSucceeds(getDoc(doc(db, "usuarios/userA/gastos/g1")));
+  });
+
+  test("A não lê nem escreve nada de B", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "usuarios/userB/gastos/g1"), gastoValido);
+    });
+    const db = dbDe("userA");
+    await assertFails(getDoc(doc(db, "usuarios/userB/gastos/g1")));
+    await assertFails(setDoc(doc(db, "usuarios/userB/gastos/g2"), gastoValido));
+    await assertFails(deleteDoc(doc(db, "usuarios/userB/gastos/g1")));
+    await assertFails(getDoc(doc(db, "usuarios/userB/saldo/atual")));
+  });
+
+  test("anônimo não lê nada", async () => {
+    await assertFails(getDoc(doc(anonimo(), "usuarios/userA/gastos/g1")));
+  });
+
+  test("coleções do servidor são inacessíveis pro navegador", async () => {
+    const db = dbDe("userA");
+    await assertFails(getDoc(doc(db, "auditoriaPlataforma/x")));
+    await assertFails(setDoc(doc(db, "auditoriaPlataforma/x"), { a: 1 }));
+    await assertFails(setDoc(doc(db, "limitesUso/userA__consultor__2026-10-01"), { usos: 0 }));
+    await assertFails(setDoc(doc(db, "pushAparelhos/x"), { uid: "userA" }));
+    // inscrição de push é cadastrada só pela API do servidor
+    await assertFails(
+      setDoc(doc(db, "usuarios/userA/pushInscricoes/x"), { endpoint: "https://evil.local" })
+    );
+    // notificação é gerada pelo servidor
+    await assertFails(setDoc(doc(db, "usuarios/userA/notificacoes/n1"), { titulo: "fake" }));
+  });
+
+  test("subcoleção desconhecida é negada", async () => {
+    await assertFails(setDoc(doc(dbDe("userA"), "usuarios/userA/qualquerCoisa/x"), { a: 1 }));
+  });
+});
+
+describe("validação de campos (S03)", () => {
+  test("recusa valor não numérico, NaN, absurdo e campo extra", async () => {
+    const db = dbDe("userA");
+    const ref = doc(db, "usuarios/userA/gastos/g1");
+    await assertFails(setDoc(ref, { ...gastoValido, valor: "30" }));
+    await assertFails(setDoc(ref, { ...gastoValido, valor: Number.NaN }));
+    await assertFails(setDoc(ref, { ...gastoValido, valor: 5_000_000 }));
+    await assertFails(setDoc(ref, { ...gastoValido, admin: true }));
+    await assertFails(setDoc(ref, { ...gastoValido, mes: "outubro" }));
+  });
+
+  test("saldo: só o documento 'atual', com número de verdade", async () => {
+    const db = dbDe("userA");
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/saldo/atual"), { valor: 100, atualizadoEm: 1 }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/saldo/outro"), { valor: 100, atualizadoEm: 1 }));
+    await assertFails(
+      setDoc(doc(db, "usuarios/userA/saldo/atual"), { valor: "muito", atualizadoEm: 1 })
+    );
+  });
+
+  test("documento antigo com campo legado continua editável", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "usuarios/userA/parcelas/p1"), {
+        tipo: "cartao",
+        nome: "Impressora",
+        valorParcela: 63.4,
+        totalParcelas: 10,
+        parcelasRestantes: 6,
+        cartaoId: "legado",
+        criadoEm: 1,
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(dbDe("userA"), "usuarios/userA/parcelas/p1"), { parcelasRestantes: 5 })
+    );
+  });
+});
+
+describe("trilha de auditoria só-acréscimo (S04)", () => {
+  test("cria com o próprio usuário como ator, mas não edita nem apaga", async () => {
+    const db = dbDe("userA");
+    const ref = await assertSucceeds(
+      addDoc(collection(db, "usuarios/userA/audit_logs"), {
+        action: "updated",
+        entityType: "gasto",
+        entityId: "g1",
+        summary: "x",
+        actorUid: "userA",
+        createdAt: 1,
+      })
+    );
+    await assertFails(updateDoc(ref, { summary: "reescrito" }));
+    await assertFails(deleteDoc(ref));
+  });
+
+  test("não dá pra registrar auditoria em nome de outro", async () => {
+    await assertFails(
+      addDoc(collection(dbDe("userA"), "usuarios/userA/audit_logs"), {
+        action: "updated",
+        actorUid: "userB",
+        createdAt: 1,
+      })
+    );
+  });
+});
+
+describe("mês fechado (F11, matriz 8)", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "usuarios/userA/monthCloses/2026-09"), { month: "2026-09", status: "closed" });
+      await setDoc(doc(db, "usuarios/userA/gastos/antigo"), { ...gastoValido, mes: "2026-09" });
+    });
+  });
+
+  test("não cria, não edita e não apaga gasto de mês fechado", async () => {
+    const db = dbDe("userA");
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/novo"), { ...gastoValido, mes: "2026-09" }));
+    await assertFails(updateDoc(doc(db, "usuarios/userA/gastos/antigo"), { valor: 1 }));
+    await assertFails(deleteDoc(doc(db, "usuarios/userA/gastos/antigo")));
+    // mover pra um mês aberto também não vale (sairia do mês fechado)
+    await assertFails(updateDoc(doc(db, "usuarios/userA/gastos/antigo"), { mes: "2026-10" }));
+  });
+
+  test("mês aberto segue normal", async () => {
+    await assertSucceeds(setDoc(doc(dbDe("userA"), "usuarios/userA/gastos/novo"), gastoValido));
+  });
+
+  test("reabrir exige motivo", async () => {
+    const ref = doc(dbDe("userA"), "usuarios/userA/monthCloses/2026-09");
+    await assertFails(updateDoc(ref, { status: "open" }));
+    await assertFails(updateDoc(ref, { status: "open", motivoReabertura: "" }));
+    await assertSucceeds(updateDoc(ref, { status: "open", motivoReabertura: "lancei a fatura errada" }));
+  });
+});
+
+describe("notificações (N01/N07)", () => {
+  test("você só pode marcar como lida — não reescreve o conteúdo", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "usuarios/userA/notificacoes/n1"), {
+        titulo: "Fatura vence amanhã",
+        criadaEm: 1,
+      });
+    });
+    const ref = doc(dbDe("userA"), "usuarios/userA/notificacoes/n1");
+    await assertSucceeds(updateDoc(ref, { lidaEm: 123 }));
+    await assertFails(updateDoc(ref, { titulo: "outra coisa" }));
+    await assertFails(deleteDoc(ref));
+    await assertFails(getDoc(doc(dbDe("userB"), "usuarios/userA/notificacoes/n1")));
+  });
+});

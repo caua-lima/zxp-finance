@@ -37,6 +37,8 @@ async function chamarMensagens(
   corpo: Record<string, unknown>
 ): Promise<RespostaAnthropic> {
   const resposta = await fetch(URL_MENSAGENS, {
+    // sem prazo, uma chamada travada segura a função até o limite da Vercel
+    signal: AbortSignal.timeout(25000),
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -46,8 +48,8 @@ async function chamarMensagens(
     body: JSON.stringify(corpo),
   });
   if (!resposta.ok) {
-    const texto = await resposta.text().catch(() => "");
-    throw new Error(`Anthropic API respondeu ${resposta.status}: ${texto.slice(0, 300)}`);
+    // corpo do erro da API fica fora da mensagem: pode ecoar dados da requisição
+    throw new Error(`Anthropic API respondeu ${resposta.status}`);
   }
   return resposta.json();
 }
@@ -83,7 +85,7 @@ export async function perguntarComFerramenta<TInput, TResultadoFerramenta>(opts:
 
   const corpoBase = {
     model: MODELO_HAIKU,
-    max_tokens: 700,
+    max_tokens: 500, // teto de custo por resposta
     system: opts.systemPrompt,
     tools: [opts.ferramenta],
   };

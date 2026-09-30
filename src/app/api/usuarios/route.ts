@@ -1,53 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listarUsuarios, criarUsuario } from "@/lib/usuariosFirebase";
-import { verificarChamador } from "@/lib/verificarChamador";
+import { verificarAdmin, auditarOperacaoAdmin } from "@/lib/verificarChamador";
+import { lerJson, texto } from "@/lib/validacao";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mensagemDeErro(e: unknown, padrao: string): string {
-  if (e instanceof Error) return e.message;
-  return padrao;
-}
-
+/**
+ * Administração de logins. Antes bastava estar logado pra listar, criar,
+ * editar e apagar QUALQUER login (auditoria S01) — agora só admin global,
+ * com conta ativa e sessão não revogada.
+ */
 export async function GET(req: NextRequest) {
+  const acesso = await verificarAdmin(req);
+  if (!acesso.ok) return acesso.resposta;
   try {
-    const chamador = await verificarChamador(req);
-    if (!chamador) {
-      return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
-    }
-
-    const usuarios = await listarUsuarios();
-    return NextResponse.json({ usuarios });
-  } catch (e) {
-    return NextResponse.json(
-      { erro: mensagemDeErro(e, "Erro ao listar usuários.") },
-      { status: 500 }
-    );
+    return NextResponse.json({ usuarios: await listarUsuarios() });
+  } catch {
+    return NextResponse.json({ erro: "Erro ao listar usuários." }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const acesso = await verificarAdmin(req);
+  if (!acesso.ok) return acesso.resposta;
+
+  const corpo = await lerJson(req);
+  const email = texto(corpo?.email, 3, 254);
+  const senha = texto(corpo?.senha, 6, 128);
+  if (!email || !senha || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return NextResponse.json({ erro: "E-mail válido e senha de 6+ caracteres são obrigatórios." }, { status: 400 });
+  }
+
   try {
-    const chamador = await verificarChamador(req);
-    if (!chamador) {
-      return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
-    }
-
-    const { email, senha } = await req.json();
-    if (!email || !senha) {
-      return NextResponse.json(
-        { erro: "E-mail e senha são obrigatórios." },
-        { status: 400 }
-      );
-    }
-
     const uid = await criarUsuario(email, senha);
+    await auditarOperacaoAdmin(req, acesso.identidade, "criar_login", uid, { email });
     return NextResponse.json({ uid });
   } catch (e) {
-    return NextResponse.json(
-      { erro: mensagemDeErro(e, "Erro ao criar usuário.") },
-      { status: 500 }
-    );
+    const msg = e instanceof Error ? e.message : "";
+    // mensagens traduzidas da API (e-mail já existe etc.) são seguras de mostrar
+    const segura = /já existe|inválido|senha/i.test(msg) ? msg : "Erro ao criar usuário.";
+    return NextResponse.json({ erro: segura }, { status: 400 });
   }
 }

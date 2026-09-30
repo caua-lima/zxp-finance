@@ -1,4 +1,5 @@
 import { createSign, createVerify, createPublicKey } from "crypto";
+import { problemaTemporalDoToken } from "./autorizacao";
 
 const ESCOPO_IDENTITY = "https://www.googleapis.com/auth/identitytoolkit";
 const ESCOPO_FIRESTORE = "https://www.googleapis.com/auth/datastore";
@@ -112,6 +113,10 @@ async function certificadosGoogle(): Promise<Record<string, string>> {
 export interface TokenVerificado {
   uid: string;
   email?: string;
+  /** Claims do token, incluindo custom claims (ex: `admin`). */
+  claims: Record<string, unknown>;
+  /** Quando o token foi emitido (segundos) — base da checagem de revogação. */
+  iat: number;
 }
 
 /** Valida o ID token que o app do usuário mandou no header Authorization. */
@@ -129,7 +134,10 @@ export async function verificarIdToken(
     aud?: string;
     iss?: string;
     exp?: number;
+    iat?: number;
+    auth_time?: number;
     email?: string;
+    [claim: string]: unknown;
   };
   try {
     cabecalho = JSON.parse(Buffer.from(cabecalhoB64, "base64url").toString());
@@ -144,7 +152,7 @@ export async function verificarIdToken(
   if (corpo.aud !== projectId) return null;
   if (corpo.iss !== `https://securetoken.google.com/${projectId}`) return null;
   if (!corpo.sub) return null;
-  if (!corpo.exp || corpo.exp * 1000 < Date.now()) return null;
+  if (problemaTemporalDoToken(corpo, Math.floor(Date.now() / 1000))) return null;
 
   const certs = await certificadosGoogle();
   const certificado = certs[cabecalho.kid];
@@ -158,5 +166,5 @@ export async function verificarIdToken(
     );
 
   if (!valido) return null;
-  return { uid: corpo.sub, email: corpo.email };
+  return { uid: corpo.sub, email: corpo.email, claims: corpo, iat: corpo.iat as number };
 }

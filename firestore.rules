@@ -1,9 +1,267 @@
 rules_version = '2';
 
+// Regras por coleção (auditoria S03/S04/S08, F11). Antes: qualquer
+// escrita sob o próprio uid valia, com qualquer campo e qualquer valor.
+// Agora cada coleção tem campos permitidos, tipos e limites; trilha de
+// auditoria é só-acréscimo; mês fechado recusa mudança; e o que é do
+// servidor (inscrição de push, notificações, entregas, auditoria da
+// plataforma, cotas) o navegador não escreve.
+//
+// Em update valida só os campos ALTERADOS (diff): documento antigo com
+// campo legado continua editável.
+//
+// Testes: tests/firestore.rules.test.ts (emulador).
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /usuarios/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    function logado() {
+      return request.auth != null;
+    }
+    function dono(uid) {
+      return logado() && request.auth.uid == uid;
+    }
+    // número de verdade: rejeita string, NaN (NaN != NaN) e valor absurdo
+    function numero(v) {
+      return (v is int || v is float) && v == v && v > -1000000000 && v < 1000000000;
+    }
+    function numeroEntre(v, min, max) {
+      return numero(v) && v >= min && v <= max;
+    }
+    function texto(v, max) {
+      return v is string && v.size() <= max;
+    }
+    function mes(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}$');
+    }
+    function dia(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    function opcional(d, campo) {
+      return !(campo in d);
+    }
+    function campos(permitidos) {
+      return request.resource.data.keys().hasOnly(permitidos);
+    }
+    function alterados(permitidos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(permitidos);
+    }
+    function criaOuAltera(permitidos) {
+      return (resource == null && campos(permitidos)) || (resource != null && alterados(permitidos));
+    }
+    function caminhoMes(uid, m) {
+      return /databases/$(database)/documents/usuarios/$(uid)/monthCloses/$(m);
+    }
+    function mesFechado(uid, m) {
+      return m is string && exists(caminhoMes(uid, m)) && get(caminhoMes(uid, m)).data.status == 'closed';
+    }
+    // mês do documento antes e depois da escrita — nenhum dos dois pode estar fechado
+    function mesLivre(uid) {
+      return (resource == null || !('mes' in resource.data) || !mesFechado(uid, resource.data.mes))
+        && (request.resource == null || !('mes' in request.resource.data) || !mesFechado(uid, request.resource.data.mes));
+    }
+
+    match /usuarios/{uid} {
+      allow read: if dono(uid);
+      allow write: if false;
+
+      // ---------------- movimentos (respeitam mês fechado) ----------------
+      match /gastos/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid) && mesLivre(uid)
+          && criaOuAltera(['descricao', 'valor', 'categoria', 'mes', 'data', 'criadoEm',
+                           'registradoEm', 'guardado', 'estornado', 'estornadoEm',
+                           'estornoDeId', 'ajusteConciliacaoId'])
+          && texto(request.resource.data.descricao, 200)
+          && numeroEntre(request.resource.data.valor, -1000000, 1000000)
+          && texto(request.resource.data.categoria, 60)
+          && mes(request.resource.data.mes)
+          && (opcional(request.resource.data, 'data') || dia(request.resource.data.data))
+          && (opcional(request.resource.data, 'guardado') || request.resource.data.guardado is map);
+        allow delete: if dono(uid) && mesLivre(uid);
+      }
+
+      match /pagamentos/{id} {
+        allow read: if dono(uid);
+        allow create: if dono(uid) && mesLivre(uid)
+          && campos(['mes', 'origem', 'itemId', 'nome', 'valor', 'pagoEm', 'registradoEm', 'afetaSaldo'])
+          && mes(request.resource.data.mes)
+          && request.resource.data.origem in ['conta', 'assinatura', 'parcela', 'fatura', 'ganho']
+          && texto(request.resource.data.nome, 200)
+          && numeroEntre(request.resource.data.valor, 0, 1000000)
+          && numero(request.resource.data.pagoEm);
+        // pagamento não se edita: desmarca e marca de novo
+        allow update: if false;
+        allow delete: if dono(uid) && mesLivre(uid);
+      }
+
+      match /faturasCartao/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid) && mesLivre(uid)
+          && criaOuAltera(['nome', 'valor', 'mes', 'criadoEm'])
+          && texto(request.resource.data.nome, 60)
+          && numeroEntre(request.resource.data.valor, 0, 1000000)
+          && mes(request.resource.data.mes);
+        allow delete: if dono(uid) && mesLivre(uid);
+      }
+
+      match /comissoes/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid) && mesLivre(uid)
+          && criaOuAltera(['data', 'mes', 'reunioes', 'vendasPerformance', 'vendasAcelera',
+                           'valorTotal', 'criadoEm', 'atualizadoEm'])
+          && dia(request.resource.data.data)
+          && mes(request.resource.data.mes)
+          && numeroEntre(request.resource.data.valorTotal, 0, 1000000);
+        allow delete: if dono(uid) && mesLivre(uid);
+      }
+
+      match /ganhos/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid) && mesLivre(uid)
+          && criaOuAltera(['tipo', 'mes', 'ativo', 'arquivado', 'recebido', 'recebidoEm',
+                           'categoriaReceita', 'descricao', 'valor', 'semImposto',
+                           'origemComissao', 'criadoEm'])
+          && numeroEntre(request.resource.data.valor, 0, 10000000)
+          && texto(request.resource.data.descricao, 200);
+        allow delete: if dono(uid) && mesLivre(uid);
+      }
+
+      // ---------------- cadastros ----------------
+      match /contasFixas/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid)
+          && criaOuAltera(['nome', 'valor', 'categoria', 'ativa', 'diaVencimento', 'criadoEm',
+                           'inicioEm', 'desativadaEm', 'historicoValores'])
+          && texto(request.resource.data.nome, 200)
+          && numeroEntre(request.resource.data.valor, 0, 1000000);
+        allow delete: if dono(uid);
+      }
+
+      match /assinaturas/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid)
+          && criaOuAltera(['nome', 'valor', 'ativa', 'cartao', 'naFatura', 'diaRenovacao',
+                           'usoPercebido', 'criadoEm', 'inicioEm', 'desativadaEm',
+                           'historicoValores'])
+          && texto(request.resource.data.nome, 200)
+          && numeroEntre(request.resource.data.valor, 0, 1000000);
+        allow delete: if dono(uid);
+      }
+
+      match /parcelas/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid)
+          && criaOuAltera(['tipo', 'nome', 'valorParcela', 'totalParcelas', 'parcelasRestantes',
+                           'dividida', 'naFatura', 'cartao', 'mesReferencia', 'vinculoDesejo',
+                           'criadoEm'])
+          && texto(request.resource.data.nome, 200)
+          && numeroEntre(request.resource.data.valorParcela, 0, 1000000)
+          && numeroEntre(request.resource.data.totalParcelas, 1, 600)
+          && numeroEntre(request.resource.data.parcelasRestantes, 0, 600);
+        allow delete: if dono(uid);
+      }
+
+      match /caixinhas/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid)
+          && criaOuAltera(['nome', 'saldo', 'porGasto', 'meta', 'ativa', 'depositos',
+                           'criadoEm', 'atualizadoEm', 'percentualCdi'])
+          && numeroEntre(request.resource.data.saldo, -1000000, 100000000)
+          && numeroEntre(request.resource.data.porGasto, 0, 100000);
+        allow delete: if dono(uid);
+      }
+
+      match /saldo/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid) && id == 'atual'
+          && criaOuAltera(['valor', 'atualizadoEm', 'reservaMeta', 'percentualCdi'])
+          && (opcional(request.resource.data, 'valor')
+              || numeroEntre(request.resource.data.valor, -100000000, 100000000))
+          && (opcional(request.resource.data, 'reservaMeta')
+              || numeroEntre(request.resource.data.reservaMeta, 0, 100000000))
+          && (opcional(request.resource.data, 'percentualCdi')
+              || numeroEntre(request.resource.data.percentualCdi, 0, 1000));
+        allow delete: if false;
+      }
+
+      match /conciliacoes/{id} {
+        allow read: if dono(uid);
+        // histórico: só acréscimo
+        allow create: if dono(uid) && request.resource.data.responsavelUid == uid;
+        allow update, delete: if false;
+      }
+
+      match /cartoesConfig/{id} {
+        allow read, write: if dono(uid);
+      }
+      match /comissaoConfig/{id} {
+        allow read, write: if dono(uid);
+      }
+      match /perfil/{id} {
+        allow read, write: if dono(uid);
+      }
+      match /preferencias/{id} {
+        allow read: if dono(uid);
+        allow create, update: if dono(uid) && id in ['notificacoes', 'app'];
+        allow delete: if false;
+      }
+
+      // fechamento: reabrir exige motivo
+      match /monthCloses/{m} {
+        allow read: if dono(uid);
+        allow create: if dono(uid) && mes(m) && request.resource.data.status in ['open', 'closed'];
+        allow update: if dono(uid)
+          && request.resource.data.status in ['open', 'closed']
+          && (resource.data.status != 'closed'
+              || request.resource.data.status == 'closed'
+              || texto(request.resource.data.motivoReabertura, 500)
+                 && request.resource.data.motivoReabertura.size() >= 3);
+        allow delete: if false;
+      }
+
+      // trilha de auditoria: só acréscimo, com o próprio usuário como ator
+      match /audit_logs/{id} {
+        allow read: if dono(uid);
+        allow create: if dono(uid) && request.resource.data.actorUid == uid;
+        allow update, delete: if false;
+      }
+
+      // ---------------- do servidor: o navegador só lê ----------------
+      match /pushInscricoes/{id} {
+        allow read: if dono(uid);
+        allow write: if false;
+      }
+      match /notificacoes/{id} {
+        allow read: if dono(uid);
+        // único campo que você mexe: marcar como lida
+        allow update: if dono(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lidaEm'])
+          && numero(request.resource.data.lidaEm);
+        allow create, delete: if false;
+      }
+      match /entregas/{id} {
+        allow read: if dono(uid);
+        allow write: if false;
+      }
+
+      // qualquer outra subcoleção: negado
+      match /{outra}/{id} {
+        allow read, write: if false;
+      }
+    }
+
+    match /auditoriaPlataforma/{id} {
+      allow read, write: if false;
+    }
+    match /pushAparelhos/{id} {
+      allow read, write: if false;
+    }
+    match /limitesUso/{id} {
+      allow read, write: if false;
+    }
+    match /execucoesNotificacao/{id} {
+      allow read, write: if false;
     }
   }
 }

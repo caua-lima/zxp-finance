@@ -75,7 +75,13 @@ export function useMonthClose(mes: string) {
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "monthCloses", mes);
-      batch.set(ref, { status: "open" }, { merge: true });
+      // o motivo fica no próprio documento: as regras do Firestore só
+      // aceitam reabrir um mês fechado com motivo (auditoria F11)
+      batch.set(
+        ref,
+        { status: "open", reabertoEm: Date.now(), motivoReabertura: motivo },
+        { merge: true }
+      );
       anexarAuditLog(batch, user.uid, user.email, {
         action: "updated",
         entityType: "monthClose",

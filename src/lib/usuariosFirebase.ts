@@ -72,10 +72,51 @@ function paraUsuario(conta: RespostaConta): UsuarioFirebase {
   };
 }
 
+/**
+ * Todos os logins, paginando — antes vinha só a primeira página da API, e
+ * com mais clientes que isso o cron de notificação pulava gente calado.
+ */
 export async function listarUsuarios(): Promise<UsuarioFirebase[]> {
-  const dados = await chamar("/accounts:query", {});
-  const contas = (dados.userInfo ?? []) as RespostaConta[];
-  return contas.map(paraUsuario);
+  const todos: UsuarioFirebase[] = [];
+  const porPagina = 500;
+  for (let offset = 0; ; offset += porPagina) {
+    const dados = await chamar("/accounts:query", {
+      returnUserInfo: true,
+      limit: String(porPagina),
+      offset: String(offset),
+    });
+    const contas = (dados.userInfo ?? []) as RespostaConta[];
+    todos.push(...contas.map(paraUsuario));
+    if (contas.length < porPagina) break;
+  }
+  return todos;
+}
+
+export interface EstadoConta {
+  existe: boolean;
+  disabled: boolean;
+  /** Tokens emitidos antes disso (segundos) foram revogados. */
+  validSince: number | null;
+}
+
+/** Estado atual da conta no Auth — suspensão e revogação de sessão. */
+export async function consultarConta(uid: string): Promise<EstadoConta> {
+  const dados = await chamar("/accounts:lookup", { localId: [uid] });
+  const conta = ((dados.users ?? []) as Array<{ disabled?: boolean; validSince?: string }>)[0];
+  if (!conta) return { existe: false, disabled: true, validSince: null };
+  return {
+    existe: true,
+    disabled: conta.disabled ?? false,
+    validSince: conta.validSince ? Number(conta.validSince) : null,
+  };
+}
+
+/** Marca (ou desmarca) o login como admin global via custom claim. Só a service account consegue. */
+export async function definirClaimAdmin(uid: string, admin: boolean): Promise<void> {
+  await chamar("/accounts:update", {
+    localId: uid,
+    customAttributes: JSON.stringify(admin ? { admin: true } : {}),
+  });
 }
 
 export async function criarUsuario(
