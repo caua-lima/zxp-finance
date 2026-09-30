@@ -42,7 +42,6 @@ import { IconMicrofone } from "@/components/icons";
 import { diasRestantesNoMes, hojeISO } from "@/lib/finance/calculations";
 import { projetarRitmo } from "@/lib/finance/ritmo";
 import { avaliarDiasFechados, resumirConquistas } from "@/lib/finance/conquistas";
-import { usePushNotifications } from "@/lib/usePushNotifications";
 import { useMonthClose } from "@/lib/useMonthClose";
 
 const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -681,8 +680,6 @@ function Configuracoes({
   onSalvarReserva: (v: number) => void;
   onSalvarCdi: (v: number) => void;
 }) {
-  const push = usePushNotifications();
-  const toast = useToast();
   const [reserva, setReserva] = useState(reservaMeta);
   const [cdi, setCdi] = useState(String(percentualCdi));
   const rendimentoAnual = cdiAnual !== null ? (cdiAnual * (Number(cdi) || 0)) / 100 : null;
@@ -756,34 +753,13 @@ function Configuracoes({
           </p>
         </div>
 
-        {push.suportado && (
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-text-muted">
-              Aviso diário no celular
-              {push.permissao === "denied" && (
-                <span className="block text-[11px] text-text-faint">bloqueado no navegador</span>
-              )}
-            </span>
-            <Botao
-              onClick={() => {
-                if (push.ativo) push.desativar().then(() => toast.sucesso("Aviso desativado."));
-                else push.ativar();
-              }}
-              disabled={push.carregando || push.permissao === "denied"}
-              variante="secundario"
-              tamanho="pequeno"
-            >
-              {push.carregando ? "..." : push.ativo ? "Desativar" : "Ativar"}
-            </Botao>
-          </div>
-        )}
-        {push.precisaInstalar && (
-          <p className="text-[11px] leading-relaxed text-text-faint">
-            Pra receber aviso no iPhone, instale o app: <strong>Compartilhar</strong> →{" "}
-            <strong>Adicionar à Tela de Início</strong>, e abra por lá.
-          </p>
-        )}
-        {push.erro && <p className="text-xs text-negative">{push.erro}</p>}
+        <Link
+          href="/notificacoes"
+          className="flex items-center justify-between rounded-xl bg-surface-2/60 px-3 py-3 text-sm text-text-muted active:bg-surface-2"
+        >
+          <span>Avisos no celular e preferências</span>
+          <span className="text-brand">Notificações →</span>
+        </Link>
       </div>
     </details>
   );

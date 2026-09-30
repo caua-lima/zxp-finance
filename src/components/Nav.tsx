@@ -23,6 +23,7 @@ import {
   IconCaixinha,
   IconConsultor,
   IconSair,
+  IconSino,
 } from "./icons";
 
 interface ItemNav {
@@ -98,6 +99,7 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
   {
     titulo: "Sua conta",
     itens: [
+      { href: "/notificacoes", label: "Notificações", Icon: IconSino, descricao: "Avisos, este aparelho e preferências" },
       { href: "/perfil", label: "Perfil", Icon: IconPerfil, descricao: "Seu cenário, pra comparar com médias" },
       { href: "/acesso", label: "Acesso", Icon: IconAcesso, descricao: "Logins que entram no app" },
     ],

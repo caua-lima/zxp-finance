@@ -40,3 +40,25 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: ci-placeholder
           NEXT_PUBLIC_VAPID_PUBLIC_KEY: ci-placeholder
         run: npm run build
+
+  # Regras do Firestore e servidor de notificações contra o emulador
+  # (isolamento A/B, mês fechado, idempotência, retry, 410, VAPID inválida).
+  regras-e-notificacoes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - name: Regras + notificações (emulador)
+        run: npm run test:regras

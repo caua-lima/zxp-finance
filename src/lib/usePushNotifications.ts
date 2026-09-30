@@ -1,92 +1,141 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { doc, deleteDoc, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
-import { mensagemErro } from "./erroFirebase";
-
-function urlBase64ToUint8Array(base64: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const base64Padded = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64Padded);
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
-}
-
-async function idDaInscricao(endpoint: string): Promise<string> {
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
-  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+import {
+  urlBase64ToUint8Array,
+  idDoAparelho,
+  lerDono,
+  gravarDono,
+  revogarPushDesteNavegador,
+} from "./pushNavegador";
 
 /**
- * Inscrição de push do dispositivo atual (usuarios/{uid}/pushInscricoes).
- * Um usuário pode ter várias — um por aparelho/navegador instalado.
+ * Push deste aparelho, com estado honesto (auditoria N01/N02).
+ *
+ * Antes: "ativo" era só "o navegador tem uma inscrição" — que podia ser de
+ * outra conta, ou ter sido apagada no servidor. E o navegador gravava a
+ * inscrição direto no banco. Agora:
+ *  - o cadastro passa pela API (validada no servidor);
+ *  - "vinculado" é confirmado no servidor PRA CONTA LOGADA;
+ *  - inscrição de outra conta neste navegador é revogada e desligada
+ *    (conta nova não herda avisos da anterior);
+ *  - inscrição desta conta que sumiu do servidor é reparada sozinha, sem
+ *    pedir permissão de novo.
  */
+
+export type EstadoPush =
+  | "verificando"
+  | "sem_suporte"
+  | "precisa_instalar"
+  | "negada"
+  | "desligado"
+  | "registrando"
+  | "vinculado"
+  | "erro";
+
 export function usePushNotifications() {
   const { user } = useAuth();
-  const [suportado, setSuportado] = useState(false);
-  const [permissao, setPermissao] = useState<NotificationPermission>("default");
-  const [ativo, setAtivo] = useState(false);
-  const [carregando, setCarregando] = useState(false);
+  const [estado, setEstado] = useState<EstadoPush>("verificando");
   const [erro, setErro] = useState<string | null>(null);
-  const [ehIOS, setEhIOS] = useState(false);
-  const [instalado, setInstalado] = useState(false);
+  const [aparelho, setAparelho] = useState<string | null>(null);
 
+  const chamar = useCallback(
+    async (url: string, init: RequestInit = {}) => {
+      const token = await user?.getIdToken();
+      const r = await fetch(url, {
+        ...init,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init.headers },
+      });
+      const dados = await r.json().catch(() => ({}));
+      return { ok: r.ok, status: r.status, dados: dados as Record<string, unknown> };
+    },
+    [user]
+  );
+
+  const cadastrar = useCallback(
+    async (sub: PushSubscription) => {
+      const json = sub.toJSON();
+      const r = await chamar("/api/push/inscricao", {
+        method: "POST",
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
+      if (!r.ok) throw new Error((r.dados.erro as string) ?? "Não consegui ativar.");
+      return r.dados.aparelho as string;
+    },
+    [chamar]
+  );
+
+  // estado inicial: suporte, instalação, permissão e vínculo real
   useEffect(() => {
-    const suporta =
-      typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- detecta suporte do navegador só depois de montar (evita mismatch de SSR)
-    setSuportado(suporta);
-    if (suporta) setPermissao(Notification.permission);
-
-    // iPadOS 13+ se identifica como Mac; o toque é o que diferencia de um
-    // desktop de verdade.
-    const ua = navigator.userAgent;
-    const ios =
-      /iPad|iPhone|iPod/.test(ua) ||
-      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-    setEhIOS(ios);
-
-    // No iOS, push só existe rodando como app instalado na tela de início —
-    // em aba do Safari o PushManager simplesmente não existe, e sem essa
-    // detecção o usuário fica sem notificação e sem saber por quê.
-    setInstalado(
-      window.matchMedia("(display-mode: standalone)").matches ||
-        (navigator as Navigator & { standalone?: boolean }).standalone === true
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!suportado) return;
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then(async (registro) => {
-        const sub = await registro.pushManager.getSubscription();
-        setAtivo(!!sub);
-      })
-      .catch(() => {});
-  }, [suportado]);
-
-  const ativar = useCallback(async () => {
-    if (!user || !suportado) return;
-    setCarregando(true);
-    setErro(null);
-    try {
-      const perm = await Notification.requestPermission();
-      setPermissao(perm);
-      if (perm !== "granted") {
-        setErro("Permissão de notificação negada pelo navegador.");
+    if (!user) return;
+    let ativo = true;
+    (async () => {
+      const suporta = "serviceWorker" in navigator && "PushManager" in window;
+      const ua = navigator.userAgent;
+      const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+      const instalado =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      if (!suporta) {
+        if (ativo) setEstado(ios && !instalado ? "precisa_instalar" : "sem_suporte");
         return;
       }
+      try {
+        const registro = await navigator.serviceWorker.register("/sw.js");
+        const sub = await registro.pushManager.getSubscription();
+        if (!sub) {
+          if (ativo) setEstado(Notification.permission === "denied" ? "negada" : "desligado");
+          return;
+        }
+        const id = await idDoAparelho(sub.endpoint);
+        const r = await chamar(`/api/push/status?aparelho=${id}`);
+        if (r.ok && r.dados.vinculado) {
+          if (ativo) {
+            setAparelho(id);
+            setEstado("vinculado");
+          }
+          return;
+        }
+        if (lerDono() === user.uid && Notification.permission === "granted") {
+          // era desta conta e sumiu do servidor: repara sem pedir permissão
+          const novo = await cadastrar(sub);
+          if (ativo) {
+            setAparelho(novo);
+            setEstado("vinculado");
+          }
+          return;
+        }
+        // inscrição de outra conta (ou de ninguém): não herda — desliga
+        await revogarPushDesteNavegador();
+        if (ativo) setEstado("desligado");
+      } catch {
+        if (ativo) {
+          setEstado("erro");
+          setErro("Não consegui verificar as notificações deste aparelho.");
+        }
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [user, chamar, cadastrar]);
 
+  /** Só por gesto do usuário (tocar em Ativar) — nunca ao carregar. */
+  const ativar = useCallback(async () => {
+    if (!user) return;
+    setErro(null);
+    setEstado("registrando");
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        setEstado(perm === "denied" ? "negada" : "desligado");
+        return;
+      }
+      const chavePublica = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!chavePublica) throw new Error("Notificações não estão configuradas neste ambiente.");
       const registro = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
-
-      const chavePublica = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!chavePublica) {
-        throw new Error("Chave VAPID pública não configurada no ambiente.");
-      }
-
       let sub = await registro.pushManager.getSubscription();
       if (!sub) {
         sub = await registro.pushManager.subscribe({
@@ -94,58 +143,50 @@ export function usePushNotifications() {
           applicationServerKey: urlBase64ToUint8Array(chavePublica) as BufferSource,
         });
       }
-
-      const json = sub.toJSON();
-      const id = await idDaInscricao(sub.endpoint);
-      await setDoc(doc(db, "usuarios", user.uid, "pushInscricoes", id), {
-        endpoint: json.endpoint,
-        keys: json.keys,
-        criadoEm: Date.now(),
-      });
-      setAtivo(true);
+      const id = await cadastrar(sub);
+      gravarDono(user.uid);
+      setAparelho(id);
+      setEstado("vinculado");
     } catch (e) {
-      setErro(mensagemErro(e));
-    } finally {
-      setCarregando(false);
+      setEstado("erro");
+      setErro(e instanceof Error ? e.message : "Não consegui ativar.");
     }
-  }, [user, suportado]);
+  }, [user, cadastrar]);
 
   const desativar = useCallback(async () => {
-    if (!user) return;
-    setCarregando(true);
     setErro(null);
     try {
-      const registro = await navigator.serviceWorker.getRegistration();
-      const sub = await registro?.pushManager.getSubscription();
-      if (sub) {
-        const id = await idDaInscricao(sub.endpoint);
-        await sub.unsubscribe();
-        await deleteDoc(doc(db, "usuarios", user.uid, "pushInscricoes", id));
+      if (aparelho) {
+        const r = await chamar(`/api/push/inscricao?aparelho=${aparelho}`, { method: "DELETE" });
+        if (!r.ok) throw new Error((r.dados.erro as string) ?? "Não consegui desativar.");
       }
-      setAtivo(false);
+      const registro = await navigator.serviceWorker.getRegistration();
+      await (await registro?.pushManager.getSubscription())?.unsubscribe();
+      gravarDono(null);
+      setAparelho(null);
+      setEstado("desligado");
     } catch (e) {
-      setErro(mensagemErro(e));
-    } finally {
-      setCarregando(false);
+      setErro(e instanceof Error ? e.message : "Não consegui desativar.");
     }
-  }, [user]);
+  }, [aparelho, chamar]);
 
-  /**
-   * iPhone/iPad em aba do navegador: precisa instalar na tela de início antes
-   * de conseguir receber notificação. É o único caso em que dá pra explicar
-   * o que fazer — nos outros, "não suportado" é definitivo.
-   */
-  const precisaInstalar = ehIOS && !instalado && !suportado;
+  /** Dispara um push de teste pra este aparelho e diz o que aconteceu. */
+  const testar = useCallback(async (): Promise<string> => {
+    if (!aparelho) return "Ative as notificações primeiro.";
+    const r = await chamar("/api/push/teste", {
+      method: "POST",
+      body: JSON.stringify({ aparelho }),
+    });
+    if (!r.ok) return (r.dados.erro as string) ?? "O teste falhou.";
+    if (r.dados.aceita)
+      return "Enviado. O serviço de push do aparelho recebeu — deve aparecer em instantes. Se não aparecer, confira se o sistema não está silenciando o app.";
+    if (r.dados.inscricaoEncerrada) {
+      setEstado("desligado");
+      return "A inscrição deste aparelho expirou. Ative de novo.";
+    }
+    if (r.dados.reagendada) return "O serviço de push não respondeu agora. Vou tentar de novo sozinho.";
+    return "O envio falhou. Tente ativar de novo.";
+  }, [aparelho, chamar]);
 
-  return {
-    suportado,
-    permissao,
-    ativo,
-    carregando,
-    erro,
-    precisaInstalar,
-    instalado,
-    ativar,
-    desativar,
-  };
+  return { estado, erro, aparelho, ativar, desativar, testar };
 }

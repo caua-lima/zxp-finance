@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/finance/finance.test.ts",
-    "test:regras": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-zxp \"node --import tsx --test tests/firestore.rules.test.ts\""
+    "test": "node --import tsx --test src/lib/finance/finance.test.ts src/lib/notificacoes/notificacoes.test.ts",
+    "test:regras": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-zxp \"node --import tsx --test --test-concurrency=1 tests/firestore.rules.test.ts tests/notificacoes.test.ts\""
   },
   "dependencies": {
     "firebase": "^12.16.0",

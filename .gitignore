@@ -43,3 +43,7 @@ next-env.d.ts
 
 # backups locais de dados reais (scripts/backup.ts)
 backups/
+
+# logs do emulador do Firestore
+firestore-debug.log
+*-debug.log
