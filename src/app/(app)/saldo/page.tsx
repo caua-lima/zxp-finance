@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import {
   formatarMoeda,
@@ -20,7 +20,17 @@ import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { totalGuardado, totalPorGasto } from "@/lib/finance/caixinhas";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
-import { useRendimentoAutomatico } from "@/lib/useRendimentoAutomatico";
+import { useCdi } from "@/lib/useCdi";
+import { usePagamentos } from "@/lib/usePagamentos";
+import { Dialogo } from "@/components/Dialogo";
+import {
+  saldoConfirmado,
+  saidasDeHoje,
+  orcamentoDoDia,
+  dataEfetivaDoGasto,
+  gastoContaNoSaldo,
+} from "@/lib/finance/saldo";
+import { estimarRendimentoMensal } from "@/lib/finance/rendimento";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -29,14 +39,7 @@ import { SkeletonLista } from "@/components/Skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { IconMicrofone } from "@/components/icons";
-import {
-  diasRestantesNoMes,
-  calculateGastavelPorDia,
-  calculateGastoDoDia,
-  calcularSaldoAtual,
-  hojeISO,
-  diaISOde,
-} from "@/lib/finance/calculations";
+import { diasRestantesNoMes, hojeISO } from "@/lib/finance/calculations";
 import { projetarRitmo } from "@/lib/finance/ritmo";
 import { avaliarDiasFechados, resumirConquistas } from "@/lib/finance/conquistas";
 import { usePushNotifications } from "@/lib/usePushNotifications";
@@ -54,6 +57,124 @@ function rotuloDoDia(dia: string, hoje: string): string {
   if (diferenca === 0) return "Hoje";
   if (diferenca === 1) return "Ontem";
   return `${DIAS_SEMANA[data.getDay()]}, ${String(d).padStart(2, "0")}/${String(mes).padStart(2, "0")}`;
+}
+
+interface Previa {
+  chave: string;
+  fraseOriginal: string;
+  descricao: string;
+  valor: number;
+  categoria: string;
+  data: string;
+}
+
+function diaMenos(iso: string, dias: number): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const d = new Date(ano, mes - 1, dia - dias);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+/**
+ * Prévia do lançamento: o que foi entendido, editável, antes de gravar.
+ * Enter no campo de cima também confirma.
+ */
+function CartaoPrevia({
+  previa,
+  hoje,
+  enviando,
+  onMudar,
+  onConfirmar,
+  onCancelar,
+}: {
+  previa: Previa;
+  hoje: string;
+  enviando: boolean;
+  onMudar: (p: Previa) => void;
+  onConfirmar: () => void;
+  onCancelar: () => void;
+}) {
+  const dias = [0, 1, 2].map((n) => diaMenos(hoje, n));
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-brand/40 bg-surface-2/40 p-3">
+      <p className="text-xs font-medium text-text-muted">Confere antes de salvar:</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label htmlFor="previa-valor" className="rotulo">
+            Valor
+          </label>
+          <MoneyInput
+            id="previa-valor"
+            value={previa.valor}
+            onChange={(valor) => onMudar({ ...previa, valor })}
+            className="campo font-semibold"
+          />
+        </div>
+        <div>
+          <label htmlFor="previa-data" className="rotulo">
+            Quando
+          </label>
+          <select
+            id="previa-data"
+            value={dias.includes(previa.data) ? previa.data : dias[0]}
+            onChange={(e) => onMudar({ ...previa, data: e.target.value })}
+            className="campo"
+          >
+            {dias.map((d) => (
+              <option key={d} value={d}>
+                {rotuloDoDia(d, hoje)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label htmlFor="previa-descricao" className="rotulo">
+          Descrição
+        </label>
+        <input
+          id="previa-descricao"
+          value={previa.descricao}
+          onChange={(e) => onMudar({ ...previa, descricao: e.target.value })}
+          className="campo"
+        />
+      </div>
+      <div>
+        <label htmlFor="previa-categoria" className="rotulo">
+          Categoria
+        </label>
+        <select
+          id="previa-categoria"
+          value={previa.categoria}
+          onChange={(e) => onMudar({ ...previa, categoria: e.target.value })}
+          className="campo"
+        >
+          {CATEGORIAS_GASTO.map((c) => (
+            <option key={c} value={c}>
+              {iconeCategoriaGasto(c)} {c}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs text-text-muted">
+        Gasto aqui = dinheiro que saiu da conta (Pix, débito). Compra no cartão de crédito entra
+        pela fatura.
+      </p>
+      <div className="flex gap-2">
+        <Botao
+          onClick={onConfirmar}
+          disabled={enviando || !previa.descricao.trim() || previa.valor <= 0}
+          larguraTotal
+        >
+          {enviando ? "Salvando..." : "Confirmar"}
+        </Botao>
+        <Botao onClick={onCancelar} disabled={enviando} variante="secundario" larguraTotal>
+          Voltar
+        </Botao>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -81,11 +202,14 @@ export default function SaldoPage() {
     remover,
   } = useGastos();
   const { caixinhas } = useCaixinhas();
-  const cdi = useRendimentoAutomatico();
+  const cdi = useCdi();
+  const pagamentos = usePagamentos(mesPadrao());
   const toast = useToast();
   const monthClose = useMonthClose(mesPadrao());
 
   const [texto, setTexto] = useState("");
+  const [previa, setPrevia] = useState<Previa | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
   const [avisoParcial, setAvisoParcial] = useState<string | null>(null);
   const [atualizandoSaldo, setAtualizandoSaldo] = useState(false);
@@ -95,70 +219,100 @@ export default function SaldoPage() {
   const loading = loadingSaldo || loadingGastos;
   const erro = erroSaldo || erroGastos;
 
-  const saldoAtual = calcularSaldoAtual(saldo, gastos);
+  // Contrato único (docs/modelo-financeiro.md): saldo confirmado e
+  // orçamento do dia — o gasto de hoje é descontado UMA vez (auditoria F01).
+  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos);
   const reservaMeta = saldo?.reservaMeta ?? 0;
   const diasRestantes = diasRestantesNoMes(hoje);
-  const gastavelPorDia = calculateGastavelPorDia(saldoAtual, reservaMeta, diasRestantes);
-  const totalGastoHoje = calculateGastoDoDia(gastos, hoje);
-  const aindaPodeGastarHoje =
-    gastavelPorDia === null ? null : arredondarCentavos(gastavelPorDia - totalGastoHoje);
-  const semDinheiroLivre = saldoAtual !== null && saldoAtual - reservaMeta <= 0;
+  const saidasHoje = saidasDeHoje(saldo, gastos, pagamentos.movimentos, hoje);
+  const orcamento = orcamentoDoDia(saldoAtual, saidasHoje, reservaMeta, diasRestantes);
+  const semDinheiroLivre = orcamento !== null && orcamento.orcamento <= 0;
   const projecao = semDinheiroLivre
     ? null
     : projetarRitmo(saldoAtual, reservaMeta, gastos, mes, hoje);
   const conquistas =
-    gastavelPorDia && gastavelPorDia > 0
-      ? resumirConquistas(avaliarDiasFechados(gastos, gastavelPorDia, mes, hoje), gastavelPorDia)
+    orcamento && orcamento.orcamento > 0
+      ? resumirConquistas(
+          avaliarDiasFechados(gastos, orcamento.orcamento, mes, hoje),
+          orcamento.orcamento
+        )
       : null;
-  const rendeuNoMes = saldo?.rendimentoPorMes?.[mes] ?? 0;
+  // rendimento é só estimativa — nunca entra no saldo (auditoria F07)
+  const percentualCdiSaldo = saldo?.percentualCdi ?? 0;
+  const rendimentoEstimado =
+    cdi.info && saldoAtual !== null
+      ? estimarRendimentoMensal(saldoAtual, cdi.info.taxaDiaria, percentualCdiSaldo)
+      : 0;
   const guardaPorGasto = totalPorGasto(caixinhas);
 
   // Ajuste de conciliação não é gasto (é correção de saldo antiga) — fica
   // fora da lista e do total. Com "Atualizar saldo" ele nem existe mais.
-  const gastosDoMes = useMemo(
-    () => gastos.filter((g) => g.mes === mes && !g.ajusteConciliacaoId),
-    [gastos, mes]
-  );
+  const gastosDoMes = gastos.filter((g) => g.mes === mes && !g.ajusteConciliacaoId);
   const totalDoMes = arredondarCentavos(
     gastosDoMes.reduce((acc, g) => acc + g.valor, 0)
   );
-  const porDia = useMemo(() => {
-    const grupos = new Map<string, Gasto[]>();
-    for (const g of gastosDoMes) {
-      const dia = diaISOde(g.criadoEm);
-      grupos.set(dia, [...(grupos.get(dia) ?? []), g]);
-    }
-    return [...grupos.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [gastosDoMes]);
+  const grupos = new Map<string, Gasto[]>();
+  for (const g of gastosDoMes) {
+    const dia = dataEfetivaDoGasto(g);
+    grupos.set(dia, [...(grupos.get(dia) ?? []), g]);
+  }
+  const porDia = [...grupos.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 
-  const voz = useReconhecimentoVoz((falado) => registrar(falado));
-
-  function registrar(frase: string) {
-    const interpretado = parseGastoTexto(frase);
-    if (!interpretado.valor || !interpretado.descricao) {
+  /**
+   * Texto ou voz viram uma PRÉVIA editável — nada é salvo sem você ver
+   * valor, descrição, categoria e dia (auditoria F06/U05). A chave de
+   * idempotência nasce com a prévia: confirmar duas vezes grava uma só.
+   */
+  function interpretar(frase: string) {
+    const lido = parseGastoTexto(frase);
+    if (!lido.valor || !lido.descricao) {
       setTexto(frase);
       setAvisoParcial('Não entendi o valor. Tenta assim: "25 almoço" ou "gastei 100 de gasolina".');
       setUltimoRegistro(null);
       return;
     }
-    const categoria = inferirCategoriaGasto(interpretado.descricao);
-    setTexto("");
     setAvisoParcial(null);
-    const descricao = interpretado.descricao;
-    const valor = interpretado.valor;
-    adicionar(descricao, valor, categoria).then((ok) => {
-      if (!ok) return;
-      setUltimoRegistro(
-        `${formatarMoeda(valor)} · ${descricao} · ${iconeCategoriaGasto(categoria)} ${categoria}` +
-          (guardaPorGasto > 0 ? ` · 🐷 +${formatarMoeda(guardaPorGasto)}` : "")
-      );
+    setUltimoRegistro(null);
+    setPrevia({
+      chave: crypto.randomUUID(),
+      fraseOriginal: frase,
+      descricao: lido.descricao,
+      valor: lido.valor,
+      categoria: inferirCategoriaGasto(lido.descricao),
+      data: diaMenos(hoje, lido.diasAtras),
     });
   }
 
+  async function confirmarPrevia() {
+    if (!previa || confirmando) return;
+    setConfirmando(true);
+    const ok = await adicionar(previa.descricao, previa.valor, previa.categoria, {
+      data: previa.data,
+      chave: previa.chave,
+    });
+    setConfirmando(false);
+    if (!ok) return; // a prévia continua na tela: nada do que você digitou se perde
+    setUltimoRegistro(
+      `${formatarMoeda(previa.valor)} · ${previa.descricao} · ${iconeCategoriaGasto(
+        previa.categoria
+      )} ${previa.categoria}${previa.data !== hoje ? ` · ${rotuloDoDia(previa.data, hoje).toLowerCase()}` : ""}` +
+        (guardaPorGasto > 0 ? ` · 🐷 +${formatarMoeda(guardaPorGasto)}` : "")
+    );
+    setPrevia(null);
+    setTexto("");
+  }
+
+  // depois de `interpretar` existir: a voz entrega a frase pra ela
+  const voz = useReconhecimentoVoz(interpretar);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (previa) {
+      confirmarPrevia();
+      return;
+    }
     const frase = texto.trim();
-    if (frase) registrar(frase);
+    if (frase) interpretar(frase);
   }
 
   return (
@@ -191,8 +345,11 @@ export default function SaldoPage() {
                   day: "2-digit",
                   month: "2-digit",
                 })}
-                {rendeuNoMes > 0 && (
-                  <span className="text-positive"> · rendeu +{formatarMoeda(rendeuNoMes)} no mês</span>
+                {rendimentoEstimado > 0 && (
+                  <span>
+                    {" "}
+                    · rende ~{formatarMoeda(rendimentoEstimado)}/mês (estimativa)
+                  </span>
                 )}
               </p>
             </div>
@@ -217,33 +374,34 @@ export default function SaldoPage() {
                     : `Seu saldo está abaixo dos ${formatarMoeda(reservaMeta)} que você quer guardar.`}
                 </p>
               </>
-            ) : aindaPodeGastarHoje !== null && aindaPodeGastarHoje < 0 ? (
+            ) : orcamento && orcamento.restante < 0 ? (
               <>
                 <p className="mt-0.5 text-2xl font-bold tracking-tight text-negative">
-                  Passou {formatarMoeda(-aindaPodeGastarHoje)} do limite
+                  Passou {formatarMoeda(-orcamento.restante)} do limite
                 </p>
                 <p className="mt-1 text-xs text-text-muted">
-                  Limite de hoje era {formatarMoeda(gastavelPorDia ?? 0)}. Amanhã ele se ajusta
+                  Limite de hoje era {formatarMoeda(orcamento.orcamento)}. Amanhã ele se ajusta
                   sozinho ao que sobrou.
                 </p>
               </>
             ) : (
               <>
                 <p className="mt-0.5 text-4xl font-bold tracking-tight text-brand">
-                  {formatarMoeda(aindaPodeGastarHoje ?? 0)}
+                  {formatarMoeda(orcamento?.restante ?? 0)}
                 </p>
-                {gastavelPorDia !== null && gastavelPorDia > 0 && (
+                {orcamento && orcamento.orcamento > 0 && (
                   <>
                     <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface-2">
                       <div
                         className="h-full rounded-full bg-brand transition-all"
                         style={{
-                          width: `${Math.min(100, (totalGastoHoje / gastavelPorDia) * 100)}%`,
+                          width: `${Math.min(100, (orcamento.gastoHoje / orcamento.orcamento) * 100)}%`,
                         }}
                       />
                     </div>
                     <p className="mt-1.5 text-[11px] text-text-faint">
-                      Gastou {formatarMoeda(totalGastoHoje)} de {formatarMoeda(gastavelPorDia)} ·{" "}
+                      Gastou {formatarMoeda(orcamento.gastoHoje)} de{" "}
+                      {formatarMoeda(orcamento.orcamento)} ·{" "}
                       {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} até o fim do mês
                     </p>
                   </>
@@ -287,7 +445,10 @@ export default function SaldoPage() {
             id="saldo-form-texto"
             placeholder={voz.ouvindo ? "Ouvindo..." : 'Ex: "25 almoço"'}
             value={voz.parcial || texto}
-            onChange={(e) => setTexto(e.target.value)}
+            onChange={(e) => {
+              setTexto(e.target.value);
+              if (previa) setPrevia(null);
+            }}
             className="campo flex-1"
             autoComplete="off"
           />
@@ -305,12 +466,29 @@ export default function SaldoPage() {
               <IconMicrofone width={19} height={19} />
             </button>
           )}
-          <Botao type="submit" className="shrink-0 px-4">
-            Salvar
-          </Botao>
+          {!previa && (
+            <Botao type="submit" className="shrink-0 px-4">
+              Anotar
+            </Botao>
+          )}
         </div>
-        {ultimoRegistro && !avisoParcial && (
-          <p className="mt-2 px-1 text-xs text-positive">✓ {ultimoRegistro}</p>
+        {previa && (
+          <CartaoPrevia
+            previa={previa}
+            hoje={hoje}
+            enviando={confirmando}
+            onMudar={setPrevia}
+            onConfirmar={confirmarPrevia}
+            onCancelar={() => {
+              setTexto(previa.fraseOriginal);
+              setPrevia(null);
+            }}
+          />
+        )}
+        {ultimoRegistro && !avisoParcial && !previa && (
+          <p className="mt-2 px-1 text-xs text-positive" role="status">
+            ✓ Salvo: {ultimoRegistro}
+          </p>
         )}
         {avisoParcial && <p className="mt-2 px-1 text-xs text-gold">{avisoParcial}</p>}
       </form>
@@ -346,6 +524,7 @@ export default function SaldoPage() {
                     onEstornar={estornar}
                     onRemover={remover}
                     mesFechado={monthClose.fechado}
+                    mudaSaldo={saldo ? gastoContaNoSaldo(g, saldo) : false}
                   />
                 ))}
               </ul>
@@ -368,7 +547,10 @@ export default function SaldoPage() {
         <Configuracoes
           reservaMeta={reservaMeta}
           percentualCdi={saldo.percentualCdi ?? 100}
-          cdiAnual={cdi?.anual ?? null}
+          cdiAnual={cdi.info?.anual ?? null}
+          cdiData={cdi.info?.data ?? null}
+          cdiStatus={cdi.status}
+          onTentarCdi={cdi.tentarDeNovo}
           onSalvarReserva={(v) => toast.sucessoSe(definirReservaMeta(v), "Reserva atualizada.")}
           onSalvarCdi={(v) => toast.sucessoSe(definirPercentualCdi(v), "Rendimento atualizado.")}
         />
@@ -377,12 +559,15 @@ export default function SaldoPage() {
       {atualizandoSaldo && saldoAtual !== null && (
         <AtualizarSaldo
           saldoAtual={saldoAtual}
-          onSalvar={(valor) => {
-            toast.sucessoSe(
-              atualizar(valor, saldoAtual),
-              valor === 0 ? "Saldo zerado." : `Saldo atualizado pra ${formatarMoeda(valor)}.`
-            );
-            setAtualizandoSaldo(false);
+          onSalvar={async (valor) => {
+            const ok = await atualizar(valor, saldoAtual);
+            if (ok) {
+              toast.sucesso(
+                valor === 0 ? "Saldo zerado." : `Saldo atualizado pra ${formatarMoeda(valor)}.`
+              );
+              setAtualizandoSaldo(false);
+            }
+            return ok;
           }}
           onFechar={() => setAtualizandoSaldo(false)}
         />
@@ -417,50 +602,63 @@ function PrimeiroSaldo({ onSalvar }: { onSalvar: (valor: number) => Promise<bool
  * de conciliação", sem gasto negativo aparecendo na lista. "Zerar" é o
  * atalho pro caso de começar do zero.
  */
+/**
+ * Atualizar saldo = o valor digitado vira o saldo, e ponto. Sem "ajuste
+ * de conciliação", sem gasto negativo na lista. Se salvar falhar, a janela
+ * continua aberta com o valor digitado (auditoria U02).
+ */
 function AtualizarSaldo({
   saldoAtual,
   onSalvar,
   onFechar,
 }: {
   saldoAtual: number;
-  onSalvar: (valor: number) => void;
+  onSalvar: (valor: number) => Promise<boolean>;
   onFechar: () => void;
 }) {
   const [valor, setValor] = useState(Math.max(0, saldoAtual));
+  const [enviando, setEnviando] = useState(false);
+
+  async function salvar(v: number) {
+    setEnviando(true);
+    await onSalvar(v);
+    setEnviando(false);
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Atualizar saldo"
+    <Dialogo
+      aberto
+      titulo="Quanto tem na conta agora?"
+      descricao="Olhe no app do banco e digite o saldo disponível. Ele vira o seu saldo — sem ajuste, sem conta escondida."
+      onFechar={onFechar}
+      bloqueado={enviando}
     >
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-2xl">
-        <p className="text-base font-semibold">Quanto tem na conta agora?</p>
-        <p className="mt-1 text-xs text-text-faint">
-          Olhe no app do banco e digite o valor. Ele vira o seu saldo — sem ajuste, sem conta
-          escondida.
-        </p>
-        <MoneyInput
-          value={valor}
-          onChange={setValor}
-          className="campo mt-3 text-center text-lg font-semibold"
-        />
-        <div className="mt-3 flex gap-2">
-          <Botao onClick={() => onSalvar(valor)} larguraTotal>
-            Salvar
-          </Botao>
-          <Botao onClick={onFechar} variante="secundario" larguraTotal>
-            Cancelar
-          </Botao>
-        </div>
-        <button
-          onClick={() => onSalvar(0)}
-          className="mt-3 w-full rounded-xl py-2 text-sm font-medium text-negative active:bg-negative-soft"
-        >
-          Zerar saldo
-        </button>
+      <label htmlFor="saldo-novo" className="rotulo">
+        Saldo disponível no banco
+      </label>
+      <MoneyInput
+        id="saldo-novo"
+        value={valor}
+        onChange={setValor}
+        className="campo text-center text-lg font-semibold"
+      />
+      <div className="mt-3 flex gap-2">
+        <Botao onClick={() => salvar(valor)} disabled={enviando} larguraTotal>
+          {enviando ? "Salvando..." : "Salvar"}
+        </Botao>
+        <Botao onClick={onFechar} disabled={enviando} variante="secundario" larguraTotal>
+          Cancelar
+        </Botao>
       </div>
-    </div>
+      <button
+        type="button"
+        onClick={() => salvar(0)}
+        disabled={enviando}
+        className="mt-3 w-full rounded-xl py-2 text-sm font-medium text-negative active:bg-negative-soft disabled:opacity-40"
+      >
+        Zerar saldo
+      </button>
+    </Dialogo>
   );
 }
 
@@ -468,12 +666,18 @@ function Configuracoes({
   reservaMeta,
   percentualCdi,
   cdiAnual,
+  cdiData,
+  cdiStatus,
+  onTentarCdi,
   onSalvarReserva,
   onSalvarCdi,
 }: {
   reservaMeta: number;
   percentualCdi: number;
   cdiAnual: number | null;
+  cdiData: string | null;
+  cdiStatus: "carregando" | "ok" | "erro";
+  onTentarCdi: () => void;
   onSalvarReserva: (v: number) => void;
   onSalvarCdi: (v: number) => void;
 }) {
@@ -505,9 +709,12 @@ function Configuracoes({
         </div>
 
         <div>
-          <label className="rotulo">A conta rende quanto do CDI? (%)</label>
+          <label htmlFor="saldo-cdi" className="rotulo">
+            A conta rende quanto do CDI? (%) — só pra estimativa
+          </label>
           <div className="flex gap-2">
             <input
+              id="saldo-cdi"
               inputMode="numeric"
               value={cdi}
               onChange={(e) => setCdi(e.target.value.replace(/\D/g, ""))}
@@ -521,11 +728,31 @@ function Configuracoes({
               Salvar
             </Botao>
           </div>
-          <p className="mt-1 text-[11px] text-text-faint">
-            Mercado Pago rende 100% do CDI.
-            {rendimentoAnual !== null &&
-              ` Hoje isso dá ~${rendimentoAnual.toFixed(2).replace(".", ",")}% ao ano (bruto).`}{" "}
-            O rendimento entra sozinho todo dia útil. 0 = não rende.
+          <p className="mt-1 text-xs text-text-muted">
+            A conta do Mercado Pago diz render 100% do CDI. O app só mostra uma estimativa de
+            quanto o saldo tende a render — ela nunca entra no saldo. O dinheiro que o banco
+            creditar de verdade aparece quando você atualizar o saldo. 0 = sem estimativa.
+          </p>
+          <p className="mt-1 text-xs text-text-muted" role="status">
+            {cdiStatus === "ok" && cdiAnual !== null && cdiData
+              ? `Fonte: Banco Central (CDI de ${cdiData.split("-").reverse().join("/")}: ~${cdiAnual
+                  .toFixed(2)
+                  .replace(".", ",")}% ao ano).${
+                  rendimentoAnual !== null && percentualCdi > 0
+                    ? ` No seu percentual, ~${rendimentoAnual.toFixed(2).replace(".", ",")}% ao ano, bruto.`
+                    : ""
+                }`
+              : cdiStatus === "carregando"
+              ? "Buscando a taxa do CDI no Banco Central..."
+              : null}
+            {cdiStatus === "erro" && (
+              <>
+                Não consegui buscar o CDI no Banco Central.{" "}
+                <button type="button" onClick={onTentarCdi} className="font-medium text-brand">
+                  Tentar de novo
+                </button>
+              </>
+            )}
           </p>
         </div>
 
@@ -572,6 +799,7 @@ function ItemGasto({
   onEstornar,
   onRemover,
   mesFechado,
+  mudaSaldo,
 }: {
   gasto: Gasto;
   onEditar: (
@@ -581,6 +809,8 @@ function ItemGasto({
   onEstornar: (id: string, motivo: string) => Promise<boolean>;
   onRemover: (id: string, motivo: string) => Promise<boolean>;
   mesFechado?: boolean;
+  /** Esse gasto está descontado do saldo atual — apagar devolve o valor. */
+  mudaSaldo?: boolean;
 }) {
   const toast = useToast();
   const [aberto, setAberto] = useState(false);
@@ -704,7 +934,11 @@ function ItemGasto({
         descricao={
           bloqueado
             ? "Esse gasto e o estorno dele são apagados juntos. Como um cancela o outro, o saldo não muda."
-            : `"${gasto.descricao}" some de vez — use quando lançou errado. Se o dinheiro voltou, use Estornar.`
+            : `"${gasto.descricao}" some de vez — use quando lançou errado. ${
+                mudaSaldo
+                  ? `O saldo volta ${formatarMoeda(gasto.valor)}.`
+                  : "O saldo não muda (esse gasto é de antes da última atualização de saldo)."
+              } Se o dinheiro voltou de verdade, use Estornar.`
         }
         textoConfirmar="Excluir"
         perigo

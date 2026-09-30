@@ -159,6 +159,8 @@ export function calculateOverdueEntries(
         e.type === "expense" &&
         isEntryPending(e) &&
         isEntryActive(e) &&
+        // estimativa vencida é "valor a confirmar", não dívida atrasada certa
+        !e.aConfirmar &&
         new Date(e.dueDate) < hoje
     )
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
@@ -221,6 +223,42 @@ export function calculateDailyCashFlow(
 }
 
 /**
+ * Projeção do saldo do dia de hoje até o fim do mês (auditoria F02).
+ *
+ * A curva antiga começava no dia 1 com o saldo de HOJE e reaplicava todo o
+ * mês por cima — gasto já descontado do saldo era descontado de novo. Aqui
+ * o ponto de partida é o saldo confirmado de agora e só entram saídas
+ * ainda NÃO pagas (atrasadas caem hoje, as outras no vencimento). Entrada
+ * prevista não entra: saldo não soma previsão (docs/modelo-financeiro.md).
+ * Não existe histórico antes de hoje aqui — sem saldo de abertura
+ * confiável, o app não inventa um.
+ */
+export function projetarSaldoAteFimDoMes(
+  entries: FinancialEntry[],
+  hojeISO: string,
+  saldoAtual: number
+): PontoFluxoDiario[] {
+  const fim = ultimoDiaMes(hojeISO.slice(0, 7));
+  const dias: PontoFluxoDiario[] = [];
+  for (let cursor = hojeISO; cursor <= fim; cursor = proximoDiaISO(cursor)) {
+    dias.push({ data: cursor, entradas: 0, saidas: 0, saldoAcumulado: 0 });
+  }
+  const porDia = new Map(dias.map((d) => [d.data, d]));
+  for (const e of entries) {
+    if (e.type !== "expense" || !isEntryPending(e) || !isEntryActive(e)) continue;
+    const dia = e.dueDate.slice(0, 10) < hojeISO ? hojeISO : e.dueDate.slice(0, 10);
+    const ponto = porDia.get(dia);
+    if (ponto) ponto.saidas += e.amount;
+  }
+  let acumulado = saldoAtual;
+  for (const d of dias) {
+    acumulado = arredondarCentavos(acumulado - d.saidas);
+    d.saldoAcumulado = acumulado;
+  }
+  return dias;
+}
+
+/**
  * Status "de vitrine": igual ao status real, exceto que despesa pendente
  * com vencimento no passado vira "overdue" só pra exibição (o dado
  * guardado continua "pending" — atraso é derivado da data, não é um
@@ -236,6 +274,7 @@ export function deriveDisplayStatus(
   if (
     entry.type === "expense" &&
     isEntryPending(entry) &&
+    !entry.aConfirmar &&
     new Date(entry.dueDate) < new Date(hojeISO)
   ) {
     return "overdue";
@@ -365,23 +404,6 @@ export function calculateGastavelPorDia(
   // gastar -R$ 50 hoje", que não significa nada. Sem dinheiro livre, o
   // limite é zero — a explicação de por quê fica na tela.
   return Math.max(0, arredondarCentavos((saldoAtual - reservaMeta) / diasRestantes));
-}
-
-/**
- * Saldo de agora: o último valor que você informou, menos o que foi
- * gastado depois disso. É a mesma conta em toda tela — antes o Resumo
- * mostrava só o valor informado, sem descontar os gastos lançados depois,
- * e os dois lugares discordavam.
- */
-export function calcularSaldoAtual(
-  saldo: { valor: number; atualizadoEm: number } | null,
-  gastos: Gasto[]
-): number | null {
-  if (!saldo) return null;
-  const gastoDepois = gastos
-    .filter((g) => g.criadoEm > saldo.atualizadoEm)
-    .reduce((acc, g) => acc + g.valor, 0);
-  return arredondarCentavos(saldo.valor - gastoDepois);
 }
 
 export interface LinhaCompromisso {

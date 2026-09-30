@@ -13,12 +13,10 @@ import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { totalPorGasto } from "@/lib/finance/caixinhas";
-import {
-  diasRestantesNoMes,
-  calculateGastavelPorDia,
-  calculateGastoDoDia,
-  hojeISO,
-} from "@/lib/finance/calculations";
+import { diasRestantesNoMes, hojeISO } from "@/lib/finance/calculations";
+import { saldoConfirmado, saidasDeHoje, orcamentoDoDia } from "@/lib/finance/saldo";
+import { usePagamentos } from "@/lib/usePagamentos";
+import { mesPadrao } from "@/lib/types";
 import { PageHeader } from "@/components/PageHeader";
 import { ErroBanner } from "@/components/ErroBanner";
 import { Botao } from "@/components/Botao";
@@ -33,6 +31,10 @@ type Mensagem =
       valor: number;
       descricao: string;
       categoria: string;
+      /** Dia do gasto ("ontem" dito na frase não é descartado). */
+      data: string;
+      /** Idempotência: confirmar duas vezes grava um gasto só. */
+      chave: string;
     }
   | {
       tipo: "salvo";
@@ -56,25 +58,23 @@ export default function ChatPage() {
   const { saldo } = useSaldo();
   const { gastos, adicionar, erro } = useGastos();
   const { caixinhas } = useCaixinhas();
+  const pagamentos = usePagamentos(mesPadrao());
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [salvando, setSalvando] = useState<number | null>(null);
   const [texto, setTexto] = useState("");
   const fimRef = useRef<HTMLDivElement>(null);
 
   const hoje = hojeISO();
 
-  const gastosDesdeReferencia = saldo
-    ? gastos.filter((g) => g.criadoEm > saldo.atualizadoEm)
-    : [];
-  const saldoAtual = saldo
-    ? saldo.valor - gastosDesdeReferencia.reduce((acc, g) => acc + g.valor, 0)
-    : null;
-  const gastavelPorDia = calculateGastavelPorDia(
+  // mesmo contrato da tela de Saldo (docs/modelo-financeiro.md)
+  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos);
+  const orcamento = orcamentoDoDia(
     saldoAtual,
+    saidasDeHoje(saldo, gastos, pagamentos.movimentos, hoje),
     saldo?.reservaMeta ?? 0,
     diasRestantesNoMes(hoje)
   );
-  const aindaHoje =
-    gastavelPorDia === null ? null : gastavelPorDia - calculateGastoDoDia(gastos, hoje);
+  const aindaHoje = orcamento ? orcamento.restante : null;
 
   function adicionarMensagem(m: SemId<Mensagem>) {
     setMensagens((atual) => [...atual, { ...m, id: proximoId++ } as Mensagem]);
@@ -86,7 +86,7 @@ export default function ChatPage() {
     if (!limpa) return;
     adicionarMensagem({ tipo: "voce", texto: limpa });
 
-    const { valor, descricao } = parseGastoTexto(limpa);
+    const { valor, descricao, diasAtras } = parseGastoTexto(limpa);
 
     if (!valor || !descricao) {
       adicionarMensagem({
@@ -98,11 +98,17 @@ export default function ChatPage() {
       return;
     }
 
+    const [ano, mes, dia] = hoje.split("-").map(Number);
+    const d = new Date(ano, mes - 1, dia - diasAtras);
     adicionarMensagem({
       tipo: "confirmar",
       valor,
       descricao,
       categoria: inferirCategoriaGasto(descricao),
+      data: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate()
+      ).padStart(2, "0")}`,
+      chave: crypto.randomUUID(),
     });
   }
 
@@ -112,9 +118,12 @@ export default function ChatPage() {
     m: Extract<Mensagem, { tipo: "confirmar" }>,
     categoria: string
   ) {
-    // Só vira "✓ salvo" depois que gravou de verdade. Marcar antes fazia a
-    // conversa dizer que anotou mesmo quando a escrita falhava.
-    const ok = await adicionar(m.descricao, m.valor, categoria);
+    // Só vira "✓ salvo" depois que gravou de verdade. Trava enquanto grava
+    // e a chave impede um segundo gasto mesmo com toque duplo.
+    if (salvando !== null) return;
+    setSalvando(m.id);
+    const ok = await adicionar(m.descricao, m.valor, categoria, { data: m.data, chave: m.chave });
+    setSalvando(null);
     if (!ok) {
       adicionarMensagem({
         tipo: "app",
@@ -124,7 +133,7 @@ export default function ChatPage() {
     }
     // O saldo do Firestore só chega no próximo snapshot; o desconto aqui é
     // otimista pra a resposta ser imediata, e o valor real reaparece sozinho.
-    const restante = aindaHoje === null ? null : aindaHoje - m.valor;
+    const restante = aindaHoje === null || m.data !== hoje ? aindaHoje : aindaHoje - m.valor;
     // as caixinhas se encheram junto com o gasto, no mesmo batch — mostrar
     // aqui é o que faz o hábito aparecer em vez de acontecer escondido
     const guardado = totalPorGasto(caixinhas);
@@ -225,6 +234,11 @@ export default function ChatPage() {
                   {formatarMoeda(m.valor)}
                 </p>
                 <p className="text-sm text-text">{m.descricao}</p>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  {m.data === hoje
+                    ? "Hoje"
+                    : `Dia ${m.data.split("-").reverse().slice(0, 2).join("/")} (como você disse)`}
+                </p>
 
                 <p className="rotulo mt-3">Categoria</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -252,7 +266,11 @@ export default function ChatPage() {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <Botao onClick={() => confirmar(m, m.categoria)} larguraTotal>
+                  <Botao
+                    onClick={() => confirmar(m, m.categoria)}
+                    disabled={salvando !== null}
+                    larguraTotal
+                  >
                     Confirmar
                   </Botao>
                   <Botao

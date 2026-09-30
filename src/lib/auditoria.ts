@@ -1,4 +1,4 @@
-import { WriteBatch, doc, collection } from "firebase/firestore";
+import { DocumentReference, doc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { semUndefined } from "./semUndefined";
 
@@ -9,10 +9,21 @@ import { semUndefined } from "./semUndefined";
  * aqui — nunca senha/token/segredo, só o suficiente pra reconstruir o
  * "quem fez o quê" depois.
  *
- * `anexarAuditLog` recebe um WriteBatch em vez de escrever direto:
- * cada hook faz a mudança no documento original e o log de auditoria
- * no mesmo batch, então os dois só existem juntos ou nenhum dos dois.
+ * `anexarAuditLog` recebe um batch (ou transação) em vez de escrever
+ * direto: cada hook faz a mudança no documento original e o log de
+ * auditoria juntos, então os dois só existem juntos ou nenhum dos dois.
+ *
+ * Limite honesto (auditoria S04): este log é escrito pelo navegador, então
+ * serve de histórico, não de prova. As regras do Firestore deixam ele
+ * append-only (ninguém edita nem apaga) e o horário vem do servidor
+ * (`registradoEm`). Operação privilegiada da plataforma é auditada à parte,
+ * pelo servidor (`auditoriaPlataforma`, ver verificarChamador.ts).
  */
+
+/** Batch ou transação — os dois têm `set` com essa forma. */
+interface Gravavel {
+  set(ref: DocumentReference, dados: Record<string, unknown>): unknown;
+}
 
 export type AcaoAuditoria =
   | "created"
@@ -35,19 +46,20 @@ export interface AuditLogInput {
 }
 
 export function anexarAuditLog(
-  batch: WriteBatch,
+  batch: Gravavel,
   uid: string,
   actorEmail: string | null | undefined,
   entrada: AuditLogInput
 ) {
   const ref = doc(collection(db, "usuarios", uid, "audit_logs"));
-  batch.set(
-    ref,
-    semUndefined({
+  batch.set(ref, {
+    ...(semUndefined({
       ...entrada,
       actorUid: uid,
       ...(actorEmail ? { actorEmail } : {}),
       createdAt: Date.now(),
-    })
-  );
+    }) as Record<string, unknown>),
+    // fora do semUndefined: serverTimestamp é um marcador especial do SDK
+    registradoEm: serverTimestamp(),
+  });
 }

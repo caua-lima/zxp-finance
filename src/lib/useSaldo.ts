@@ -8,17 +8,16 @@ import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
 import { arredondarCentavos, formatarMoeda } from "./types";
 import { hojeISO } from "./finance/calculations";
-import { diaAnterior } from "./finance/rendimento";
 
 export interface Saldo {
   valor: number;
   atualizadoEm: number;
   reservaMeta?: number; // quanto você quer que sobre até o fim do mês
-  /** Quanto do CDI a conta rende (100 = Mercado Pago). Ausente = 100; 0 = não rende. */
+  /**
+   * Quanto do CDI a conta rende, só pra ESTIMATIVA mostrada na tela.
+   * Ausente = não informado = sem estimativa (o app não presume produto).
+   */
   percentualCdi?: number;
-  /** Último dia cujo rendimento já foi somado ao saldo. */
-  rendimentoAte?: string;
-  rendimentoPorMes?: Record<string, number>;
 }
 
 /**
@@ -68,8 +67,6 @@ export function useSaldo() {
         {
           valor,
           atualizadoEm: Date.now(),
-          // o valor digitado já inclui o que rendeu até hoje
-          rendimentoAte: diaAnterior(hojeISO()),
         },
         { merge: true }
       );

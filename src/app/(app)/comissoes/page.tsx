@@ -10,7 +10,7 @@ import { useGanhos } from "@/lib/useGanhos";
 import { MoneyInput } from "@/components/MoneyInput";
 import {
   comissaoPrevistaPara,
-  ehGanhoDeComissao,
+  pagamentosDaComissao,
 } from "@/lib/finance/comissaoPrevista";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -162,21 +162,32 @@ export default function ComissoesPage() {
   }
 
   const prevista = comissaoPrevistaPara(mesPagamento, comissoes.todas);
-  const pagamentoLancado = ganhos.pontuais.find(ehGanhoDeComissao);
+  // só o que foi lançado VINCULADO a este mês de comissão (não por nome)
+  const pagamentos = pagamentosDaComissao(mes, ganhos.pontuais);
+  const recebido = pagamentos.reduce((acc, g) => acc + g.valor, 0);
+  const pagamentoLancado = pagamentos.length > 0 ? { valor: recebido } : null;
+  const restanteBruto = prevista ? Math.max(0, prevista.bruto - recebido) : 0;
   const nomeMesOrigem = formatarMes(mes).split(" ")[0].toLowerCase();
   const nomeMesPagamento = formatarMes(mesPagamento).split(" ")[0].toLowerCase();
 
   function abrirRecebimento() {
     // abre com o bruto calculado — o valor que o cliente paga costuma
     // ser o bruto; o imposto sai depois, no DRE
-    setValorRecebido(prevista?.bruto ?? comissoes.totalMes);
+    setValorRecebido(restanteBruto || comissoes.totalMes);
     setRegistrandoRecebimento(true);
   }
 
   function confirmarRecebimento() {
     if (valorRecebido <= 0) return;
     toast.sucessoSe(
-      ganhos.adicionarPontual(`Comissão de ${nomeMesOrigem}`, valorRecebido, "Comissão", true),
+      ganhos.adicionarPontual(
+        `Comissão de ${nomeMesOrigem}`,
+        valorRecebido,
+        "Comissão",
+        true,
+        false,
+        mes
+      ),
       `Comissão lançada como recebida em ${nomeMesPagamento}.`
     );
     setRegistrandoRecebimento(false);
@@ -320,13 +331,19 @@ export default function ComissoesPage() {
 
         {prevista && (
           <div className="border-t border-line-soft pt-2.5">
-            {pagamentoLancado ? (
+            {pagamentoLancado && restanteBruto <= 0 ? (
               <p className="text-xs text-positive">
                 ✓ Recebida em {nomeMesPagamento}: {formatarMoeda(pagamentoLancado.valor)} (lançada
                 em Ganhos)
               </p>
             ) : (
               <>
+                {pagamentoLancado && (
+                  <p className="mb-1.5 text-xs text-positive">
+                    ✓ Já caiu {formatarMoeda(pagamentoLancado.valor)} — falta{" "}
+                    {formatarMoeda(restanteBruto)} bruto
+                  </p>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-text-muted">
                     Cai em {nomeMesPagamento}, líquido

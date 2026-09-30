@@ -17,6 +17,7 @@ import { useCartoesConfig } from "@/lib/useCartoesConfig";
 import { hojeISO } from "@/lib/finance/calculations";
 import { vencimentoEfetivo } from "@/lib/finance/diasUteis";
 import { faturasPrevistasParaEntries } from "@/lib/finance/adapters";
+import { recorrenciaNoMes, valorNoMes } from "@/lib/finance/recorrencia";
 import { useMonthClose } from "@/lib/useMonthClose";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -61,23 +62,23 @@ export default function ChecklistPage() {
 
   const grupos = useMemo(() => {
     const itensContas: ItemChecklist[] = contas.contas
-      .filter((c) => c.ativa)
+      .filter((c) => recorrenciaNoMes(c, mes))
       .map((c) => ({
         id: c.id,
         origem: "conta" as const,
         nome: c.nome,
         detalhe: `${iconeCategoria(c.categoria)} ${c.categoria}`,
-        valor: c.valor,
+        valor: valorNoMes(c, mes),
         diaVencimento: c.diaVencimento,
       }));
 
     const itensAssinaturas: ItemChecklist[] = assinaturas.assinaturas
-      .filter((a) => a.ativa && !a.naFatura)
+      .filter((a) => recorrenciaNoMes(a, mes) && !a.naFatura)
       .map((a) => ({
         id: a.id,
         origem: "assinatura" as const,
         nome: a.nome,
-        valor: a.valor,
+        valor: valorNoMes(a, mes),
         diaVencimento: a.diaRenovacao,
       }));
 
@@ -125,7 +126,9 @@ export default function ChecklistPage() {
         id: `${mes}__${e.cardId}`,
         origem: "fatura" as const,
         nome: e.cardId ?? "Cartão",
-        detalhe: "prevista · lance o valor real em Fatura",
+        detalhe: e.aConfirmar
+          ? "valor a confirmar · lance o valor real em Fatura"
+          : "prevista · lance o valor real em Fatura",
         valor: e.amount,
         diaVencimento: e.cardId ? diaPorCartao[e.cardId] : undefined,
         estimado: true,
@@ -283,8 +286,14 @@ export default function ChecklistPage() {
                         item.diaVencimento !== undefined
                           ? vencimentoEfetivo(item.diaVencimento, mes).efetivo
                           : null;
+                      // estimativa vencida não é dívida atrasada certa:
+                      // aparece como "a confirmar", sem alarme vermelho
                       const atrasada =
-                        !pago && ehMesCorrente && venceEm !== null && venceEm < hoje;
+                        !pago &&
+                        !item.estimado &&
+                        ehMesCorrente &&
+                        venceEm !== null &&
+                        venceEm < hoje;
                       const diaQueVence = venceEm ? Number(venceEm.split("-")[2]) : null;
                       return (
                         <li key={`${item.origem}-${item.id}`}>

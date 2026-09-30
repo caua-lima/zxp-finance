@@ -13,6 +13,8 @@ import { Assinatura, UsoPercebidoAssinatura } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
+import { historicoAoMudarValor } from "./finance/recorrencia";
+import { mesPadrao } from "./types";
 
 export function useAssinaturas() {
   const { user } = useAuth();
@@ -86,9 +88,15 @@ export function useAssinaturas() {
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "assinaturas", id);
+      // valor novo vale deste mês pra frente — o passado mantém o antigo
+      // (auditoria F11)
+      const mudouValor = !!assinatura && assinatura.valor !== dados.valor;
       const dadosGravados = {
         nome: dados.nome,
         valor: dados.valor,
+        ...(mudouValor
+          ? { historicoValores: historicoAoMudarValor(assinatura!, dados.valor, mesPadrao()) }
+          : {}),
         cartao: dados.cartao || null,
         naFatura: !!dados.naFatura,
         diaRenovacao: dados.diaRenovacao ?? null,
@@ -160,7 +168,8 @@ export function useAssinaturas() {
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "assinaturas", id);
-      batch.update(ref, { ativa });
+      // arquivar grava o mês: meses anteriores continuam com ela
+      batch.update(ref, { ativa, desativadaEm: ativa ? null : mesPadrao() });
       if (assinatura) {
         anexarAuditLog(batch, user.uid, user.email, {
           action: ativa ? "updated" : "archived",

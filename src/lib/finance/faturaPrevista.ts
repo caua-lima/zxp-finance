@@ -5,6 +5,7 @@ import {
   parcelasRestantesEm,
 } from "@/lib/types";
 import { vencimentoEfetivo } from "./diasUteis";
+import { recorrenciaNoMes, valorNoMes } from "./recorrencia";
 
 /**
  * Fatura prevista: o piso do que o cartão vai cobrar num mês em que a
@@ -55,8 +56,8 @@ export function composicaoFaturaPrevista(
 
   if (cartao !== CARTAO_NAO_INFORMADO) {
     for (const a of assinaturas) {
-      if (a.ativa && a.naFatura && a.cartao === cartao) {
-        itens.push({ nome: a.nome, valor: a.valor, origem: "assinatura" });
+      if (recorrenciaNoMes(a, mes) && a.naFatura && a.cartao === cartao) {
+        itens.push({ nome: a.nome, valor: valorNoMes(a, mes), origem: "assinatura" });
       }
     }
   }
@@ -69,19 +70,25 @@ export function composicaoFaturaPrevista(
 }
 
 /**
- * Previsão só olha pra frente. Mês passado vale o que foi lançado (não
- * dá pra inventar uma fatura que você nunca registrou). No mês atual, só
- * cartão cujo vencimento ainda não passou — se já venceu e você não
- * lançou, não é o app que vai acusar uma fatura "atrasada" do nada.
+ * Previsão vale pro mês atual e pra frente. Mês passado vale o que foi
+ * lançado (ou o que ficou no fechamento) — não dá pra inventar agora uma
+ * fatura que nunca foi registrada. Veja `previsaoAConfirmar` pro caso da
+ * previsão cujo vencimento já passou.
  */
-export function devePreverFatura(
+export function devePreverFatura(mes: string, hojeISO: string): boolean {
+  return mes >= hojeISO.slice(0, 7);
+}
+
+/**
+ * A previsão venceu e o valor real não foi lançado: não some (seria
+ * esconder um compromisso) e também não vira "dívida atrasada" certa —
+ * fica como "valor a confirmar" (auditoria F14).
+ */
+export function previsaoAConfirmar(
   mes: string,
   hojeISO: string,
   diaVencimento?: number
 ): boolean {
-  const mesHoje = hojeISO.slice(0, 7);
-  if (mes < mesHoje) return false;
-  if (mes > mesHoje) return true;
-  if (!diaVencimento) return true; // sem dia cadastrado, o app assume fim do mês
-  return vencimentoEfetivo(diaVencimento, mes).efetivo >= hojeISO;
+  if (mes !== hojeISO.slice(0, 7) || !diaVencimento) return false;
+  return vencimentoEfetivo(diaVencimento, mes).efetivo < hojeISO;
 }

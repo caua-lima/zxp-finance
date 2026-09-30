@@ -1,90 +1,90 @@
 import { listarDocumentos, obterDocumento } from "@/lib/firestoreRest";
-import { calcularImposto, arredondarCentavos } from "@/lib/types";
-import { ContextoSimulacao } from "./simulador";
+import {
+  calcularImposto,
+  arredondarCentavos,
+  mesPadrao,
+  Ganho,
+  ContaFixa,
+  Assinatura,
+  Parcela,
+  FaturaCartao,
+  Gasto,
+} from "@/lib/types";
+import { hojeISO } from "./calculations";
+import { saldoConfirmado, MovimentoPagamento } from "./saldo";
+import { compromissosPorMes } from "./compromissosFuturos";
+import { ContextoSimulacao, MESES_MAXIMOS } from "./simulador";
 
 /**
- * Monta o contexto real de um usuário pro simulador de viabilidade, lendo
- * via Firestore REST (mesmo caminho do cron — não existe sessão de
- * usuário no servidor, e este código deliberadamente NÃO usa
- * firebase-admin, ver googleAuth.ts/firestoreRest.ts). Só é chamado depois
- * que `verificarChamador` já confirmou de quem é o `uid` — nunca recebe um
- * uid vindo direto do corpo da requisição.
+ * Monta o contexto real de um usuário pro simulador, lendo via Firestore
+ * REST (mesmo caminho do cron — sem firebase-admin, ver firestoreRest.ts).
+ * Só é chamado depois que `verificarChamadorAtivo` confirmou de quem é o
+ * `uid` — nunca recebe um uid vindo do corpo da requisição.
+ *
+ * Usa o MESMO snapshot do painel (auditoria F15): saldo confirmado
+ * (referência menos movimentos posteriores), e compromissos mês a mês
+ * incluindo faturas e parcelas do cartão. Sem saldo informado, devolve
+ * null — o Consultor responde que não dá pra avaliar, em vez de supor zero.
  */
 
-interface SaldoDoc {
-  valor: number;
-  reservaMeta?: number;
-}
-interface ContaFixaDoc {
-  valor: number;
-  ativa: boolean;
-}
-interface AssinaturaDoc {
-  valor: number;
-  ativa: boolean;
-  naFatura?: boolean;
-}
-interface ParcelaDoc {
-  valorParcela: number;
-  parcelasRestantes: number;
-  dividida?: boolean;
-  naFatura?: boolean;
-}
-interface GanhoDoc {
-  tipo: "recorrente" | "pontual";
-  ativo?: boolean;
-  valor: number;
-  semImposto?: boolean;
-}
+type Doc<T> = { id: string; dados: T };
+const comId = <T,>(docs: Doc<T>[]) => docs.map((d) => ({ ...d.dados, id: d.id }) as T & { id: string });
 
-export async function montarContextoSimulacao(uid: string): Promise<ContextoSimulacao> {
-  const [saldoDoc, contasFixas, assinaturas, parcelas, ganhos] = await Promise.all([
-    obterDocumento<SaldoDoc>(`usuarios/${uid}/saldo/atual`),
-    listarDocumentos<ContaFixaDoc>(`usuarios/${uid}/contasFixas`),
-    listarDocumentos<AssinaturaDoc>(`usuarios/${uid}/assinaturas`),
-    listarDocumentos<ParcelaDoc>(`usuarios/${uid}/parcelas`),
-    listarDocumentos<GanhoDoc>(`usuarios/${uid}/ganhos`),
-  ]);
+export async function montarContextoSimulacao(uid: string): Promise<ContextoSimulacao | null> {
+  const base = `usuarios/${uid}`;
+  const [saldoDoc, contas, assinaturas, parcelas, ganhos, faturas, gastos, pagamentos, cartoes] =
+    await Promise.all([
+      obterDocumento<{ valor: number; atualizadoEm: number; reservaMeta?: number }>(`${base}/saldo/atual`),
+      listarDocumentos<ContaFixa>(`${base}/contasFixas`),
+      listarDocumentos<Assinatura>(`${base}/assinaturas`),
+      listarDocumentos<Parcela>(`${base}/parcelas`),
+      listarDocumentos<Ganho>(`${base}/ganhos`),
+      listarDocumentos<FaturaCartao>(`${base}/faturasCartao`),
+      listarDocumentos<Gasto>(`${base}/gastos`),
+      listarDocumentos<MovimentoPagamento>(`${base}/pagamentos`),
+      listarDocumentos<{ nome: string; diaVencimento?: number | null }>(`${base}/cartoesConfig`),
+    ]);
 
-  const saldoAtual = saldoDoc?.valor ?? 0;
-  const reservaMeta = saldoDoc?.reservaMeta ?? 0;
+  if (!saldoDoc || typeof saldoDoc.valor !== "number") return null;
 
-  // assinatura "naFatura" já está contada dentro do lançamento de fatura
-  // do cartão — não existe aqui como despesa fixa própria, senão contaria
-  // o mesmo gasto duas vezes (mesma regra do adapters.ts)
-  const despesasFixasMensais = arredondarCentavos(
-    contasFixas
-      .filter((c) => c.dados.ativa)
-      .reduce((acc, c) => acc + c.dados.valor, 0) +
-      assinaturas
-        .filter((a) => a.dados.ativa && !a.dados.naFatura)
-        .reduce((acc, a) => acc + a.dados.valor, 0)
+  const saldoAtual = saldoConfirmado(
+    { valor: saldoDoc.valor, atualizadoEm: saldoDoc.atualizadoEm ?? 0 },
+    comId(gastos),
+    pagamentos.map((p) => p.dados)
   );
 
-  const parcelasAtivas = parcelas
-    .filter((p) => p.dados.parcelasRestantes > 0 && !p.dados.naFatura)
-    .map((p) => ({
-      // mesma regra de valorMinhaParte() em types.ts, sem precisar montar
-      // um Parcela completo só pra chamar a função
-      valorMensal: p.dados.dividida ? p.dados.valorParcela / 2 : p.dados.valorParcela,
-      mesesRestantes: p.dados.parcelasRestantes,
-    }));
+  const diaVencimentoPorCartao: Record<string, number> = {};
+  for (const c of cartoes) {
+    if (c.dados.diaVencimento) diaVencimentoPorCartao[c.dados.nome] = c.dados.diaVencimento;
+  }
 
+  const listaGanhos = comId(ganhos);
+  const compromissos = compromissosPorMes(
+    {
+      ganhos: listaGanhos,
+      contas: comId(contas),
+      assinaturas: comId(assinaturas),
+      parcelas: comId(parcelas),
+      faturas: comId(faturas),
+      gastos: [],
+      diaVencimentoPorCartao,
+      hojeISO: hojeISO(),
+    },
+    mesPadrao(),
+    MESES_MAXIMOS
+  );
+
+  // renda conservadora: só o que é recorrente e ativo, líquido de imposto
   const rendaMensalLiquida = arredondarCentavos(
-    ganhos
-      .filter((g) => g.dados.tipo === "recorrente" && g.dados.ativo !== false)
-      .reduce((acc, g) => {
-        const bruto = g.dados.valor;
-        const imposto = g.dados.semImposto ? 0 : calcularImposto(bruto);
-        return acc + (bruto - imposto);
-      }, 0)
+    listaGanhos
+      .filter((g) => g.tipo === "recorrente" && g.ativo !== false)
+      .reduce((acc, g) => acc + g.valor - (g.semImposto ? 0 : calcularImposto(g.valor)), 0)
   );
 
   return {
-    saldoAtual,
-    reservaMeta,
+    saldoAtual: saldoAtual ?? 0,
+    reservaMeta: saldoDoc.reservaMeta ?? 0,
     rendaMensalLiquida,
-    despesasFixasMensais,
-    parcelasAtivas,
+    compromissosPorMes: compromissos,
   };
 }

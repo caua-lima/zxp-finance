@@ -16,9 +16,11 @@ import { vencimentoEfetivo } from "./diasUteis";
 import {
   composicaoFaturaPrevista,
   devePreverFatura,
+  previsaoAConfirmar,
   CARTAO_NAO_INFORMADO,
 } from "./faturaPrevista";
 import { comissaoPrevistaParaEntries } from "./comissaoPrevista";
+import { recorrenciaNoMes, valorNoMes } from "./recorrencia";
 import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 
 /**
@@ -37,15 +39,33 @@ import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
  * segura pra não marcar nada como "atrasado" antes da hora.
  */
 
-export type EstaPago = (
-  origem: "conta" | "assinatura" | "parcela" | "fatura" | "ganho",
+export type OrigemPagamento = "conta" | "assinatura" | "parcela" | "fatura" | "ganho";
+
+export type EstaPago = (origem: OrigemPagamento, itemId: string) => boolean;
+
+/**
+ * Quando foi pago de verdade (timestamp), se o checklist sabe. Sem isso o
+ * fluxo de caixa usava o vencimento como se fosse a data do pagamento
+ * (auditoria F12).
+ */
+export type DataPagamento = (origem: OrigemPagamento, itemId: string) => number | undefined;
+
+function paidAtDe(
+  pago: boolean,
+  dataPagamento: DataPagamento | undefined,
+  origem: OrigemPagamento,
   itemId: string
-) => boolean;
+): string | undefined {
+  if (!pago || !dataPagamento) return undefined;
+  const quando = dataPagamento(origem, itemId);
+  return quando ? new Date(quando).toISOString() : undefined;
+}
 
 export function ganhosParaEntries(
   ganhos: Ganho[],
   mes: string,
-  estaPago: EstaPago
+  estaPago: EstaPago,
+  dataPagamento?: DataPagamento
 ): FinancialEntry[] {
   const entries: FinancialEntry[] = [];
   for (const g of ganhos) {
@@ -63,9 +83,11 @@ export function ganhosParaEntries(
       amount: g.valor,
       dueDate: `${mes}-01`,
       paidAt:
-        g.tipo === "pontual" && g.recebido && g.recebidoEm
-          ? new Date(g.recebidoEm).toISOString()
-          : undefined,
+        g.tipo === "pontual"
+          ? g.recebido && g.recebidoEm
+            ? new Date(g.recebidoEm).toISOString()
+            : undefined
+          : paidAtDe(recebido, dataPagamento, "ganho", g.id),
       competenceMonth: mes,
       description: g.descricao,
       categoryId:
@@ -83,17 +105,21 @@ export function ganhosParaEntries(
 export function contasFixasParaEntries(
   contas: ContaFixa[],
   mes: string,
-  estaPago: EstaPago
+  estaPago: EstaPago,
+  dataPagamento?: DataPagamento
 ): FinancialEntry[] {
   return contas
-    .filter((c) => c.ativa)
+    // vigência: não existe antes do início, e arquivada continua nos
+    // meses em que estava ativa (auditoria F11)
+    .filter((c) => recorrenciaNoMes(c, mes))
     .map((c) => {
       const pago = estaPago("conta", c.id);
       return {
         id: `conta__${c.id}__${mes}`,
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
-        amount: c.valor,
+        amount: valorNoMes(c, mes),
+        paidAt: paidAtDe(pago, dataPagamento, "conta", c.id),
         // boleto que cai em fim de semana ou feriado é pago no próximo
         // dia útil sem juros — usar o dia cadastrado marcaria como
         // atrasado algo que ainda está no prazo
@@ -114,17 +140,19 @@ export function contasFixasParaEntries(
 export function assinaturasParaEntries(
   assinaturas: Assinatura[],
   mes: string,
-  estaPago: EstaPago
+  estaPago: EstaPago,
+  dataPagamento?: DataPagamento
 ): FinancialEntry[] {
   return assinaturas
-    .filter((a) => a.ativa && !a.naFatura)
+    .filter((a) => recorrenciaNoMes(a, mes) && !a.naFatura)
     .map((a) => {
       const pago = estaPago("assinatura", a.id);
       return {
         id: `assinatura__${a.id}__${mes}`,
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
-        amount: a.valor,
+        amount: valorNoMes(a, mes),
+        paidAt: paidAtDe(pago, dataPagamento, "assinatura", a.id),
         // assinatura não pula pro dia útil: a cobrança é automática no
         // cartão e acontece no domingo igual, não espera o banco abrir
         dueDate: a.diaRenovacao
@@ -145,7 +173,8 @@ export function assinaturasParaEntries(
 export function parcelasParaEntries(
   parcelas: Parcela[],
   mes: string,
-  estaPago: EstaPago
+  estaPago: EstaPago,
+  dataPagamento?: DataPagamento
 ): FinancialEntry[] {
   return parcelas
     .filter((p) => parcelasRestantesEm(p, mes) > 0 && !p.naFatura)
@@ -158,6 +187,7 @@ export function parcelasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: valorMinhaParte(p),
+        paidAt: paidAtDe(pago, dataPagamento, "parcela", p.id),
         dueDate: ultimoDiaMes(mes),
         competenceMonth: mes,
         description: `${p.nome} (${numeroAtual}/${p.totalParcelas})`,
@@ -175,7 +205,8 @@ export function faturasParaEntries(
   faturas: FaturaCartao[],
   mes: string,
   estaPago: EstaPago,
-  diaVencimentoPorCartao: Record<string, number> = {}
+  diaVencimentoPorCartao: Record<string, number> = {},
+  dataPagamento?: DataPagamento
 ): FinancialEntry[] {
   return faturas
     .filter((f) => f.valor > 0)
@@ -187,6 +218,7 @@ export function faturasParaEntries(
         type: "expense" as const,
         status: pago ? ("paid" as const) : ("pending" as const),
         amount: f.valor,
+        paidAt: paidAtDe(pago, dataPagamento, "fatura", f.id),
         dueDate: dia ? vencimentoEfetivo(dia, mes).efetivo : ultimoDiaMes(mes),
         competenceMonth: mes,
         description: `Fatura ${f.nome}`,
@@ -217,21 +249,23 @@ export function faturasPrevistasParaEntries(
     faturas.filter((f) => f.mes === mes && f.valor > 0).map((f) => f.nome)
   );
 
+  if (!devePreverFatura(mes, hojeISO)) return [];
+
   const cartoes = new Set<string>(CARTOES_PREDEFINIDOS);
   for (const p of parcelas) if (p.naFatura && p.cartao) cartoes.add(p.cartao);
   for (const a of assinaturas) if (a.naFatura && a.cartao) cartoes.add(a.cartao);
-  // parcela "na fatura" sem cartão informado: só dá pra prever enquanto
-  // nenhuma fatura real do mês foi lançada — ela pode estar em qualquer uma
-  if (lancadas.size === 0) cartoes.add(CARTAO_NAO_INFORMADO);
+  // parcela "na fatura" sem cartão informado: não some só porque alguma
+  // fatura real foi lançada — fica pendente até você dizer qual cartão
+  cartoes.add(CARTAO_NAO_INFORMADO);
 
   const entries: FinancialEntry[] = [];
   for (const cartao of cartoes) {
     if (lancadas.has(cartao)) continue;
     const dia = diaVencimentoPorCartao[cartao];
-    if (!devePreverFatura(mes, hojeISO, dia)) continue;
     const prevista = composicaoFaturaPrevista(cartao, mes, parcelas, assinaturas);
     if (prevista.total <= 0) continue;
 
+    const semCartao = cartao === CARTAO_NAO_INFORMADO;
     const idPagamento = `${mes}__${cartao}`;
     entries.push({
       id: `fatura-prevista__${idPagamento}`,
@@ -240,7 +274,12 @@ export function faturasPrevistasParaEntries(
       amount: prevista.total,
       dueDate: dia ? vencimentoEfetivo(dia, mes).efetivo : ultimoDiaMes(mes),
       competenceMonth: mes,
-      description: `Fatura ${cartao} (prevista)`,
+      description: semCartao
+        ? "Parcelas sem cartão definido (a confirmar)"
+        : previsaoAConfirmar(mes, hojeISO, dia)
+        ? `Fatura ${cartao} (valor a confirmar)`
+        : `Fatura ${cartao} (prevista)`,
+      aConfirmar: semCartao || previsaoAConfirmar(mes, hojeISO, dia),
       categoryId: "cartao",
       cardId: cartao,
       source: "card_bill",
@@ -286,19 +325,22 @@ export interface DadosFinanceiros {
   /** Comissões diárias lançadas — viram entrada prevista do mês seguinte. */
   comissoes?: Comissao[];
   hojeISO?: string;
+  /** Data real de cada pagamento marcado no checklist (auditoria F12). */
+  dataPagamento?: DataPagamento;
 }
 
 export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEntry[] {
   return [
-    ...ganhosParaEntries(dados.ganhos, dados.mes, dados.estaPago),
-    ...contasFixasParaEntries(dados.contas, dados.mes, dados.estaPago),
-    ...assinaturasParaEntries(dados.assinaturas, dados.mes, dados.estaPago),
-    ...parcelasParaEntries(dados.parcelas, dados.mes, dados.estaPago),
+    ...ganhosParaEntries(dados.ganhos, dados.mes, dados.estaPago, dados.dataPagamento),
+    ...contasFixasParaEntries(dados.contas, dados.mes, dados.estaPago, dados.dataPagamento),
+    ...assinaturasParaEntries(dados.assinaturas, dados.mes, dados.estaPago, dados.dataPagamento),
+    ...parcelasParaEntries(dados.parcelas, dados.mes, dados.estaPago, dados.dataPagamento),
     ...faturasParaEntries(
       dados.faturas,
       dados.mes,
       dados.estaPago,
-      dados.diaVencimentoPorCartao
+      dados.diaVencimentoPorCartao,
+      dados.dataPagamento
     ),
     ...faturasPrevistasParaEntries(
       dados.faturas,

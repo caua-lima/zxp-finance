@@ -12,7 +12,14 @@ export interface Ganho {
   descricao: string;
   valor: number;
   semImposto?: boolean; // true pra renda que já chega líquida (ex: bico, trabalho por fora) — não desconta o imposto padrão dela
+  /** Mês ("AAAA-MM") das comissões que esse pagamento quita — vínculo explícito com a previsão. */
+  origemComissao?: string;
   criadoEm: number;
+}
+
+export interface VigenciaValor {
+  desde: string; // "AAAA-MM"
+  valor: number;
 }
 
 export interface ContaFixa {
@@ -23,6 +30,12 @@ export interface ContaFixa {
   ativa: boolean;
   diaVencimento?: number; // 1-31, opcional — sem isso o app assume fim do mês
   criadoEm: number;
+  /** Primeiro mês em que existe ("AAAA-MM"). Ausente = mês do cadastro. */
+  inicioEm?: string;
+  /** Mês em que foi arquivada — meses anteriores continuam com ela. */
+  desativadaEm?: string | null;
+  /** Mudanças de valor com vigência — mês antigo mantém o valor antigo. */
+  historicoValores?: VigenciaValor[];
 }
 
 export function diaVencimentoNoMes(mes: string, diaVencimento: number): string {
@@ -78,6 +91,12 @@ export interface Assinatura {
   diaRenovacao?: number; // 1-31, opcional — sem isso o app assume fim do mês
   usoPercebido?: UsoPercebidoAssinatura;
   criadoEm: number;
+  /** Primeiro mês em que existe ("AAAA-MM"). Ausente = mês do cadastro. */
+  inicioEm?: string;
+  /** Mês em que foi arquivada — meses anteriores continuam com ela. */
+  desativadaEm?: string | null;
+  /** Mudanças de valor com vigência — mês antigo mantém o valor antigo. */
+  historicoValores?: VigenciaValor[];
 }
 
 export interface FaturaCartao {
@@ -99,6 +118,8 @@ export interface Gasto {
   estornadoEm?: number;
   estornoDeId?: string; // presente só na entrada de estorno — aponta pro gasto original
   ajusteConciliacaoId?: string; // presente só em gasto criado por ajuste de conciliação
+  /** Dia em que o gasto aconteceu ("AAAA-MM-DD"). Ausente em gasto antigo = dia do registro. */
+  data?: string;
   /**
    * Quanto foi guardado em cada caixinha por causa DESTE gasto, no formato
    * {caixinhaId: valor}. Guardado no próprio lançamento pra que o estorno
@@ -129,12 +150,12 @@ export interface Caixinha {
   depositos: number; // quantas vezes já guardou — explica o saldo
   criadoEm: number;
   atualizadoEm: number;
-  /** Quanto do CDI a caixinha rende (100 = 100% do CDI, o do Mercado Pago). Ausente = 100; 0 = não rende. */
+  /**
+   * Quanto do CDI a caixinha rende (100 = Cofrinho do Mercado Pago), só pra
+   * ESTIMAR rendimento na tela. Ausente/0 = sem estimativa. O saldo da
+   * caixinha só muda por depósito ou quando você corrige o valor.
+   */
   percentualCdi?: number;
-  /** Último dia ("AAAA-MM-DD") cujo rendimento já foi somado ao saldo. */
-  rendimentoAte?: string;
-  /** Rendimento somado por mês ("AAAA-MM" → R$), só pra mostrar quanto rendeu. */
-  rendimentoPorMes?: Record<string, number>;
 }
 
 export type NivelEscolaridade =
@@ -396,4 +417,10 @@ export interface FinancialEntry {
    * anterior que ainda vai cair. Some sozinho quando o valor real é lançado.
    */
   estimado?: boolean;
+  /**
+   * Estimativa cujo vencimento já passou sem o valor real ter sido
+   * lançado: não é dívida vencida certa, mas também não pode sumir —
+   * fica pendente como "valor a confirmar" (auditoria F14).
+   */
+  aConfirmar?: boolean;
 }

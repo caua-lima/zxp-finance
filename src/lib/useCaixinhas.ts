@@ -14,8 +14,6 @@ import { Caixinha, arredondarCentavos, formatarMoeda } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
-import { hojeISO } from "./finance/calculations";
-import { diaAnterior } from "./finance/rendimento";
 
 /**
  * Caixinhas: potinhos de dinheiro guardado que se enchem sozinhos a cada
@@ -75,9 +73,8 @@ export function useCaixinhas() {
         depositos: 0,
         criadoEm: agora,
         atualizadoEm: agora,
-        // rende pelo CDI a partir de hoje (100% = Mercado Pago)
-        percentualCdi: Math.max(0, dados.percentualCdi ?? 100),
-        rendimentoAte: diaAnterior(hojeISO()),
+        // só pra estimativa de rendimento na tela — nunca soma no saldo
+        percentualCdi: Math.max(0, dados.percentualCdi ?? 0),
       });
       setErro(null);
       return true;
@@ -97,7 +94,7 @@ export function useCaixinhas() {
         nome: dados.nome,
         porGasto: arredondarCentavos(dados.porGasto),
         meta: dados.meta ? arredondarCentavos(dados.meta) : null,
-        percentualCdi: Math.max(0, dados.percentualCdi ?? 100),
+        percentualCdi: Math.max(0, dados.percentualCdi ?? 0),
         atualizadoEm: Date.now(),
       });
       setErro(null);
@@ -123,8 +120,6 @@ export function useCaixinhas() {
       batch.update(doc(db, "usuarios", user.uid, "caixinhas", id), {
         saldo: arredondarCentavos(novoSaldo),
         atualizadoEm: Date.now(),
-        // o valor corrigido à mão já inclui o que rendeu até hoje
-        rendimentoAte: diaAnterior(hojeISO()),
       });
       anexarAuditLog(batch, user.uid, user.email, {
         action: "updated",

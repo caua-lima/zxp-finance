@@ -15,7 +15,7 @@ const RUIDO = new Set([
   "torrar", "custou", "custa", "saiu", "foi", "deu", "peguei", "mandei",
   "botei", "coloquei",
   // tempo
-  "hoje", "agora", "ontem", "cedo", "mais",
+  "hoje", "agora", "ontem", "anteontem", "cedo", "mais",
   // conectores e artigos
   "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "num",
   "numa", "com", "pra", "para", "por", "o", "a", "os", "as", "um", "uma",
@@ -79,22 +79,42 @@ function numeroPorExtenso(tokens: string[]): number | null {
   return encontrou ? total : null;
 }
 
+/**
+ * Converte o número achado na frase, com as regras do jeito brasileiro:
+ * vírgula é decimal ("15,50"), ponto seguido de 3 dígitos é milhar
+ * ("1.500", "1.500,50"). Ponto seguido de 1–2 dígitos sem vírgula é
+ * decimal ("15.50") — é assim que o teclado do celular e a voz escrevem.
+ */
 function paraNumero(bruto: string): number {
-  // "1.500,50" -> 1500.50 · "15,50" -> 15.50 · "15.50" -> 15.50
-  const limpo = bruto.replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
-  return parseFloat(limpo);
+  if (bruto.includes(",")) return parseFloat(bruto.replace(/\./g, "").replace(",", "."));
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(bruto)) return parseFloat(bruto.replace(/\./g, ""));
+  return parseFloat(bruto);
 }
 
 export interface GastoTextoInterpretado {
   valor: number | null;
   descricao: string;
+  /** 0 = hoje, 1 = ontem, 2 = anteontem. A data dita na frase não é descartada. */
+  diasAtras: number;
 }
 
-const NUMERO = /\d+(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:\.\d{1,2})?/;
+// Ordem importa: milhar com ponto, decimal com vírgula, decimal com ponto
+// e só então inteiro. A versão antiga casava "15" antes de ".50" e lia
+// "café 15.50" como R$ 50 (auditoria F06).
+const NUMERO =
+  /\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?(?!\d)|\d+,\d{1,2}(?!\d)|\d+\.\d{1,2}(?!\d)|\d+/;
+
+function diasAtrasDaFrase(texto: string): number {
+  const t = semAcento(texto);
+  if (/\banteontem\b/.test(t)) return 2;
+  if (/\bontem\b/.test(t)) return 1;
+  return 0;
+}
 
 export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
   const texto = textoOriginal.trim();
-  if (!texto) return { valor: null, descricao: "" };
+  if (!texto) return { valor: null, descricao: "", diasAtras: 0 };
+  const diasAtras = diasAtrasDaFrase(texto);
 
   let valor: number | null = null;
   let resto = texto;
@@ -151,5 +171,5 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
   }
 
   const descricao = tokens.join(" ").replace(/[.,!?]+$/, "").trim();
-  return { valor, descricao };
+  return { valor, descricao, diasAtras };
 }

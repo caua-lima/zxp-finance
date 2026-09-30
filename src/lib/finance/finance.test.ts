@@ -28,9 +28,24 @@ import {
   calculatePendingExpenses,
   hojeISO,
   diaISOde,
-  calcularSaldoAtual,
   resumoCompromissos,
+  projetarSaldoAteFimDoMes,
 } from "./calculations";
+import {
+  saldoConfirmado,
+  saidasDeHoje,
+  orcamentoDoDia,
+  gastoContaNoSaldo,
+  exclusaoDoParMudaSaldo,
+} from "./saldo";
+import { recorrenciaNoMes, valorNoMes, historicoAoMudarValor } from "./recorrencia";
+import {
+  ehAdminGlobal,
+  problemaTemporalDoToken,
+  tokenRevogado,
+  recursoLiberado,
+} from "../autorizacao";
+import { valorColado } from "../valorColado";
 import {
   parcelasParaEntries,
   assinaturasParaEntries,
@@ -41,11 +56,12 @@ import {
 import {
   comissaoPrevistaPara,
   comissaoPrevistaParaEntries,
-  ehGanhoDeComissao,
+  pagamentosDaComissao,
 } from "./comissaoPrevista";
 import {
   composicaoFaturaPrevista,
   devePreverFatura,
+  previsaoAConfirmar,
   CARTAO_NAO_INFORMADO,
 } from "./faturaPrevista";
 import {
@@ -53,12 +69,7 @@ import {
   mesDaUltimaParcela,
   resumoParcelasAtivas,
 } from "./resumoParcelas";
-import {
-  calcularRendimento,
-  cdiAnual,
-  somarPorMes,
-  converterSerieBcb,
-} from "./rendimento";
+import { cdiAnual, estimarRendimentoMensal, converterSerieBcb } from "./rendimento";
 import { sugerirCrescimentoCategorias, compararComBenchmarkIBGE } from "./sugestoes";
 import { GrupoPorCategoria } from "./entries";
 import { calcularComissaoDoDia } from "./comissoes";
@@ -79,7 +90,11 @@ import {
   progressoDaMeta,
   gastosAteAMeta,
 } from "./caixinhas";
-import { simularNovoCompromisso, ContextoSimulacao } from "./simulador";
+import {
+  simularNovoCompromisso,
+  validarEntradaSimulacao,
+  ContextoSimulacao,
+} from "./simulador";
 import { saldoEstaVelho } from "./alerts";
 import {
   projetarRitmo,
@@ -761,15 +776,13 @@ describe("simulador de viabilidade", () => {
       saldoAtual: 1000,
       reservaMeta: 100,
       rendaMensalLiquida: 2000,
-      despesasFixasMensais: 1500,
-      parcelasAtivas: [],
+      compromissosPorMes: [1500],
       ...over,
     };
   }
 
   test("sobra dinheiro todo mês: viável, sem mês ruim", () => {
-    // renda 2000, despesas fixas 1500, sobra 500/mês — uma parcela de 200
-    // ainda deixa 300 de sobra, bem acima da reserva de 100
+    // renda 2000, compromissos 1500, sobra 500/mês — parcela de 200 cabe
     const r = simularNovoCompromisso(contexto(), 200, 12);
     assert.equal(r.viavel, true);
     assert.equal(r.primeiroMesRuim, null);
@@ -778,16 +791,12 @@ describe("simulador de viabilidade", () => {
   });
 
   test("aponta o primeiro mês em que o saldo fica negativo", () => {
-    // saldo 1000, sobra líquida 500/mês antes do novo peso; compromisso de
-    // 600/mês come 100 do saldo por mês — no mês 3 fica -800+1500(reserva
-    // não entra aqui, é so negativo mesmo)... calculado abaixo
     const r = simularNovoCompromisso(
-      contexto({ saldoAtual: 200, reservaMeta: 0, rendaMensalLiquida: 1000, despesasFixasMensais: 1000 }),
+      contexto({ saldoAtual: 200, reservaMeta: 0, rendaMensalLiquida: 1000, compromissosPorMes: [1000] }),
       150,
       6
     );
-    // cada mês: saldo += 1000 - 1000 - 150 = -150
-    // mês1: 200-150=50 · mês2: 50-150=-100 → inviável no mês 2
+    // cada mês: saldo += 1000 - 1000 - 150 = -150 → mês 1: 50 · mês 2: -100
     assert.equal(r.viavel, false);
     assert.equal(r.primeiroMesRuim, 2);
     assert.equal(r.motivo, "saldo_negativo");
@@ -797,52 +806,38 @@ describe("simulador de viabilidade", () => {
 
   test("saldo positivo mas abaixo da reserva também é inviável, com motivo diferente", () => {
     const r = simularNovoCompromisso(
-      contexto({ saldoAtual: 500, reservaMeta: 300, rendaMensalLiquida: 1000, despesasFixasMensais: 1000 }),
+      contexto({ saldoAtual: 500, reservaMeta: 300, rendaMensalLiquida: 1000, compromissosPorMes: [1000] }),
       150,
       3
     );
-    // mês1: 500-150=350 (>=300, ok) · mês2: 350-150=200 (<300 → ruim)
     assert.equal(r.viavel, false);
     assert.equal(r.primeiroMesRuim, 2);
     assert.equal(r.motivo, "abaixo_da_reserva");
   });
 
-  test("só marca o PRIMEIRO mês ruim, não repete a cada mês seguinte", () => {
+  test("usa o compromisso de CADA mês: parcela que termina alivia os meses seguintes", () => {
+    // mês 1 e 2 com parcela de 300 a mais (800), depois só 500
     const r = simularNovoCompromisso(
-      contexto({ saldoAtual: 100, rendaMensalLiquida: 500, despesasFixasMensais: 700 }),
-      0,
-      5
+      contexto({ saldoAtual: 0, reservaMeta: 0, rendaMensalLiquida: 1000, compromissosPorMes: [800, 800, 500] }),
+      1,
+      3
     );
-    assert.equal(r.primeiroMesRuim, 1);
-    // mesmo com o saldo continuando negativo nos meses seguintes, o motivo
-    // e o número do mês não mudam
-    assert.equal(r.meses[4].saldoFinal < 0, true);
+    assert.equal(r.meses[0].saldoFinal, 199);
+    assert.equal(r.meses[1].saldoFinal, 398);
+    assert.equal(r.meses[2].saldoFinal, 897);
   });
 
-  test("parcela já em andamento some da conta no mês em que ela termina", () => {
-    // uma parcela de 300 que só tem 2 meses restantes: nos meses 3+ ela
-    // não pesa mais, e o saldo passa a melhorar
-    const r = simularNovoCompromisso(
-      contexto({
-        saldoAtual: 0,
-        rendaMensalLiquida: 1000,
-        despesasFixasMensais: 500,
-        parcelasAtivas: [{ valorMensal: 300, mesesRestantes: 2 }],
-      }),
-      0,
-      4
-    );
-    // mês1: 0+1000-500-300=200 · mês2: 200+1000-500-300=400
-    // mês3 (parcela já não conta): 400+1000-500=900
-    assert.equal(r.meses[0].saldoFinal, 200);
-    assert.equal(r.meses[1].saldoFinal, 400);
-    assert.equal(r.meses[2].saldoFinal, 900);
-    assert.equal(r.meses[2].compromissosDoMes, 500);
-  });
-
-  test("compromisso de valor zero simula 'e se eu não assumisse nada'", () => {
-    const r = simularNovoCompromisso(contexto(), 0, 1);
-    assert.equal(r.meses[0].compromissosDoMes, 1500);
+  test("auditoria: meses=0, negativo, NaN e horizonte gigante são recusados", () => {
+    assert.ok(validarEntradaSimulacao(1000, 0));
+    assert.ok(validarEntradaSimulacao(-10, 12));
+    assert.ok(validarEntradaSimulacao(Number.NaN, 12));
+    assert.ok(validarEntradaSimulacao(Infinity, 12));
+    assert.ok(validarEntradaSimulacao(100, 1.5));
+    assert.ok(validarEntradaSimulacao(100, 10_000));
+    assert.ok(validarEntradaSimulacao("100", 12));
+    assert.equal(validarEntradaSimulacao(200, 12), null);
+    // e a simulação nunca mais responde "viável" com lista vazia
+    assert.throws(() => simularNovoCompromisso(contexto(), 1000, 0));
   });
 });
 
@@ -891,25 +886,27 @@ describe("comissão prevista pro mês seguinte", () => {
     assert.equal(entries[0].estimado, true);
   });
 
-  test("some quando o pagamento real da comissão é lançado em Ganhos", () => {
-    const recebida = ganho({ mes: "2026-10", categoriaReceita: "Comissão", valor: 2500 });
+  test("some quando o pagamento VINCULADO à comissão cobre o valor", () => {
+    const recebida = ganho({ mes: "2026-10", origemComissao: "2026-09", valor: 100 });
     assert.deepEqual(
       comissaoPrevistaParaEntries([comissao("2026-09-01", 100)], [recebida], "2026-10"),
       []
     );
   });
 
-  test("reconhece pagamento de comissão pela categoria ou pela descrição", () => {
-    assert.equal(ehGanhoDeComissao(ganho({ categoriaReceita: "Comissão" })), true);
-    assert.equal(ehGanhoDeComissao(ganho({ descricao: "Comissão de setembro" })), true);
-    assert.equal(ehGanhoDeComissao(ganho({ descricao: "comissao" })), true);
-    assert.equal(ehGanhoDeComissao(ganho({ descricao: "Salário" })), false);
-    // recorrente não é pagamento de comissão, e arquivado não conta
-    assert.equal(
-      ehGanhoDeComissao(ganho({ tipo: "recorrente", categoriaReceita: "Comissão" })),
-      false
-    );
-    assert.equal(ehGanhoDeComissao(ganho({ categoriaReceita: "Comissão", arquivado: true })), false);
+  test("auditoria F13: ganho com 'Comissão' no nome mas sem vínculo NÃO esconde a previsão", () => {
+    const bico = ganho({ mes: "2026-10", descricao: "Comissão de indicação", categoriaReceita: "Comissão", valor: 50 });
+    const entries = comissaoPrevistaParaEntries([comissao("2026-09-01", 2000)], [bico], "2026-10");
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].amount, 1880);
+  });
+
+  test("pagamento parcial deixa o RESTANTE previsto, líquido", () => {
+    const parcial = ganho({ mes: "2026-10", origemComissao: "2026-09", valor: 1500 });
+    const entries = comissaoPrevistaParaEntries([comissao("2026-09-01", 2000)], [parcial], "2026-10");
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].amount, 470); // 500 bruto − 6%
+    assert.equal(pagamentosDaComissao("2026-09", [parcial]).length, 1);
   });
 });
 
@@ -968,15 +965,42 @@ describe("fatura prevista", () => {
     assert.equal(prevista.total, 34.39);
   });
 
-  test("mês passado nunca é previsto; mês que vem sempre é", () => {
-    assert.equal(devePreverFatura("2026-08", "2026-09-29", 5), false);
-    assert.equal(devePreverFatura("2026-10", "2026-09-29", 5), true);
+  test("mês passado nunca é previsto; mês atual e seguintes sim", () => {
+    assert.equal(devePreverFatura("2026-08", "2026-09-29"), false);
+    assert.equal(devePreverFatura("2026-09", "2026-09-29"), true);
+    assert.equal(devePreverFatura("2026-10", "2026-09-29"), true);
   });
 
-  test("no mês atual, só prevê cartão cujo vencimento ainda não passou", () => {
-    assert.equal(devePreverFatura("2026-09", "2026-09-29", 10), false);
-    assert.equal(devePreverFatura("2026-09", "2026-09-05", 10), true);
-    assert.equal(devePreverFatura("2026-09", "2026-09-29"), true); // sem dia: fim do mês
+  test("auditoria F14: previsão vencida vira 'a confirmar' em vez de sumir", () => {
+    assert.equal(previsaoAConfirmar("2026-09", "2026-09-29", 10), true);
+    assert.equal(previsaoAConfirmar("2026-09", "2026-09-05", 10), false);
+    assert.equal(previsaoAConfirmar("2026-10", "2026-09-29", 5), false);
+    const entries = faturasPrevistasParaEntries(
+      [],
+      [parcela({ mesReferencia: "2026-09" })],
+      [],
+      "2026-09",
+      () => false,
+      { "Nubank CNPJ": 5 },
+      "2026-09-29"
+    );
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].aConfirmar, true);
+    assert.match(entries[0].description, /a confirmar/);
+  });
+
+  test("auditoria F14: parcela sem cartão não some quando outra fatura real é lançada", () => {
+    const entries = faturasPrevistasParaEntries(
+      [{ id: "2026-10__Inter", nome: "Inter", valor: 100, mes: "2026-10", criadoEm: 1 }],
+      [parcela({ cartao: undefined })],
+      [],
+      "2026-10",
+      () => false,
+      {},
+      "2026-09-29"
+    );
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].aConfirmar, true);
   });
 
   test("vira compromisso de outubro quando a fatura real ainda não foi lançada", () => {
@@ -1089,57 +1113,19 @@ describe("resumo de parcelas ativas", () => {
   });
 });
 
-describe("rendimento pelo CDI", () => {
-  const taxas = [
-    { data: "2026-09-24", taxa: 0.05 },
-    { data: "2026-09-25", taxa: 0.05 },
-    { data: "2026-09-28", taxa: 0.05 },
-    { data: "2026-09-29", taxa: 0.05 },
-  ];
-
-  test("rende só os dias úteis entre o último dia rendido e ontem", () => {
-    const r = calcularRendimento(1000, taxas, "2026-09-24", "2026-09-29", 100);
-    // 25 e 28 (24 já rendeu; 29 é hoje, ainda não caiu)
-    assert.equal(r.diasUteis, 2);
-    assert.equal(r.ultimoDia, "2026-09-28");
-    assert.equal(r.rendimento, Math.round((1000 * 1.0005 * 1.0005 - 1000) * 100) / 100);
+describe("rendimento pelo CDI (só estimativa)", () => {
+  test("estima o mês sobre o saldo, no percentual do CDI", () => {
+    const cheio = estimarRendimentoMensal(10000, 0.05, 100, 21);
+    assert.equal(cheio, Math.round(10000 * (Math.pow(1.0005, 21) - 1) * 100) / 100);
+    const metade = estimarRendimentoMensal(10000, 0.05, 50, 21);
+    // metade do CDI rende um pouco MENOS que metade (juros compostos)
+    assert.ok(metade < cheio / 2 && metade > cheio / 2 - 0.5);
   });
 
-  test("percentual do CDI escala o rendimento", () => {
-    const cheio = calcularRendimento(10000, taxas, "2026-09-01", "2026-09-30", 100);
-    const metade = calcularRendimento(10000, taxas, "2026-09-01", "2026-09-30", 50);
-    assert.ok(metade.rendimento < cheio.rendimento);
-    assert.ok(Math.abs(metade.rendimento * 2 - cheio.rendimento) < 0.05);
-  });
-
-  test("saldo zerado não rende, mas os dias avançam (nada retroativo depois)", () => {
-    const r = calcularRendimento(0, taxas, "2026-09-01", "2026-09-30", 100);
-    assert.equal(r.rendimento, 0);
-    assert.equal(r.ultimoDia, "2026-09-29");
-  });
-
-  test("sem dia novo, nada muda", () => {
-    const r = calcularRendimento(1000, taxas, "2026-09-29", "2026-09-30", 100);
-    assert.equal(r.ultimoDia, null);
-    assert.equal(r.rendimento, 0);
-  });
-
-  test("separa o rendimento pelo mês em que rendeu", () => {
-    const r = calcularRendimento(
-      1000,
-      [
-        { data: "2026-09-30", taxa: 0.05 },
-        { data: "2026-10-01", taxa: 0.05 },
-      ],
-      "2026-09-29",
-      "2026-10-02",
-      100
-    );
-    assert.deepEqual(Object.keys(r.porMes).sort(), ["2026-09", "2026-10"]);
-    assert.deepEqual(somarPorMes({ "2026-09": 1 }, { "2026-09": 0.5, "2026-10": 2 }), {
-      "2026-09": 1.5,
-      "2026-10": 2,
-    });
+  test("sem percentual configurado, não presume rendimento", () => {
+    assert.equal(estimarRendimentoMensal(10000, 0.05, 0), 0);
+    assert.equal(estimarRendimentoMensal(0, 0.05, 100), 0);
+    assert.equal(estimarRendimentoMensal(-50, 0.05, 100), 0);
   });
 
   test("CDI de 0,050788% ao dia é ~13,65% ao ano", () => {
@@ -1164,8 +1150,10 @@ describe("saldo de agora e compromissos do mês", () => {
       { id: "1", descricao: "a", valor: 30, categoria: "x", mes: "2026-10", criadoEm: 100 },
       { id: "2", descricao: "b", valor: 50, categoria: "x", mes: "2026-10", criadoEm: 300 },
     ] as Gasto[];
-    assert.equal(calcularSaldoAtual({ valor: 1000, atualizadoEm: 200 }, gastos), 950);
-    assert.equal(calcularSaldoAtual(null, gastos), null);
+    // mesmo dia da referência: vale a ordem do registro
+    const ref = { valor: 1000, atualizadoEm: 200 };
+    assert.equal(saldoConfirmado(ref, gastos), 950);
+    assert.equal(saldoConfirmado(null, gastos), null);
   });
 
   test("saldo abaixo da reserva não vira limite diário negativo", () => {
@@ -1565,7 +1553,7 @@ describe("interpretar frase de gasto", () => {
   });
 
   test("frase vazia não quebra", () => {
-    assert.deepEqual(parseGastoTexto("   "), { valor: null, descricao: "" });
+    assert.deepEqual(parseGastoTexto("   "), { valor: null, descricao: "", diasAtras: 0 });
   });
 });
 
@@ -1627,5 +1615,201 @@ describe("navegação de meses", () => {
     assert.equal(podeVoltar("2026-09"), true);
     assert.equal(podeVoltar("2026-12"), true);
     assert.equal(podeVoltar("2027-03"), true);
+  });
+});
+// ---------------------------------------------------------------------------
+// Reproduções da auditoria de 30/09/2026 (docs/auditoria-2026-09-30.md,
+// seção 2 e matriz de aceite). Cada teste aqui falhava no commit auditado.
+// ---------------------------------------------------------------------------
+
+/** Timestamp de um horário em Brasília (UTC−3), pra não depender do fuso da máquina. */
+function emBrasilia(dataHora: string): number {
+  return new Date(`${dataHora}-03:00`).getTime();
+}
+
+function gastoT(over: Partial<Gasto> & { criadoEm: number }): Gasto {
+  return { id: "g", descricao: "x", valor: 10, categoria: "Outros", mes: "2026-09", ...over };
+}
+
+describe("auditoria — saldo e orçamento do dia (F01, matriz 5)", () => {
+  test("último dia, saldo 100, gasto 30: restante 70 — e não 40", () => {
+    const ref = { valor: 100, atualizadoEm: emBrasilia("2026-09-30T08:00:00") };
+    const gastos = [gastoT({ valor: 30, criadoEm: emBrasilia("2026-09-30T12:00:00"), data: "2026-09-30" })];
+    const saldo = saldoConfirmado(ref, gastos);
+    assert.equal(saldo, 70);
+    const saidas = saidasDeHoje(ref, gastos, [], "2026-09-30");
+    const o = orcamentoDoDia(saldo, saidas, 0, 1)!;
+    assert.equal(o.orcamento, 100);
+    assert.equal(o.restante, 70);
+  });
+
+  test("saldo informado depois do gasto de hoje: gasto não é descontado de novo", () => {
+    // gastou 30 de manhã, depois atualizou o saldo pro que o banco mostra (70)
+    const ref = { valor: 70, atualizadoEm: emBrasilia("2026-09-30T13:00:00") };
+    const gastos = [gastoT({ valor: 30, criadoEm: emBrasilia("2026-09-30T09:00:00"), data: "2026-09-30" })];
+    const saldo = saldoConfirmado(ref, gastos);
+    assert.equal(saldo, 70);
+    assert.equal(saidasDeHoje(ref, gastos, [], "2026-09-30"), 0);
+    assert.equal(orcamentoDoDia(saldo, 0, 0, 1)!.restante, 70);
+  });
+
+  test("gasto de ONTEM registrado hoje, depois de atualizar o saldo, não entra (o banco já tinha descontado)", () => {
+    const ref = { valor: 500, atualizadoEm: emBrasilia("2026-09-30T08:00:00") };
+    const ontem = gastoT({ valor: 40, criadoEm: emBrasilia("2026-09-30T10:00:00"), data: "2026-09-29" });
+    assert.equal(gastoContaNoSaldo(ontem, ref), false);
+    assert.equal(saldoConfirmado(ref, [ontem]), 500);
+  });
+
+  test("depósito automático na caixinha sai do saldo junto com o gasto", () => {
+    const ref = { valor: 100, atualizadoEm: emBrasilia("2026-09-30T08:00:00") };
+    const g = gastoT({
+      valor: 10,
+      criadoEm: emBrasilia("2026-09-30T09:00:00"),
+      data: "2026-09-30",
+      guardado: { a: 0.1, b: 0.1 },
+    });
+    assert.equal(saldoConfirmado(ref, [g]), 89.8);
+  });
+});
+
+describe("auditoria — pagamento vira movimento de caixa (F03, matriz 6)", () => {
+  const ref = { valor: 1000, atualizadoEm: emBrasilia("2026-10-01T08:00:00") };
+
+  test("conta paga depois de atualizar o saldo desconta uma vez", () => {
+    const pagamentos = [
+      { valor: 100, pagoEm: emBrasilia("2026-10-02T10:00:00"), origem: "conta", afetaSaldo: true },
+    ];
+    assert.equal(saldoConfirmado(ref, [], pagamentos), 900);
+  });
+
+  test("pagamento antigo (sem afetaSaldo), anterior à referência ou de ganho não mexe no saldo", () => {
+    const pagamentos = [
+      { valor: 120, pagoEm: emBrasilia("2026-10-02T10:00:00"), origem: "conta" },
+      { valor: 50, pagoEm: emBrasilia("2026-09-30T10:00:00"), origem: "conta", afetaSaldo: true },
+      { valor: 2600, pagoEm: emBrasilia("2026-10-05T10:00:00"), origem: "ganho", afetaSaldo: false },
+    ];
+    assert.equal(saldoConfirmado(ref, [], pagamentos), 1000);
+  });
+});
+
+describe("auditoria — par gasto/estorno (F05, matriz 4)", () => {
+  test("reprodução: original antes da referência e estorno depois — apagar mudaria o saldo, então é recusado", () => {
+    const ref = { valor: 70, atualizadoEm: 200 };
+    const original = gastoT({ id: "o", valor: 30, criadoEm: 100 });
+    const estorno = gastoT({ id: "e", valor: -30, criadoEm: 300, estornoDeId: "o" });
+    // com o par: saldo 100 (estorno devolveu 30 depois da referência)
+    assert.equal(saldoConfirmado(ref, [original, estorno]), 100);
+    assert.equal(exclusaoDoParMudaSaldo(original, estorno, ref), true);
+  });
+
+  test("par inteiro do mesmo lado da referência se cancela e pode ser apagado", () => {
+    const ref = { valor: 70, atualizadoEm: 50 };
+    const original = gastoT({ id: "o", valor: 30, criadoEm: 100 });
+    const estorno = gastoT({ id: "e", valor: -30, criadoEm: 300, estornoDeId: "o" });
+    assert.equal(saldoConfirmado(ref, [original, estorno]), 70);
+    assert.equal(exclusaoDoParMudaSaldo(original, estorno, ref), false);
+  });
+});
+
+describe("auditoria — parser de valores (F06, matriz 9)", () => {
+  const casos: [string, number | null, string][] = [
+    ["café 15.50", 15.5, "café"],
+    ["R$ 15.50 café", 15.5, "café"],
+    ["R$15.50 café", 15.5, "café"],
+    ["15.50 reais café", 15.5, "café"],
+    ["café 15,50", 15.5, "café"],
+    ["aluguel 1.500,50", 1500.5, "aluguel"],
+    ["notebook 1.500", 1500, "notebook"],
+    ["pão", null, "pão"],
+  ];
+  for (const [frase, valor, descricao] of casos) {
+    test(`"${frase}"`, () => {
+      const r = parseGastoTexto(frase);
+      assert.equal(r.valor, valor);
+      assert.equal(r.descricao, descricao);
+    });
+  }
+
+  test("'ontem' e 'anteontem' não são descartados: viram a data do gasto", () => {
+    assert.equal(parseGastoTexto("ontem gastei 20 reais café").diasAtras, 1);
+    assert.equal(parseGastoTexto("ontem gastei 20 reais café").descricao, "café");
+    assert.equal(parseGastoTexto("anteontem 35 uber").diasAtras, 2);
+    assert.equal(parseGastoTexto("almoço 30").diasAtras, 0);
+  });
+
+  test("colar dinheiro num campo: '100' é cem reais, não um real", () => {
+    assert.equal(valorColado("100"), 100);
+    assert.equal(valorColado("15,50"), 15.5);
+    assert.equal(valorColado("15.50"), 15.5);
+    assert.equal(valorColado("R$ 1.500,50"), 1500.5);
+    assert.equal(valorColado("abc"), null);
+  });
+});
+
+describe("auditoria — curva de caixa (F02)", () => {
+  test("parte do saldo de agora e só desconta o que ainda falta pagar", () => {
+    const entries = [
+      entry({ id: "pago", status: "paid", amount: 999, dueDate: "2026-09-10", competenceMonth: "2026-09" }),
+      entry({ id: "atrasada", status: "pending", amount: 50, dueDate: "2026-09-20", competenceMonth: "2026-09" }),
+      entry({ id: "futura", status: "pending", amount: 100, dueDate: "2026-09-29", competenceMonth: "2026-09" }),
+      entry({ id: "entrada", type: "income", status: "planned", amount: 5000, dueDate: "2026-09-29", competenceMonth: "2026-09" }),
+    ];
+    const pontos = projetarSaldoAteFimDoMes(entries, "2026-09-28", 1000);
+    assert.equal(pontos[0].data, "2026-09-28");
+    assert.equal(pontos[0].saldoAcumulado, 950); // atrasada cai hoje; paga não reaparece
+    assert.equal(pontos[pontos.length - 1].saldoAcumulado, 850); // entrada prevista não soma
+  });
+});
+
+describe("auditoria — recorrência com vigência (F11, matriz 8)", () => {
+  const base = { ativa: true, valor: 50, criadoEm: emBrasilia("2026-08-10T10:00:00") };
+
+  test("mudar o valor em outubro não altera setembro", () => {
+    const historico = historicoAoMudarValor(base, 60, "2026-10");
+    const r = { ...base, valor: 60, historicoValores: historico };
+    assert.equal(valorNoMes(r, "2026-09"), 50);
+    assert.equal(valorNoMes(r, "2026-10"), 60);
+    assert.equal(valorNoMes(r, "2026-12"), 60);
+  });
+
+  test("não existe antes do cadastro; arquivada continua nos meses em que estava ativa", () => {
+    assert.equal(recorrenciaNoMes(base, "2026-07"), false);
+    assert.equal(recorrenciaNoMes(base, "2026-08"), true);
+    const arquivada = { ...base, ativa: false, desativadaEm: "2026-10" };
+    assert.equal(recorrenciaNoMes(arquivada, "2026-09"), true);
+    assert.equal(recorrenciaNoMes(arquivada, "2026-10"), false);
+  });
+});
+
+describe("auditoria — autorização (S01/S05, matriz 1–2)", () => {
+  test("ninguém é admin por padrão; só ADMIN_UIDS ou claim de servidor", () => {
+    assert.equal(ehAdminGlobal("u1", {}, undefined), false);
+    assert.equal(ehAdminGlobal("u1", {}, ""), false);
+    assert.equal(ehAdminGlobal("u1", {}, "u2, u3"), false);
+    assert.equal(ehAdminGlobal("u1", {}, "u2, u1"), true);
+    assert.equal(ehAdminGlobal("u1", { admin: true }, undefined), true);
+    // claim precisa ser exatamente true — string não vale
+    assert.equal(ehAdminGlobal("u1", { admin: "true" }, undefined), false);
+  });
+
+  test("token emitido no futuro, login no futuro ou expirado é recusado", () => {
+    const agora = 1_800_000_000;
+    assert.equal(problemaTemporalDoToken({ exp: agora + 3600, iat: agora - 10, auth_time: agora - 20 }, agora), null);
+    assert.ok(problemaTemporalDoToken({ exp: agora - 1, iat: agora - 10, auth_time: agora - 20 }, agora));
+    assert.ok(problemaTemporalDoToken({ exp: agora + 3600, iat: agora + 3600, auth_time: agora }, agora));
+    assert.ok(problemaTemporalDoToken({ exp: agora + 3600, iat: agora, auth_time: agora + 3600 }, agora));
+    assert.ok(problemaTemporalDoToken({ exp: agora + 3600 }, agora));
+  });
+
+  test("sessão revogada: token emitido antes do validSince não vale", () => {
+    assert.equal(tokenRevogado(1000, 2000), true);
+    assert.equal(tokenRevogado(3000, 2000), false);
+    assert.equal(tokenRevogado(3000, null), false);
+  });
+
+  test("ponte com o Tasks desligada pra quem não está na lista", () => {
+    assert.equal(recursoLiberado("u1", undefined), false);
+    assert.equal(recursoLiberado("u1", "u2"), false);
+    assert.equal(recursoLiberado("u1", "u1"), true);
   });
 });

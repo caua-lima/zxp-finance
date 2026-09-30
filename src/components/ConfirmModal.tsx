@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Dialogo } from "./Dialogo";
 
 interface ConfirmModalProps {
   aberto: boolean;
@@ -9,15 +10,18 @@ interface ConfirmModalProps {
   textoConfirmar?: string;
   perigo?: boolean;
   pedirMotivo?: boolean;
-  onConfirmar: (motivo?: string) => void;
+  /**
+   * Pode ser assíncrono. Devolvendo `false` (a operação falhou), o motivo
+   * digitado é mantido — nada se perde.
+   */
+  onConfirmar: (motivo?: string) => void | boolean | Promise<void | boolean>;
   onCancelar: () => void;
 }
 
 /**
- * Substitui window.confirm()/alert() nativos em toda ação destrutiva ou
- * irreversível (arquivar, cancelar, estornar, excluir). Quando
- * `pedirMotivo` é true, o botão de confirmar só libera com texto — usado
- * pelo fluxo de cancelamento, que exige motivo por regra do briefing.
+ * Confirmação de ação destrutiva ou irreversível, em cima do Dialogo
+ * acessível (foco, Esc, retorno de foco). O motivo pertence a esta
+ * confirmação: cancelar e reabrir começa em branco.
  */
 export function ConfirmModal({
   aberto,
@@ -30,60 +34,70 @@ export function ConfirmModal({
   onCancelar,
 }: ConfirmModalProps) {
   const [motivo, setMotivo] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
-  if (!aberto) return null;
+  const bloqueado = enviando || (pedirMotivo && motivo.trim().length === 0);
 
-  const bloqueado = pedirMotivo && motivo.trim().length === 0;
-
-  function confirmar() {
-    onConfirmar(pedirMotivo ? motivo.trim() : undefined);
+  function cancelar() {
     setMotivo("");
+    onCancelar();
+  }
+
+  async function confirmar() {
+    setEnviando(true);
+    try {
+      const resultado = await onConfirmar(pedirMotivo ? motivo.trim() : undefined);
+      if (resultado !== false) setMotivo("");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-modal-titulo"
+    <Dialogo
+      aberto={aberto}
+      titulo={titulo}
+      descricao={descricao}
+      onFechar={cancelar}
+      bloqueado={enviando}
     >
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface-elevated p-5">
-        <h2 id="confirm-modal-titulo" className="text-base font-semibold text-text">
-          {titulo}
-        </h2>
-        <p className="text-sm text-text-muted mt-2">{descricao}</p>
-
-        {pedirMotivo && (
+      {pedirMotivo && (
+        <>
+          <label htmlFor="confirm-motivo" className="rotulo">
+            Motivo
+          </label>
           <textarea
+            id="confirm-motivo"
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
             placeholder="Explique o motivo..."
             rows={3}
-            className="campo mt-3 resize-none"
-            autoFocus
+            className="campo resize-none"
           />
-        )}
-
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={onCancelar}
-            className="min-h-[44px] flex-1 rounded-xl border border-line px-3 text-sm font-medium text-text-muted transition-colors hover:text-text active:bg-surface-2"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={confirmar}
-            disabled={bloqueado}
-            className={`min-h-[44px] flex-1 rounded-xl px-3 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              perigo
-                ? "bg-negative text-white hover:bg-negative/85"
-                : "bg-brand text-on-brand hover:bg-brand-dark"
-            }`}
-          >
-            {textoConfirmar}
-          </button>
-        </div>
+        </>
+      )}
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={cancelar}
+          disabled={enviando}
+          className="min-h-[44px] flex-1 rounded-xl border border-line px-3 text-sm font-medium text-text-muted transition-colors hover:text-text active:bg-surface-2 disabled:opacity-40"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={confirmar}
+          disabled={bloqueado}
+          className={`min-h-[44px] flex-1 rounded-xl px-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            perigo
+              ? "bg-negative text-white hover:bg-negative/85"
+              : "bg-brand text-on-brand hover:bg-brand-dark"
+          }`}
+        >
+          {enviando ? "Salvando..." : textoConfirmar}
+        </button>
       </div>
-    </div>
+    </Dialogo>
   );
 }

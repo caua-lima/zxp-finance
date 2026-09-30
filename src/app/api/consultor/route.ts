@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verificarChamador } from "@/lib/verificarChamador";
+import { verificarChamadorAtivo } from "@/lib/verificarChamador";
+import { lerJson, texto } from "@/lib/validacao";
+import { consumirCota } from "@/lib/cota";
 import { montarContextoSimulacao } from "@/lib/finance/contextoFinanceiro";
-import { simularNovoCompromisso, ResultadoSimulacao } from "@/lib/finance/simulador";
+import {
+  simularNovoCompromisso,
+  validarEntradaSimulacao,
+  ResultadoSimulacao,
+} from "@/lib/finance/simulador";
 import { perguntarComFerramenta, FerramentaAnthropic } from "@/lib/anthropicClient";
 import { formatarMoeda } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function mensagemDeErro(e: unknown, padrao: string): string {
-  if (e instanceof Error) return e.message;
-  return padrao;
-}
 
 const FERRAMENTA_SIMULACAO: FerramentaAnthropic = {
   name: "simularNovoCompromisso",
@@ -83,45 +84,77 @@ Se a pergunta não tiver valor mensal E número de meses claros, peça objetivam
 números que faltam, sem chamar a ferramenta. Se a pergunta não for sobre viabilidade de um
 novo compromisso financeiro, diga em uma frase que essa não é sua função aqui.`;
 
+/** Limite de perguntas por dia por usuário — teto de custo na API da Anthropic. */
+const PERGUNTAS_POR_DIA = 30;
+
 export async function POST(req: NextRequest) {
+  const acesso = await verificarChamadorAtivo(req);
+  if (!acesso.ok) return acesso.resposta;
+  const uid = acesso.identidade.uid;
+
+  const corpo = await lerJson(req);
+  const pergunta = texto(corpo?.pergunta, 3, 500);
+  if (!pergunta) {
+    return NextResponse.json(
+      { erro: "Escreva uma pergunta de até 500 caracteres." },
+      { status: 400 }
+    );
+  }
+
   try {
-    const chamador = await verificarChamador(req);
-    if (!chamador) {
-      return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
+    if (!(await consumirCota(uid, "consultor", PERGUNTAS_POR_DIA))) {
+      return NextResponse.json(
+        { erro: `Você usou as ${PERGUNTAS_POR_DIA} perguntas de hoje. Amanhã libera de novo.` },
+        { status: 429 }
+      );
     }
 
-    const { pergunta } = await req.json();
-    if (!pergunta || typeof pergunta !== "string" || !pergunta.trim()) {
-      return NextResponse.json({ erro: "Pergunta vazia." }, { status: 400 });
+    const contexto = await montarContextoSimulacao(uid);
+    if (!contexto) {
+      // sem saldo informado não dá pra avaliar — responder sem chamar o
+      // modelo (não gasta nada e não inventa um saldo zero)
+      return NextResponse.json({
+        resposta:
+          "Não consigo avaliar ainda: falta saber quanto você tem na conta. Informe o saldo na tela de Saldo e pergunte de novo.",
+        ferramentaExecutada: false,
+        simulacao: null,
+        entradaSimulacao: null,
+      });
     }
-
-    const contexto = await montarContextoSimulacao(chamador.uid);
 
     let simulacao: ResultadoSimulacao | null = null;
+    let entradaValida: EntradaFerramenta | null = null;
 
-    const { texto, ferramentaExecutada, entradaFerramenta } = await perguntarComFerramenta<
-      EntradaFerramenta,
+    const { texto: resposta, ferramentaExecutada } = await perguntarComFerramenta<
+      Record<string, unknown>,
       string
     >({
       systemPrompt: SYSTEM_PROMPT,
-      pergunta: pergunta.trim(),
+      pergunta,
       ferramenta: FERRAMENTA_SIMULACAO,
       executarFerramenta: (input) => {
-        simulacao = simularNovoCompromisso(contexto, input.valorMensal, input.meses);
+        // a entrada vem do modelo: é dado não confiável, valida antes de usar
+        const erro = validarEntradaSimulacao(input?.valorMensal, input?.meses);
+        if (erro) return JSON.stringify({ erro });
+        entradaValida = { valorMensal: input.valorMensal as number, meses: input.meses as number };
+        simulacao = simularNovoCompromisso(contexto, entradaValida.valorMensal, entradaValida.meses);
         return resumoParaOModelo(simulacao);
       },
     });
 
     return NextResponse.json({
-      resposta: texto || "Não consegui formular uma resposta agora.",
-      ferramentaExecutada,
+      resposta: resposta || "Não consegui formular uma resposta agora.",
+      // conclusão de viabilidade só existe com simulação estruturada; sem
+      // ela, a tela mostra só o texto, sem selo de "dá" ou "não dá"
+      ferramentaExecutada: ferramentaExecutada && simulacao !== null,
       simulacao,
-      entradaSimulacao: entradaFerramenta as EntradaFerramenta | null,
+      entradaSimulacao: entradaValida,
     });
   } catch (e) {
+    console.error(JSON.stringify({ evento: "consultor_falhou", erro: String(e) }));
     return NextResponse.json(
-      { erro: mensagemDeErro(e, "Erro ao consultar viabilidade.") },
-      { status: 500 }
+      { erro: "Não consegui consultar agora. Tente de novo em instantes." },
+      { status: 502 }
     );
   }
 }

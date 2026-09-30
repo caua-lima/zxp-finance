@@ -13,16 +13,15 @@ import { usePagamentos } from "@/lib/usePagamentos";
 import { useSaldo } from "@/lib/useSaldo";
 import { useComissoes } from "@/lib/useComissoes";
 import { construirFinancialEntries } from "./adapters";
+import { saldoConfirmado } from "./saldo";
 import {
   calculateAvailableBalance,
   calculateMonthlyCashFlow,
   calculatePendingIncome,
   calculatePendingExpenses,
   calculateUpcomingCommitments,
-  calculateDailyCashFlow,
-  calcularSaldoAtual,
+  projetarSaldoAteFimDoMes,
   resumoCompromissos,
-  ultimoDiaMes,
   hojeISO,
 } from "./calculations";
 import { gerarAlertas, FinanceAlert } from "./alerts";
@@ -89,6 +88,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       faturas: faturas.faturas,
       gastos: gastosHook.gastos,
       estaPago: pagamentos.estaPago,
+      dataPagamento: pagamentos.dataPagamento,
       mes,
       diaVencimentoPorCartao,
       comissoes: comissoes.todas,
@@ -103,6 +103,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     faturas.faturas,
     gastosHook.gastos,
     pagamentos.estaPago,
+    pagamentos.dataPagamento,
     mes,
     diaVencimentoPorCartao,
     comissoes.todas,
@@ -110,7 +111,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
 
   // mesma conta da tela de Saldo: valor informado menos o que foi gasto
   // depois — antes o Resumo mostrava só o valor informado
-  const saldoReal = calcularSaldoAtual(saldoHook.saldo, gastosHook.gastos);
+  const saldoReal = saldoConfirmado(saldoHook.saldo, gastosHook.gastos, pagamentos.movimentos);
   const saldoDisponivel = calculateAvailableBalance(saldoReal);
   const fluxoDoMes = useMemo(
     () => calculateMonthlyCashFlow(entries, mes),
@@ -197,14 +198,12 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     ganhos.totalLiquido,
   ]);
 
+  // projeção a partir do saldo confirmado de agora, só no mês corrente —
+  // mês passado ou futuro não tem ponto de partida confiável
   const fluxoDiario = useMemo(() => {
-    if (loading || saldoReal === null) return [];
-    return calculateDailyCashFlow(
-      entries,
-      `${mes}-01`,
-      ultimoDiaMes(mes),
-      saldoReal
-    );
+    const hoje = hojeISO();
+    if (loading || saldoReal === null || mes !== hoje.slice(0, 7)) return [];
+    return projetarSaldoAteFimDoMes(entries, hoje, saldoReal);
   }, [loading, entries, mes, saldoReal]);
 
   return {

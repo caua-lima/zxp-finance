@@ -92,7 +92,8 @@ export function useGanhos(mes: string) {
     valor: number,
     categoriaReceita?: string,
     recebido: boolean = true,
-    semImposto: boolean = false
+    semImposto: boolean = false,
+    origemComissao?: string
   ) {
     if (!user) return false;
     try {
@@ -103,6 +104,7 @@ export function useGanhos(mes: string) {
         valor,
         ...(categoriaReceita ? { categoriaReceita } : {}),
         ...(semImposto ? { semImposto } : {}),
+        ...(origemComissao ? { origemComissao } : {}),
         // ganho pontual normalmente é lançado depois que o dinheiro já
         // caiu (igual gasto) — recebido:true por padrão evita "Entradas
         // previstas" inflado com dinheiro que já entrou. Quem lança algo

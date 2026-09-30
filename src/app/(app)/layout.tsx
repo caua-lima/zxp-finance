@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { Nav } from "@/components/Nav";
 import { ToastProvider } from "@/components/Toast";
-import { useRendimentoAutomatico } from "@/lib/useRendimentoAutomatico";
 
 export default function AppLayout({
   children,
@@ -14,9 +13,6 @@ export default function AppLayout({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  // rende o CDI no saldo e nas caixinhas assim que o app abre, em
-  // qualquer tela — não depende de visitar Saldo ou Caixinhas
-  useRendimentoAutomatico();
 
   useEffect(() => {
     if (!loading && !user) {

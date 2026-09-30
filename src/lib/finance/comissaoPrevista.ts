@@ -25,16 +25,16 @@ export interface ComissaoPrevista {
   liquido: number;
 }
 
-/** Ganho que representa o pagamento de comissão (lançado pela tela de Comissões ou à mão em Ganhos). */
-export function ehGanhoDeComissao(g: Ganho): boolean {
-  if (g.tipo !== "pontual" || g.arquivado) return false;
-  if (g.categoriaReceita === "Comissão") return true;
-  return /^comiss[aã]o/i.test(g.descricao.trim());
-}
-
-/** Já existe o pagamento real da comissão lançado em `mes`? Aí a previsão sai de cena. */
-export function comissaoJaRecebidaEm(mes: string, ganhos: Ganho[]): boolean {
-  return ganhos.some((g) => g.mes === mes && ehGanhoDeComissao(g));
+/**
+ * Pagamentos de comissão VINCULADOS a um mês de origem (`origemComissao`).
+ * Antes a previsão sumia com qualquer ganho que tivesse "Comissão" no nome
+ * ou na categoria — um bico pequeno escondia uma previsão grande
+ * (auditoria F13). Texto não é chave de conciliação; o vínculo é.
+ */
+export function pagamentosDaComissao(mesOrigem: string, ganhos: Ganho[]): Ganho[] {
+  return ganhos.filter(
+    (g) => g.tipo === "pontual" && !g.arquivado && g.origemComissao === mesOrigem
+  );
 }
 
 /**
@@ -62,8 +62,9 @@ export function comissaoPrevistaPara(
 }
 
 /**
- * Entrada prevista de comissão pro `mes`, ou nada quando o pagamento real
- * já foi lançado em Ganhos (senão o mesmo dinheiro contaria duas vezes).
+ * Entrada prevista de comissão pro `mes`, descontando o que já foi
+ * recebido e vinculado a ela. Pagamento parcial deixa o RESTANTE previsto
+ * — a diferença não some.
  */
 export function comissaoPrevistaParaEntries(
   comissoes: Comissao[],
@@ -71,16 +72,26 @@ export function comissaoPrevistaParaEntries(
   mes: string
 ): FinancialEntry[] {
   const prevista = comissaoPrevistaPara(mes, comissoes);
-  if (!prevista || comissaoJaRecebidaEm(mes, ganhos)) return [];
+  if (!prevista) return [];
+  const recebidoBruto = pagamentosDaComissao(prevista.mesOrigem, ganhos).reduce(
+    (acc, g) => acc + g.valor,
+    0
+  );
+  const restanteBruto = arredondarCentavos(prevista.bruto - recebidoBruto);
+  if (restanteBruto <= 0) return [];
+  const restanteLiquido = arredondarCentavos(restanteBruto - calcularImposto(restanteBruto));
   return [
     {
       id: `comissao-prevista__${prevista.mesOrigem}`,
       type: "income",
       status: "planned",
-      amount: prevista.liquido,
+      amount: restanteLiquido,
       dueDate: `${mes}-01`,
       competenceMonth: mes,
-      description: "Comissão do mês passado (líquida)",
+      description:
+        recebidoBruto > 0
+          ? "Comissão do mês passado — restante (líquido)"
+          : "Comissão do mês passado (líquida)",
       categoryId: "Comissão",
       source: "income",
       createdAt: 0,

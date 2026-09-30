@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { formatarMoeda, formatarMes, mesPadrao, Caixinha } from "@/lib/types";
+import { formatarMoeda, Caixinha } from "@/lib/types";
 import { useCaixinhas } from "@/lib/useCaixinhas";
-import { useRendimentoAutomatico } from "@/lib/useRendimentoAutomatico";
+import { useCdi, InfoCdi } from "@/lib/useCdi";
+import { estimarRendimentoMensal } from "@/lib/finance/rendimento";
 import {
   totalGuardado,
   totalPorGasto,
@@ -33,7 +34,7 @@ export default function CaixinhasPage() {
     remover,
   } = useCaixinhas();
   const toast = useToast();
-  const cdi = useRendimentoAutomatico();
+  const cdi = useCdi();
 
   const [criando, setCriando] = useState(false);
   const [nome, setNome] = useState("");
@@ -42,10 +43,16 @@ export default function CaixinhasPage() {
   const [meta, setMeta] = useState(0);
   const [percentualCdi, setPercentualCdi] = useState("100");
 
-  const mes = mesPadrao();
   const guardado = totalGuardado(caixinhas);
   const porTransacao = totalPorGasto(caixinhas);
-  const rendeuNoMes = caixinhas.reduce((acc, c) => acc + (c.rendimentoPorMes?.[mes] ?? 0), 0);
+  // estimativa, não dinheiro: nada disso é somado ao saldo das caixinhas
+  const estimativaMensal = cdi.info
+    ? caixinhas.reduce(
+        (acc, c) =>
+          acc + estimarRendimentoMensal(c.saldo, cdi.info!.taxaDiaria, c.percentualCdi ?? 0),
+        0
+      )
+    : 0;
   const formularioAberto = criando || (!loading && caixinhas.length === 0);
 
   function handleSubmit(e: FormEvent) {
@@ -85,14 +92,25 @@ export default function CaixinhasPage() {
           {formatarMoeda(guardado)}
         </p>
         <div className="mt-3 space-y-1 border-t border-line-soft pt-3 text-xs text-text-muted">
-          <p>
-            Rendimento em {formatarMes(mes).split(" ")[0].toLowerCase()}:{" "}
-            <strong className="text-positive">+{formatarMoeda(rendeuNoMes)}</strong>
-            {cdi && (
-              <span className="text-text-faint">
-                {" "}
-                · CDI hoje ~{cdi.anual.toFixed(2).replace(".", ",")}% ao ano
-              </span>
+          <p role="status">
+            {cdi.status === "erro" ? (
+              <>
+                Não consegui buscar o CDI no Banco Central.{" "}
+                <button type="button" onClick={cdi.tentarDeNovo} className="font-medium text-brand">
+                  Tentar de novo
+                </button>
+              </>
+            ) : cdi.info ? (
+              <>
+                Rendimento estimado:{" "}
+                <strong className="text-text">~{formatarMoeda(estimativaMensal)}/mês</strong>{" "}
+                <span className="text-text-muted">
+                  (CDI de {cdi.info.data.split("-").reverse().join("/")}, ~
+                  {cdi.info.anual.toFixed(2).replace(".", ",")}% ao ano, fonte Banco Central)
+                </span>
+              </>
+            ) : (
+              "Buscando a taxa do CDI..."
             )}
           </p>
           {porTransacao > 0 && (
@@ -176,6 +194,7 @@ export default function CaixinhasPage() {
               onAjustarSaldo={ajustarSaldo}
               onAlternarAtiva={alternarAtiva}
               onRemover={remover}
+              cdi={cdi.info}
             />
           ))}
         </ul>
@@ -185,10 +204,11 @@ export default function CaixinhasPage() {
         <summary className="cursor-pointer text-sm">Como as caixinhas funcionam</summary>
         <div className="mt-2 space-y-2 leading-relaxed">
           <p>
-            <strong className="text-text">Rendimento:</strong> todo dia útil o app soma o CDI do
-            dia (taxa oficial do Banco Central) no saldo de cada caixinha, no percentual que você
-            configurou. É o valor bruto — o imposto de renda só sai quando você resgata, igual no
-            Mercado Pago.
+            <strong className="text-text">Rendimento é estimativa:</strong> o app mostra quanto
+            cada caixinha tende a render pelo CDI de hoje (taxa oficial do Banco Central), no
+            percentual que você configurou, bruto de IR. Esse valor nunca é somado sozinho — o
+            saldo da caixinha só muda por depósito ou quando você corrige com o valor que o
+            banco mostra.
           </p>
           <p>
             <strong className="text-text">Saldo e caixinhas são separados:</strong> quando for
@@ -208,8 +228,10 @@ function ItemCaixinha({
   onAjustarSaldo,
   onAlternarAtiva,
   onRemover,
+  cdi,
 }: {
   caixinha: Caixinha;
+  cdi: InfoCdi | null;
   onEditar: (
     id: string,
     dados: { nome: string; porGasto: number; meta?: number; percentualCdi?: number }
@@ -224,10 +246,10 @@ function ItemCaixinha({
   const [porGasto, setPorGasto] = useState(caixinha.porGasto);
   const [meta, setMeta] = useState(caixinha.meta ?? 0);
   const [saldo, setSaldo] = useState(caixinha.saldo);
-  const [percentualCdi, setPercentualCdi] = useState(String(caixinha.percentualCdi ?? 100));
+  const [percentualCdi, setPercentualCdi] = useState(String(caixinha.percentualCdi ?? 0));
   const toast = useToast();
-  const rendeuNoMes = caixinha.rendimentoPorMes?.[mesPadrao()] ?? 0;
-  const pctCdi = caixinha.percentualCdi ?? 100;
+  const pctCdi = caixinha.percentualCdi ?? 0;
+  const estimativa = cdi ? estimarRendimentoMensal(caixinha.saldo, cdi.taxaDiaria, pctCdi) : 0;
 
   const progresso = progressoDaMeta(caixinha);
   const falta = faltaParaMeta(caixinha);
@@ -301,7 +323,7 @@ function ItemCaixinha({
               setPorGasto(caixinha.porGasto);
               setMeta(caixinha.meta ?? 0);
               setSaldo(caixinha.saldo);
-              setPercentualCdi(String(caixinha.percentualCdi ?? 100));
+              setPercentualCdi(String(caixinha.percentualCdi ?? 0));
               setEditando(false);
             }}
             variante="secundario"
@@ -331,10 +353,8 @@ function ItemCaixinha({
             )}
           </p>
           <p className="mt-0.5 text-xs text-text-faint">
-            {pctCdi > 0 ? `rende ${pctCdi}% do CDI` : "não rende"}
-            {rendeuNoMes > 0 && (
-              <span className="text-positive"> · +{formatarMoeda(rendeuNoMes)} no mês</span>
-            )}
+            {pctCdi > 0 ? `rende ${pctCdi}% do CDI` : "sem rendimento configurado"}
+            {estimativa > 0 && ` · ~${formatarMoeda(estimativa)}/mês (estimativa)`}
           </p>
           <p className="text-xs text-text-faint">
             {!caixinha.ativa

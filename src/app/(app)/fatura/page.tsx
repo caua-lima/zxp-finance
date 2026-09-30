@@ -40,7 +40,7 @@ export default function FaturaPage() {
   const cartoes = faturas.map((f) => {
     const config = cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome };
     const prevista =
-      f.valor > 0 || !devePreverFatura(mes, hoje, config.diaVencimento)
+      f.valor > 0 || !devePreverFatura(mes, hoje)
         ? null
         : composicaoFaturaPrevista(f.nome, mes, parcelas.parcelas, assinaturas.assinaturas);
     return {

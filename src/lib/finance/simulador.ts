@@ -6,27 +6,22 @@ import { arredondarCentavos } from "@/lib/types";
  * Puro de propósito — quem chama isso é uma ferramenta de IA (ver
  * anthropicClient.ts), e o modelo NUNCA pode "chutar" o número. Ele só lê o
  * resultado real deste cálculo e traduz pra português. Toda a matemática
- * que decide se algo é viável mora aqui, testável sem precisar de rede nem
- * de chave de API nenhuma.
+ * que decide se algo é viável mora aqui, testável sem rede nem chave.
  */
 
-export interface ParcelaAtiva {
-  /** Já considerando "minha parte", se a parcela for dividida com alguém. */
-  valorMensal: number;
-  /** Quantas cobranças ainda faltam a partir de hoje. */
-  mesesRestantes: number;
-}
-
 export interface ContextoSimulacao {
+  /** Saldo confirmado de agora (docs/modelo-financeiro.md). */
   saldoAtual: number;
-  /** Quanto a pessoa quer que sobre sempre — abaixo disso já é sinal de alerta, mesmo positivo. */
+  /** Quanto você quer que sobre sempre — abaixo disso já é sinal de alerta. */
   reservaMeta: number;
   /** Renda recorrente esperada por mês, já líquida de imposto. */
   rendaMensalLiquida: number;
-  /** Contas fixas + assinaturas já assumidas, fora do que está embutido em fatura. */
-  despesasFixasMensais: number;
-  /** Parcelas e financiamentos já em andamento, fora do que está embutido em fatura. */
-  parcelasAtivas: ParcelaAtiva[];
+  /**
+   * O que já está comprometido em cada mês à frente (índice 0 = mês que
+   * vem): contas, assinaturas, parcelas e faturas, reais ou previstas.
+   * Ver compromissosFuturos.ts.
+   */
+  compromissosPorMes: number[];
 }
 
 export interface MesSimulado {
@@ -46,33 +41,55 @@ export interface ResultadoSimulacao {
   meses: MesSimulado[];
 }
 
+/** Horizonte máximo aceito — mais que 10 anos não é simulação, é chute. */
+export const MESES_MAXIMOS = 120;
+export const VALOR_MENSAL_MAXIMO = 1_000_000;
+
 /**
- * Projeta o saldo mês a mês assumindo o novo compromisso, com as parcelas
- * já em andamento saindo da conta no mês em que elas terminam — é o que
- * faz uma simulação de 12 meses não travar em "inviável" por causa de uma
- * parcela de outro financiamento que só existe até o mês 4.
+ * Valida a entrada da simulação. Antes, `meses = 0` devolvia "viável" com
+ * uma lista vazia, e NaN/negativo passavam direto (auditoria F15).
+ * Devolve a mensagem de erro, ou null se está tudo certo.
+ */
+export function validarEntradaSimulacao(valorMensal: unknown, meses: unknown): string | null {
+  if (typeof valorMensal !== "number" || !Number.isFinite(valorMensal) || valorMensal <= 0) {
+    return "O valor mensal precisa ser um número maior que zero.";
+  }
+  if (valorMensal > VALOR_MENSAL_MAXIMO) return "Valor mensal alto demais pra simular.";
+  if (typeof meses !== "number" || !Number.isInteger(meses) || meses < 1) {
+    return "O número de meses precisa ser um inteiro de 1 em diante.";
+  }
+  if (meses > MESES_MAXIMOS) return `Simulo até ${MESES_MAXIMOS} meses.`;
+  return null;
+}
+
+/**
+ * Projeta o saldo mês a mês assumindo o novo compromisso, somado ao que já
+ * está comprometido em cada mês. O horizonte é a duração do compromisso
+ * novo: depois que ele termina, ele só ajuda o saldo.
  *
- * O horizonte é a duração do próprio compromisso novo: depois que ele
- * termina, ele só ajuda o saldo, nunca piora — não tem risco novo a
- * detectar depois disso.
+ * Lança erro com entrada inválida — quem chama valida antes com
+ * `validarEntradaSimulacao` pra poder responder de forma amigável.
  */
 export function simularNovoCompromisso(
   contexto: ContextoSimulacao,
   valorMensalNovo: number,
   mesesNovo: number
 ): ResultadoSimulacao {
+  const erro = validarEntradaSimulacao(valorMensalNovo, mesesNovo);
+  if (erro) throw new Error(erro);
+
   const meses: MesSimulado[] = [];
   let saldo = contexto.saldoAtual;
   let primeiroMesRuim: number | null = null;
   let motivo: MotivoInviabilidade | null = null;
 
   for (let mes = 1; mes <= mesesNovo; mes++) {
-    const parcelasDoMes = contexto.parcelasAtivas
-      .filter((p) => p.mesesRestantes >= mes)
-      .reduce((acc, p) => acc + p.valorMensal, 0);
-    const compromissosDoMes = arredondarCentavos(
-      contexto.despesasFixasMensais + parcelasDoMes + valorMensalNovo
-    );
+    // além do horizonte conhecido, repete o último mês conhecido
+    const jaComprometido =
+      contexto.compromissosPorMes[mes - 1] ??
+      contexto.compromissosPorMes[contexto.compromissosPorMes.length - 1] ??
+      0;
+    const compromissosDoMes = arredondarCentavos(jaComprometido + valorMensalNovo);
 
     saldo = arredondarCentavos(saldo + contexto.rendaMensalLiquida - compromissosDoMes);
     meses.push({ mes, compromissosDoMes, saldoFinal: saldo });

@@ -5,21 +5,46 @@ import {
   collection,
   onSnapshot,
   doc,
-  writeBatch,
+  getDoc,
+  getDocs,
   increment,
-  WriteBatch,
+  runTransaction,
+  serverTimestamp,
+  writeBatch,
+  DocumentReference,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Gasto, mesPadrao } from "./types";
+import { Caixinha, Gasto } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
-import { useCaixinhas } from "./useCaixinhas";
 import { depositoDoGasto } from "./finance/caixinhas";
+import { hojeISO } from "./finance/calculations";
+import { exclusaoDoParMudaSaldo, gastoContaNoSaldo } from "./finance/saldo";
+
+export interface OpcoesNovoGasto {
+  /** Dia em que aconteceu ("AAAA-MM-DD"). Padrão: hoje. */
+  data?: string;
+  /**
+   * Chave de idempotência: a mesma chave nunca cria dois gastos, mesmo com
+   * clique duplo, duas abas ou reenvio depois de erro de rede (auditoria D).
+   * Gere uma por prévia/confirmação, não por clique.
+   */
+  chave?: string;
+}
+
+/** Id aceito pelo Firestore a partir da chave (sem barra, tamanho limitado). */
+function idDaChave(chave: string): string {
+  return `g_${chave.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80)}`;
+}
+
+/** Batch ou transação — os dois têm `update` nessa forma. */
+interface Escrita {
+  update(ref: DocumentReference, dados: Record<string, unknown>): unknown;
+}
 
 export function useGastos() {
   const { user } = useAuth();
-  const { caixinhas } = useCaixinhas();
   const [todos, setTodos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -47,59 +72,80 @@ export function useGastos() {
   );
 
   /**
-   * Aplica um movimento nas caixinhas dentro de um batch que já existe.
-   * `sinal` é +1 pra guardar e -1 pra devolver. Só mexe em caixinha que
-   * ainda existe: se ela foi excluída, um update nela derrubaria o batch
-   * inteiro e junto com ele o lançamento do gasto, que é o dado que
-   * realmente importa aqui.
+   * Caixinhas lidas na hora, direto do banco — antes vinham do estado de
+   * outro hook, e um gasto registrado enquanto ele ainda carregava perdia
+   * o depósito calado (auditoria M).
+   */
+  async function caixinhasAgora(uid: string): Promise<Caixinha[]> {
+    const snap = await getDocs(collection(db, "usuarios", uid, "caixinhas"));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Caixinha));
+  }
+
+  /**
+   * Movimento nas caixinhas. `increment` é atômico no servidor: dois gastos
+   * ao mesmo tempo nunca sobrescrevem o depósito um do outro. Só mexe em
+   * caixinha que existe — update em doc apagado derrubaria o gasto junto.
    */
   function aplicarNasCaixinhas(
-    batch: WriteBatch,
+    escrita: Escrita,
     uid: string,
     deposito: Record<string, number>,
-    sinal: 1 | -1
+    existentes: Set<string>
   ) {
-    const agora = Date.now();
     for (const [caixinhaId, valor] of Object.entries(deposito)) {
-      if (!caixinhas.some((c) => c.id === caixinhaId)) continue;
-      batch.update(doc(db, "usuarios", uid, "caixinhas", caixinhaId), {
-        saldo: increment(sinal * valor),
-        depositos: increment(sinal),
-        atualizadoEm: agora,
+      if (!existentes.has(caixinhaId)) continue;
+      escrita.update(doc(db, "usuarios", uid, "caixinhas", caixinhaId), {
+        saldo: increment(valor),
+        depositos: increment(valor >= 0 ? 1 : -1),
+        atualizadoEm: Date.now(),
       });
     }
   }
 
-  /**
-   * Registra o gasto e, no MESMO batch, guarda o valor configurado em cada
-   * caixinha ativa. Mesmo batch de propósito: guardar sem ter gastado, ou
-   * gastar sem ter guardado, deixaria os dois números se contradizendo sem
-   * jeito de saber qual está certo.
-   *
-   * Não existe gasto pequeno demais — um de R$ 0,01 guarda igual a um de
-   * R$ 800. Gasto zerado ou negativo não guarda: negativo aqui é estorno
-   * ou ajuste, não um gasto novo.
-   */
-  async function adicionar(descricao: string, valor: number, categoria: string) {
-    if (!user) return false;
-    try {
-      const deposito = valor > 0 ? depositoDoGasto(caixinhas) : {};
-      const guardouAlgo = Object.keys(deposito).length > 0;
+  function inverter(deposito: Record<string, number>): Record<string, number> {
+    return Object.fromEntries(Object.entries(deposito).map(([k, v]) => [k, -v]));
+  }
 
-      const batch = writeBatch(db);
-      const ref = doc(collection(db, "usuarios", user.uid, "gastos"));
-      batch.set(ref, {
-        descricao,
-        valor,
-        categoria,
-        mes: mesPadrao(),
-        criadoEm: Date.now(),
-        // só grava a chave quando guardou de verdade: objeto vazio em todo
-        // gasto seria ruído em cima do dado mais numeroso do app
-        ...(guardouAlgo ? { guardado: deposito } : {}),
+  /**
+   * Registra o gasto e, na mesma transação, guarda o valor configurado em
+   * cada caixinha ativa (transferência pro cofrinho — sai do saldo junto,
+   * ver docs/modelo-financeiro.md). Com `chave`, é idempotente: se o gasto
+   * com essa chave já existe, não grava de novo e responde sucesso.
+   */
+  async function adicionar(
+    descricao: string,
+    valor: number,
+    categoria: string,
+    opcoes: OpcoesNovoGasto = {}
+  ) {
+    if (!user) return false;
+    if (!Number.isFinite(valor) || valor <= 0 || valor > 1_000_000) {
+      setErro("Valor inválido.");
+      return false;
+    }
+    const data = opcoes.data ?? hojeISO();
+    try {
+      const caixinhas = await caixinhasAgora(user.uid);
+      const deposito = depositoDoGasto(caixinhas);
+      const guardouAlgo = Object.keys(deposito).length > 0;
+      const ref = opcoes.chave
+        ? doc(db, "usuarios", user.uid, "gastos", idDaChave(opcoes.chave))
+        : doc(collection(db, "usuarios", user.uid, "gastos"));
+
+      await runTransaction(db, async (tx) => {
+        if (opcoes.chave && (await tx.get(ref)).exists()) return; // já gravado
+        tx.set(ref, {
+          descricao,
+          valor,
+          categoria,
+          data,
+          mes: data.slice(0, 7),
+          criadoEm: Date.now(),
+          registradoEm: serverTimestamp(),
+          ...(guardouAlgo ? { guardado: deposito } : {}),
+        });
+        aplicarNasCaixinhas(tx, user.uid, deposito, new Set(caixinhas.map((c) => c.id)));
       });
-      aplicarNasCaixinhas(batch, user.uid, deposito, 1);
-      await batch.commit();
 
       setErro(null);
       return true;
@@ -111,21 +157,35 @@ export function useGastos() {
 
   async function editar(
     id: string,
-    dados: { descricao: string; valor: number; categoria: string }
+    dados: { descricao: string; valor: number; categoria: string; data?: string }
   ) {
     if (!user) return false;
+    if (!Number.isFinite(dados.valor) || dados.valor <= 0) {
+      setErro("Valor inválido.");
+      return false;
+    }
     const gasto = todos.find((g) => g.id === id);
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "gastos", id);
-      batch.update(ref, dados);
+      batch.update(ref, {
+        descricao: dados.descricao,
+        valor: dados.valor,
+        categoria: dados.categoria,
+        ...(dados.data ? { data: dados.data, mes: dados.data.slice(0, 7) } : {}),
+      });
       if (gasto) {
         anexarAuditLog(batch, user.uid, user.email, {
           action: "updated",
           entityType: "gasto",
           entityId: id,
           summary: `"${gasto.descricao}" editado`,
-          before: { descricao: gasto.descricao, valor: gasto.valor, categoria: gasto.categoria },
+          before: {
+            descricao: gasto.descricao,
+            valor: gasto.valor,
+            categoria: gasto.categoria,
+            data: gasto.data,
+          },
           after: dados,
         });
       }
@@ -139,46 +199,62 @@ export function useGastos() {
   }
 
   /**
-   * Gasto já é dinheiro que saiu de verdade — não apaga, estorna: mantém o
-   * lançamento original (marcado `estornado`) e cria uma contrapartida
-   * negativa rastreável, que é o que efetivamente devolve o valor pro
-   * saldo. Bloqueia estornar duas vezes o mesmo gasto.
+   * Estorno: o original fica (marcado `estornado`) e uma contrapartida
+   * negativa devolve o valor. Roda numa transação que relê o original e
+   * usa um id FIXO pro estorno (`estorno__<id>`): duas abas estornando ao
+   * mesmo tempo produzem um estorno só (auditoria F04). O depósito nas
+   * caixinhas volta junto, e o estorno carrega esse movimento negativo —
+   * assim original + estorno somam zero também no saldo.
    */
   async function estornar(id: string, motivo: string) {
     if (!user) return false;
-    const original = todos.find((g) => g.id === id);
-    if (!original || original.estornado || original.estornoDeId) return false;
     try {
-      const batch = writeBatch(db);
+      const caixinhas = new Set((await caixinhasAgora(user.uid)).map((c) => c.id));
       const refOriginal = doc(db, "usuarios", user.uid, "gastos", id);
-      batch.update(refOriginal, {
-        estornado: true,
-        estornadoEm: Date.now(),
+      const refEstorno = doc(db, "usuarios", user.uid, "gastos", `estorno__${id}`);
+
+      const feito = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(refOriginal);
+        const jaExiste = (await tx.get(refEstorno)).exists();
+        if (!snap.exists()) return "sumiu";
+        const original = { id, ...snap.data() } as Gasto;
+        if (original.estornado || original.estornoDeId || jaExiste) return "ja";
+
+        const hoje = hojeISO();
+        tx.update(refOriginal, { estornado: true, estornadoEm: Date.now() });
+        tx.set(refEstorno, {
+          descricao: `Estorno: ${original.descricao}`,
+          valor: -original.valor,
+          categoria: original.categoria,
+          data: hoje,
+          mes: hoje.slice(0, 7),
+          criadoEm: Date.now(),
+          registradoEm: serverTimestamp(),
+          estornoDeId: id,
+          ...(original.guardado ? { guardado: inverter(original.guardado) } : {}),
+        });
+        if (original.guardado) {
+          aplicarNasCaixinhas(tx, user.uid, inverter(original.guardado), caixinhas);
+        }
+        anexarAuditLog(tx, user.uid, user.email, {
+          action: "reversed",
+          entityType: "gasto",
+          entityId: id,
+          summary: `Estorno de "${original.descricao}": ${motivo}`,
+          before: { valor: original.valor, categoria: original.categoria },
+          after: { motivo },
+        });
+        return "ok";
       });
-      const refEstorno = doc(collection(db, "usuarios", user.uid, "gastos"));
-      batch.set(refEstorno, {
-        descricao: `Estorno: ${original.descricao}`,
-        valor: -original.valor,
-        categoria: original.categoria,
-        mes: mesPadrao(),
-        criadoEm: Date.now(),
-        estornoDeId: id,
-      });
-      // o gasto não aconteceu, então o que ele guardou também não deve
-      // ficar de pé — devolve exatamente o que tirou, e não o valor atual
-      // da caixinha, que pode ter sido reconfigurado desde então
-      if (original.guardado) {
-        aplicarNasCaixinhas(batch, user.uid, original.guardado, -1);
+
+      if (feito === "ja") {
+        setErro("Esse gasto já foi estornado.");
+        return false;
       }
-      anexarAuditLog(batch, user.uid, user.email, {
-        action: "reversed",
-        entityType: "gasto",
-        entityId: id,
-        summary: `Estorno de "${original.descricao}": ${motivo}`,
-        before: { valor: original.valor, categoria: original.categoria },
-        after: { motivo },
-      });
-      await batch.commit();
+      if (feito === "sumiu") {
+        setErro("Esse gasto não existe mais.");
+        return false;
+      }
       setErro(null);
       return true;
     } catch (e) {
@@ -188,15 +264,11 @@ export function useGastos() {
   }
 
   /**
-   * Exclusão definitiva — diferente de estornar, aqui o(s) lançamento(s)
-   * somem de verdade. Gasto normal: apaga só ele. Gasto que faz parte de
-   * um par estorno/original (qualquer uma das duas metades): apaga as
-   * DUAS juntas no mesmo batch — nunca só uma, porque apagar metade
-   * deixaria a outra contando sozinha e mudando o saldo sem explicação.
-   * Apagar o par inteiro é seguro porque as duas metades já se cancelam
-   * (soma zero), então remover as duas não move o saldo nenhum pouco.
-   * Snapshot completo (dos dois lados, quando houver) vai pro audit log
-   * antes de apagar.
+   * Exclusão definitiva, pra lançamento feito por engano. Par
+   * gasto/estorno sai junto — mas só quando os dois estão do mesmo lado do
+   * saldo informado. Com lados diferentes (gasto antes de você atualizar o
+   * saldo, estorno depois), apagar mudaria o saldo sem explicação
+   * (auditoria F05): o app recusa e o par fica no histórico.
    */
   async function remover(id: string, motivo: string) {
     if (!user) return false;
@@ -209,6 +281,18 @@ export function useGastos() {
     if (!original) return false;
 
     try {
+      const snapSaldo = await getDoc(doc(db, "usuarios", user.uid, "saldo", "atual"));
+      const ref = snapSaldo.exists()
+        ? (snapSaldo.data() as { valor: number; atualizadoEm: number })
+        : null;
+      if (estorno && exclusaoDoParMudaSaldo(original, estorno, ref)) {
+        setErro(
+          "Esse gasto e o estorno dele ficam em lados diferentes da última atualização de saldo — apagar mudaria o saldo. Eles ficam no histórico."
+        );
+        return false;
+      }
+
+      const caixinhas = new Set((await caixinhasAgora(user.uid)).map((c) => c.id));
       const batch = writeBatch(db);
       anexarAuditLog(batch, user.uid, user.email, {
         action: "archived",
@@ -219,15 +303,12 @@ export function useGastos() {
           : `Exclusão definitiva de "${original.descricao}": ${motivo}`,
         before: estorno ? { original, estorno } : { ...original },
       });
-      // com estorno o depósito já foi devolvido lá; sem estorno, o gasto
-      // some agora e o que ele guardou precisa voltar junto
+      // sem estorno, o gasto some agora e o que ele guardou volta junto
       if (!estorno && original.guardado) {
-        aplicarNasCaixinhas(batch, user.uid, original.guardado, -1);
+        aplicarNasCaixinhas(batch, user.uid, inverter(original.guardado), caixinhas);
       }
       batch.delete(doc(db, "usuarios", user.uid, "gastos", original.id));
-      if (estorno) {
-        batch.delete(doc(db, "usuarios", user.uid, "gastos", estorno.id));
-      }
+      if (estorno) batch.delete(doc(db, "usuarios", user.uid, "gastos", estorno.id));
       await batch.commit();
       setErro(null);
       return true;
@@ -237,5 +318,10 @@ export function useGastos() {
     }
   }
 
-  return { gastos, loading, erro, adicionar, editar, estornar, remover };
+  /** Esse gasto já está descontado do saldo atual? (pra explicar o efeito de apagar). */
+  function mudaSaldoAoApagar(g: Gasto, ref: { valor: number; atualizadoEm: number } | null) {
+    return !!ref && gastoContaNoSaldo(g, ref);
+  }
+
+  return { gastos, loading, erro, adicionar, editar, estornar, remover, mudaSaldoAoApagar };
 }
