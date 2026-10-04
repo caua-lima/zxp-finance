@@ -346,12 +346,12 @@ export default function ChatPage() {
           </Botao>
         </div>
         {voz.ouvindo && (
-          <p className="mt-1.5 text-center text-[11px] text-negative">
+          <p className="mt-1.5 text-center text-xs text-negative">
             Ouvindo… fale o que gastou
           </p>
         )}
         {!voz.suportado && (
-          <p className="mt-1.5 text-[11px] text-text-faint">
+          <p className="mt-1.5 text-xs text-text-faint">
             Seu navegador não tem reconhecimento de voz — dá pra escrever
             normalmente. No celular, Chrome e Safari costumam ter.
           </p>

@@ -328,7 +328,7 @@ export default function SaldoPage() {
           {/* saldo na conta */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-text-faint">
                 Na conta agora
               </p>
               <p
@@ -338,7 +338,7 @@ export default function SaldoPage() {
               >
                 {formatarMoeda(saldoAtual ?? 0)}
               </p>
-              <p className="mt-0.5 text-[11px] text-text-faint">
+              <p className="mt-0.5 text-xs text-text-faint">
                 atualizado{" "}
                 {new Date(saldo.atualizadoEm).toLocaleDateString("pt-BR", {
                   day: "2-digit",
@@ -359,7 +359,7 @@ export default function SaldoPage() {
 
           {/* quanto pode gastar hoje — o número do dia */}
           <div className="mt-4 border-t border-line-soft pt-4">
-            <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+            <p className="text-xs font-medium uppercase tracking-[0.1em] text-text-faint">
               Pode gastar hoje
             </p>
             {semDinheiroLivre ? (
@@ -398,8 +398,8 @@ export default function SaldoPage() {
                         }}
                       />
                     </div>
-                    <p className="mt-1.5 text-[11px] text-text-faint">
-                      Gastou {formatarMoeda(orcamento.gastoHoje)} de{" "}
+                    <p className="mt-1.5 text-xs text-text-faint">
+                      Saiu {formatarMoeda(orcamento.gastoHoje)} de{" "}
                       {formatarMoeda(orcamento.orcamento)} ·{" "}
                       {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} até o fim do mês
                     </p>
@@ -700,7 +700,7 @@ function Configuracoes({
               Salvar
             </Botao>
           </div>
-          <p className="mt-1 text-[11px] text-text-faint">
+          <p className="mt-1 text-xs text-text-faint">
             Sai do cálculo de quanto pode gastar por dia.
           </p>
         </div>

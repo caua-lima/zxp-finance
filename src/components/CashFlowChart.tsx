@@ -72,7 +72,7 @@ export function CashFlowChart({
             <button
               key={r}
               onClick={() => setRange(r)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`min-h-[40px] rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                 range === r ? "bg-brand text-on-brand" : "text-text-muted hover:text-text"
               }`}
             >

@@ -78,14 +78,14 @@ export default function CaixinhasPage() {
   return (
     <div>
       <PageHeader
-        titulo="Caixinhas"
+        titulo="Metas e caixinhas"
         descricao="Seus cofrinhos, rendendo o CDI e recebendo um trocado a cada gasto"
       />
       <ErroBanner mensagem={erro} />
 
       {/* o que você abre essa tela pra ver: quanto já juntou e quanto rendeu */}
       <div className="mb-4 rounded-2xl border border-brand/25 bg-surface-elevated p-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+        <p className="text-xs font-medium uppercase tracking-[0.1em] text-text-faint">
           Total guardado
         </p>
         <p className="mt-0.5 text-3xl font-bold tracking-tight text-positive">
@@ -161,7 +161,7 @@ export default function CaixinhasPage() {
               <MoneyInput value={meta} onChange={setMeta} className="campo" />
             </div>
           </div>
-          <p className="text-[11px] text-text-faint">
+          <p className="text-xs text-text-faint">
             Cofrinho do Mercado Pago rende 100% do CDI. &quot;Guarda por gasto&quot; = quanto separa a cada
             gasto registrado (0 = só rende, não recebe depósito).
           </p>
@@ -347,7 +347,7 @@ function ItemCaixinha({
           <p className="truncate text-sm font-medium">
             🐷 {caixinha.nome}
             {!caixinha.ativa && (
-              <span className="ml-2 text-[11px] font-normal text-text-faint">
+              <span className="ml-2 text-xs font-normal text-text-faint">
                 pausada
               </span>
             )}
@@ -399,7 +399,7 @@ function ItemCaixinha({
               style={{ width: `${progresso}%` }}
             />
           </div>
-          <p className="mt-1 text-[11px] text-text-faint">
+          <p className="mt-1 text-xs text-text-faint">
             {falta === 0
               ? `Meta de ${formatarMoeda(caixinha.meta!)} batida 🎉`
               : `${progresso}% de ${formatarMoeda(caixinha.meta!)} · faltam ${formatarMoeda(falta!)}${

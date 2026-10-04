@@ -58,7 +58,8 @@ export function UpcomingList({
             <span className="text-sm font-semibold text-gold">{formatarMoeda(e.amount)}</span>
             <Link
               href={HREF_POR_ORIGEM[e.source]}
-              className="text-xs font-medium text-brand hover:text-brand-dark"
+              aria-label={`Ver ${e.description}`}
+              className="-mr-2 inline-flex min-h-[44px] items-center px-2 text-xs font-medium text-brand hover:text-brand-dark"
             >
               Ver
             </Link>

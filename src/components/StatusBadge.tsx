@@ -25,7 +25,7 @@ export function StatusBadge({ status }: { status: StatusBadgeValor }) {
   const c = CONFIG[status];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${c.cor} ${c.bg}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${c.cor} ${c.bg}`}
     >
       <span aria-hidden="true">{c.simbolo}</span>
       {c.label}

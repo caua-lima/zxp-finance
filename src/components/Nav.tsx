@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { Logo } from "./Logo";
+import { useModulos, useEhAdmin } from "@/lib/useModulos";
+import { useNotificacoes } from "@/lib/useNotificacoes";
 import {
   IconResumo,
   IconSaldo,
@@ -34,12 +36,26 @@ interface ItemNav {
   descricao?: string;
 }
 
-const secoes: { titulo: string; itens: ItemNav[] }[] = [
+type Secao = { titulo: string; itens: (ItemNav & { so?: "comissoes" | "admin" })[] };
+
+/**
+ * Menu completo (auditoria U04). Comissões só aparece com o módulo ligado
+ * (quem trabalha com venda) e Acesso só pra admin da plataforma — esconder
+ * não é a proteção (a rota no servidor é), mas cliente comum não precisa
+ * ver administração.
+ */
+const SECOES: Secao[] = [
   {
     titulo: "Visão geral",
     itens: [
-      { href: "/", label: "Resumo", Icon: IconResumo, descricao: "O que entra, o que sai e o que sobra" },
-      { href: "/dre", label: "DRE do mês", labelCurto: "DRE", Icon: IconDre, descricao: "Pra onde foi o dinheiro" },
+      { href: "/", label: "Início", Icon: IconResumo, descricao: "O que entra, o que sai e o que sobra" },
+      {
+        href: "/dre",
+        label: "Relatório mensal",
+        labelCurto: "Relatório",
+        Icon: IconDre,
+        descricao: "Pra onde foi o dinheiro no mês",
+      },
       {
         href: "/consultor",
         label: "Consultor",
@@ -54,28 +70,29 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
       {
         href: "/saldo",
         label: "Saldo e gastos",
-        labelCurto: "Saldo",
+        labelCurto: "Gastos",
         Icon: IconSaldo,
         descricao: "Registrar gasto e ver quanto pode gastar hoje",
+      },
+      {
+        href: "/checklist",
+        label: "A pagar",
+        Icon: IconChecklist,
+        descricao: "O que vence no mês e o que já foi pago",
       },
       {
         href: "/comissoes",
         label: "Comissões",
         Icon: IconComissoes,
         descricao: "Lançar reuniões e vendas do dia",
-      },
-      {
-        href: "/checklist",
-        label: "Contas a pagar",
-        labelCurto: "Contas",
-        Icon: IconChecklist,
-        descricao: "Marcar o que já pagou no mês",
+        so: "comissoes",
       },
       {
         href: "/caixinhas",
-        label: "Caixinhas",
+        label: "Metas e caixinhas",
+        labelCurto: "Metas",
         Icon: IconCaixinha,
-        descricao: "Dinheiro guardado, rendendo o CDI",
+        descricao: "Dinheiro guardado e o quanto falta pra meta",
       },
       {
         href: "/chat",
@@ -93,36 +110,41 @@ const secoes: { titulo: string; itens: ItemNav[] }[] = [
       { href: "/contas", label: "Contas fixas", Icon: IconContas, descricao: "O que vence todo mês" },
       { href: "/parcelas", label: "Parcelas", Icon: IconParcelas, descricao: "Quanto de parcela você tem ativa" },
       { href: "/assinaturas", label: "Assinaturas", Icon: IconAssinaturas, descricao: "Serviços recorrentes" },
-      { href: "/fatura", label: "Fatura do cartão", labelCurto: "Fatura", Icon: IconFatura, descricao: "Valor e vencimento de cada cartão" },
+      { href: "/fatura", label: "Cartões", Icon: IconFatura, descricao: "Fatura, fechamento e vencimento de cada cartão" },
     ],
   },
   {
     titulo: "Sua conta",
     itens: [
       { href: "/notificacoes", label: "Notificações", Icon: IconSino, descricao: "Avisos, este aparelho e preferências" },
-      { href: "/perfil", label: "Perfil", Icon: IconPerfil, descricao: "Seu cenário, pra comparar com médias" },
-      { href: "/acesso", label: "Acesso", Icon: IconAcesso, descricao: "Logins que entram no app" },
+      { href: "/perfil", label: "Perfil e módulos", labelCurto: "Perfil", Icon: IconPerfil, descricao: "Seu cenário, módulos e exportar dados" },
+      { href: "/acesso", label: "Acesso", Icon: IconAcesso, descricao: "Logins da plataforma", so: "admin" },
     ],
   },
 ];
 
 /**
- * Barra de baixo do celular: só o que é usado no dia a dia. O resto vive
- * atrás de "Mais" — antes eram 13 itens num scroll horizontal, onde achar
- * qualquer coisa dava trabalho e nada ficava visível de primeira.
+ * Barra de baixo do celular: Início, Gastos, A pagar e — pra quem usa
+ * comissão — Comissões; pra quem não usa, Metas. O resto fica em "Mais".
  */
-const TABS_MOBILE: ItemNav[] = [
-  { href: "/", label: "Resumo", Icon: IconResumo },
-  { href: "/saldo", label: "Saldo", Icon: IconSaldo },
-  { href: "/checklist", label: "Contas", Icon: IconChecklist },
-  { href: "/comissoes", label: "Comissões", Icon: IconComissoes },
-];
+function tabsMobile(comissoes: boolean): ItemNav[] {
+  return [
+    { href: "/", label: "Início", Icon: IconResumo },
+    { href: "/saldo", label: "Gastos", Icon: IconSaldo },
+    { href: "/checklist", label: "A pagar", Icon: IconChecklist },
+    comissoes
+      ? { href: "/comissoes", label: "Comissões", Icon: IconComissoes }
+      : { href: "/caixinhas", label: "Metas", Icon: IconCaixinha },
+  ];
+}
 
 export function Nav() {
   const pathname = usePathname();
   const { logout } = useAuth();
   const router = useRouter();
   const [menuAberto, setMenuAberto] = useState(false);
+  const botaoMais = useRef<HTMLButtonElement>(null);
+  const botaoFechar = useRef<HTMLButtonElement>(null);
 
   async function handleLogout() {
     setMenuAberto(false);
@@ -139,12 +161,26 @@ export function Nav() {
       if (e.key === "Escape") setMenuAberto(false);
     }
     window.addEventListener("keydown", aoTeclar);
+    // foco vai pra dentro da folha e volta pro "Mais" ao fechar (auditoria U02)
+    botaoFechar.current?.focus();
+    const retorno = botaoMais.current;
     return () => {
       document.body.style.overflow = overflowAnterior;
       window.removeEventListener("keydown", aoTeclar);
+      retorno?.focus();
     };
   }, [menuAberto]);
 
+  const modulos = useModulos();
+  const admin = useEhAdmin();
+  const { naoLidas } = useNotificacoes();
+  const secoes = SECOES.map((secao) => ({
+    ...secao,
+    itens: secao.itens.filter(
+      (i) => (i.so !== "comissoes" || modulos.comissoes) && (i.so !== "admin" || admin)
+    ),
+  }));
+  const TABS_MOBILE = tabsMobile(modulos.comissoes);
   const emTabPrincipal = TABS_MOBILE.some((t) => t.href === pathname);
 
   return (
@@ -157,7 +193,7 @@ export function Nav() {
         <nav className="flex flex-col gap-4 overflow-y-auto">
           {secoes.map((secao) => (
             <div key={secao.titulo}>
-              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+              <p className="px-3 mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-faint">
                 {secao.titulo}
               </p>
               <div className="flex flex-col gap-0.5">
@@ -193,8 +229,20 @@ export function Nav() {
       </aside>
 
       {/* Header — mobile */}
-      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-3 backdrop-blur">
+      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-2 backdrop-blur">
         <Logo />
+        <Link
+          href="/notificacoes"
+          aria-label={naoLidas > 0 ? `Notificações: ${naoLidas} não lida(s)` : "Notificações"}
+          className="relative flex h-11 w-11 items-center justify-center rounded-xl text-text-muted active:bg-surface"
+        >
+          <IconSino width={20} height={20} />
+          {naoLidas > 0 && (
+            <span className="absolute right-1.5 top-1.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-xs font-bold leading-[18px] text-on-brand">
+              {naoLidas > 9 ? "9+" : naoLidas}
+            </span>
+          )}
+        </Link>
       </header>
 
       {/* Menu "Mais" — mobile */}
@@ -214,6 +262,7 @@ export function Nav() {
             <div className="sticky top-0 flex items-center justify-between border-b border-line-soft bg-sidebar px-5 pb-3 pt-4">
               <span className="text-sm font-semibold">Todas as seções</span>
               <button
+                ref={botaoFechar}
                 onClick={() => setMenuAberto(false)}
                 className="-mr-2 rounded-lg px-3 py-2 text-sm text-text-muted active:bg-surface"
               >
@@ -224,7 +273,7 @@ export function Nav() {
             <nav className="px-3 py-2">
               {secoes.map((secao) => (
                 <div key={secao.titulo} className="mb-3">
-                  <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+                  <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-faint">
                     {secao.titulo}
                   </p>
                   <div className="flex flex-col">
@@ -290,8 +339,9 @@ export function Nav() {
             <Link
               key={href}
               href={href}
+              aria-label={label}
               aria-current={ativo ? "page" : undefined}
-              className={`flex min-h-[58px] flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium transition-colors ${
+              className={`flex min-h-[58px] flex-col items-center justify-center gap-1 px-1 text-xs font-medium transition-colors ${
                 ativo ? "text-brand" : "text-text-faint active:text-text-muted"
               }`}
             >
@@ -307,10 +357,11 @@ export function Nav() {
           );
         })}
         <button
+          ref={botaoMais}
           onClick={() => setMenuAberto(true)}
           aria-expanded={menuAberto}
           aria-label="Abrir todas as seções"
-          className={`flex min-h-[58px] flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium transition-colors ${
+          className={`flex min-h-[58px] flex-col items-center justify-center gap-1 px-1 text-xs font-medium transition-colors ${
             menuAberto || !emTabPrincipal ? "text-brand" : "text-text-faint active:text-text-muted"
           }`}
         >

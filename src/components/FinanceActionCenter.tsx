@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FinanceAlert, Severidade } from "@/lib/finance/alerts";
+import { useAuth } from "@/lib/AuthContext";
 
 const CONFIG_SEVERIDADE: Record<
   Severidade,
@@ -38,31 +39,52 @@ const CONFIG_SEVERIDADE: Record<
   },
 };
 
-const CHAVE_DISPENSADOS = "financeiro:alertas-dispensados";
+/**
+ * Dispensa de alerta por CONTA e com validade (auditoria U06): antes a
+ * chave era global no navegador (a conta B herdava o que A dispensou) e a
+ * dispensa valia pra sempre. Agora vale 7 dias — alerta que continua
+ * verdadeiro volta a aparecer.
+ */
+const VALIDADE_DISPENSA = 7 * 24 * 60 * 60 * 1000;
 
-function carregarDispensados(): Set<string> {
-  if (typeof window === "undefined") return new Set();
+// usado só dentro do clique (dispensar) — nunca durante o render
+const agora = () => Date.now();
+
+function chaveDispensados(uid: string) {
+  return `financeiro:alertas-dispensados:${uid}`;
+}
+
+function carregarDispensados(uid: string): Map<string, number> {
   try {
-    const bruto = window.localStorage.getItem(CHAVE_DISPENSADOS);
-    return new Set(bruto ? (JSON.parse(bruto) as string[]) : []);
+    const bruto = window.localStorage.getItem(chaveDispensados(uid));
+    const lista = bruto ? (JSON.parse(bruto) as Array<[string, number]>) : [];
+    const agora = Date.now();
+    return new Map(lista.filter(([, em]) => typeof em === "number" && agora - em < VALIDADE_DISPENSA));
   } catch {
-    return new Set();
+    return new Map();
   }
 }
 
 export function FinanceActionCenter({ alertas }: { alertas: FinanceAlert[] }) {
-  const [dispensados, setDispensados] = useState<Set<string>>(new Set());
+  const { user } = useAuth();
+  const [dispensados, setDispensados] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
+    if (!user) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- lê localStorage só depois de montar (evita mismatch de SSR)
-    setDispensados(carregarDispensados());
-  }, []);
+    setDispensados(carregarDispensados(user.uid));
+  }, [user]);
 
   function dispensar(key: string) {
-    const novo = new Set(dispensados);
-    novo.add(key);
+    if (!user) return;
+    const novo = new Map(dispensados);
+    novo.set(key, agora());
     setDispensados(novo);
-    window.localStorage.setItem(CHAVE_DISPENSADOS, JSON.stringify([...novo]));
+    try {
+      window.localStorage.setItem(chaveDispensados(user.uid), JSON.stringify([...novo]));
+    } catch {
+      /* sem armazenamento: dispensa vale só nesta visita */
+    }
   }
 
   const visiveis = alertas.filter((a) => !dispensados.has(a.key));
@@ -92,7 +114,7 @@ export function FinanceActionCenter({ alertas }: { alertas: FinanceAlert[] }) {
                   <span className={`text-xs font-semibold ${c.cor}`} aria-hidden="true">
                     {c.simbolo}
                   </span>
-                  <span className={`text-[10px] font-semibold uppercase tracking-wide ${c.cor}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${c.cor}`}>
                     {c.label}
                   </span>
                 </div>
@@ -106,14 +128,14 @@ export function FinanceActionCenter({ alertas }: { alertas: FinanceAlert[] }) {
                 {a.href && (
                   <Link
                     href={a.href}
-                    className="text-xs font-medium text-brand hover:text-brand-dark whitespace-nowrap"
+                    className="inline-flex min-h-[44px] items-center px-2 -mx-2 text-xs font-medium text-brand hover:text-brand-dark whitespace-nowrap"
                   >
                     {a.cta}
                   </Link>
                 )}
                 <button
                   onClick={() => dispensar(a.key)}
-                  className="text-[11px] text-text-faint hover:text-text-muted"
+                  className="inline-flex min-h-[44px] items-center px-2 -mx-2 text-xs text-text-faint hover:text-text-muted"
                   aria-label="Dispensar alerta"
                 >
                   Dispensar

@@ -62,7 +62,10 @@
 
   --color-text: #f6f3e8;
   --color-text-muted: rgba(246, 243, 232, 0.65);
-  --color-text-faint: rgba(246, 243, 232, 0.42);
+  /* 0.56 e não 0.42 (auditoria U03): em 0.42 o texto esmaecido dava ~3,8:1
+     no onyx, abaixo do mínimo AA de 4,5:1. Em 0.56 fica ~5:1 no fundo e
+     nas superfícies. */
+  --color-text-faint: rgba(246, 243, 232, 0.56);
 }
 
 @theme inline {
@@ -188,4 +191,17 @@ textarea.campo {
   font-size: 0.6875rem;
   font-weight: 500;
   color: var(--color-text-muted);
+}
+
+/* Movimento reduzido: quem pediu menos animação no sistema não vê pulsar
+   nem deslizar (auditoria, tokens e comportamento). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -187,7 +187,7 @@ export default function ChecklistPage() {
   return (
     <div>
       <PageHeader
-        titulo="Contas a pagar"
+        titulo="A pagar"
         descricao="Vá marcando o que já pagou no mês"
       />
       <MonthSelector mes={mes} onChange={setMes} />
@@ -314,6 +314,7 @@ export default function ChecklistPage() {
                                 onChange={(e) =>
                                   alternarPago(item, e.target.checked)
                                 }
+                                aria-label={`${item.nome} — ${pago ? "pago" : "marcar como pago"}`}
                                 className="h-5 w-5 shrink-0 accent-brand disabled:opacity-40 disabled:cursor-not-allowed"
                               />
                               <div className="min-w-0">
