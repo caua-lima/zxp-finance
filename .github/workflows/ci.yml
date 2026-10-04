@@ -62,3 +62,6 @@ jobs:
 
       - name: Regras + notificações (emulador)
         run: npm run test:regras
+
+      - name: Backup e restauração (emulador)
+        run: npm run test:restauracao

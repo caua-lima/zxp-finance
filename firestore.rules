@@ -25,6 +25,11 @@ service cloud.firestore {
     function numero(v) {
       return (v is int || v is float) && v == v && v > -1000000000 && v < 1000000000;
     }
+    // momento em milissegundos (Date.now()): entre 2001 e 5138 — fora do
+    // limite de `numero`, que é pra dinheiro e contagens
+    function momento(v) {
+      return v is int && v > 1000000000000 && v < 100000000000000;
+    }
     function numeroEntre(v, min, max) {
       return numero(v) && v >= min && v <= max;
     }
@@ -89,7 +94,7 @@ service cloud.firestore {
           && request.resource.data.origem in ['conta', 'assinatura', 'parcela', 'fatura', 'ganho']
           && texto(request.resource.data.nome, 200)
           && numeroEntre(request.resource.data.valor, 0, 1000000)
-          && numero(request.resource.data.pagoEm);
+          && momento(request.resource.data.pagoEm);
         // pagamento não se edita: desmarca e marca de novo
         allow update: if false;
         allow delete: if dono(uid) && mesLivre(uid);
@@ -237,7 +242,7 @@ service cloud.firestore {
         // único campo que você mexe: marcar como lida
         allow update: if dono(uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lidaEm'])
-          && numero(request.resource.data.lidaEm);
+          && momento(request.resource.data.lidaEm);
         allow create, delete: if false;
       }
       match /entregas/{id} {

@@ -8,6 +8,13 @@ import {
   idadeEm,
   diasAteAniversario,
   MES_MINIMO,
+  mesPadrao,
+  mesMinimoAtual,
+  configurarInicioHistorico,
+  configurarTaxaImposto,
+  taxaImpostoAtual,
+  calcularImposto,
+  TAXA_IMPOSTO,
   Parcela,
   Gasto,
   Caixinha,
@@ -1811,5 +1818,28 @@ describe("auditoria — autorização (S01/S05, matriz 1–2)", () => {
     assert.equal(recursoLiberado("u1", undefined), false);
     assert.equal(recursoLiberado("u1", "u2"), false);
     assert.equal(recursoLiberado("u1", "u1"), true);
+  });
+});
+
+describe("configuração por cliente (O03)", () => {
+  test("taxa de imposto configurável, com limites; valor inválido é ignorado", () => {
+    configurarTaxaImposto(0.1);
+    assert.equal(taxaImpostoAtual(), 0.1);
+    assert.equal(calcularImposto(100), 10);
+    configurarTaxaImposto(Number.NaN);
+    configurarTaxaImposto(0.9);
+    assert.equal(taxaImpostoAtual(), 0.1);
+    // taxa explícita (servidor) não depende da configuração global
+    assert.equal(calcularImposto(100, 0.06), 6);
+    configurarTaxaImposto(TAXA_IMPOSTO);
+  });
+
+  test("início do histórico configurável; formato inválido é ignorado", () => {
+    configurarInicioHistorico("2027-03");
+    assert.equal(mesMinimoAtual(), "2027-03");
+    configurarInicioHistorico("março");
+    assert.equal(mesMinimoAtual(), "2027-03");
+    assert.ok(mesPadrao() >= "2027-03");
+    configurarInicioHistorico(MES_MINIMO);
   });
 });

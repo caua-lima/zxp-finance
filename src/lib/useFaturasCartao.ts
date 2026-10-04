@@ -18,7 +18,7 @@ function chave(mes: string, cartao: string) {
  * ainda não foi lançado nada. Salvar é sempre um upsert por
  * mes+cartão, não existe "adicionar" nem "excluir".
  */
-export function useFaturasCartao(mes: string) {
+export function useFaturasCartao(mes: string, cartoesExtras: string[] = []) {
   const { user } = useAuth();
   const [todas, setTodas] = useState<FaturaCartao[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +43,13 @@ export function useFaturasCartao(mes: string) {
     return unsubscribe;
   }, [user]);
 
+  // comparada por conteúdo: o array muda de identidade a cada render
+  const chaveExtras = cartoesExtras.join("|");
   const faturas = useMemo(() => {
-    return CARTOES_PREDEFINIDOS.map((cartao) => {
+    const cartoesExtras = chaveExtras ? chaveExtras.split("|") : [];
+    const padrao = CARTOES_PREDEFINIDOS as readonly string[];
+    const nomes = [...padrao, ...cartoesExtras.filter((n) => !padrao.includes(n))];
+    return nomes.map((cartao) => {
       const existente = todas.find((f) => f.mes === mes && f.nome === cartao);
       return (
         existente ?? {
@@ -56,7 +61,7 @@ export function useFaturasCartao(mes: string) {
         }
       );
     });
-  }, [todas, mes]);
+  }, [todas, mes, chaveExtras]);
 
   async function salvar(cartao: string, valor: number) {
     if (!user) return false;

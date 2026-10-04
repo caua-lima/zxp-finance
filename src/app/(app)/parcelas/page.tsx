@@ -13,7 +13,7 @@ import {
   VinculoDesejo,
   valorMinhaParte,
 } from "@/lib/types";
-import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
+import { useNomesCartoes } from "@/lib/useCartoesConfig";
 import { useParcelas } from "@/lib/useParcelas";
 import { useDesejosEmAberto } from "@/lib/useDesejosEmAberto";
 import { resumoParcelasAtivas } from "@/lib/finance/resumoParcelas";
@@ -53,6 +53,7 @@ export default function ParcelasPage() {
   const [desejoId, setDesejoId] = useState("");
   const desejos = useDesejosEmAberto();
   const toast = useToast();
+  const nomesCartoes = useNomesCartoes();
   const [criando, setCriando] = useState(false);
   const resumo = resumoParcelasAtivas(parcelas, mesPadrao());
 
@@ -113,7 +114,7 @@ export default function ParcelasPage() {
           também as que estão dentro da fatura do cartão. O total antigo
           deixava essas de fora e só mostrava o carro. */}
       <div className="mb-4 rounded-2xl border border-brand/25 bg-surface-elevated p-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-text-faint">
+        <p className="text-xs font-medium uppercase tracking-[0.1em] text-text-faint">
           Parcelas ativas
         </p>
         <div className="mt-1 flex items-baseline justify-between gap-3">
@@ -147,7 +148,7 @@ export default function ParcelasPage() {
             </div>
           </div>
         )}
-        <p className="mt-2 text-[11px] text-text-faint">
+        <p className="mt-2 text-xs text-text-faint">
           Valores na sua parte (metade quando é dividida).
         </p>
       </div>
@@ -242,7 +243,7 @@ export default function ParcelasPage() {
               className="campo"
             >
               <option value="">Qual cartão?</option>
-              {CARTOES_PREDEFINIDOS.map((c) => (
+              {nomesCartoes.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -389,7 +390,7 @@ function GrupoParcelas({
       )}
       {quitadas.length > 0 && (
         <div className="mt-3">
-          <p className="px-1 mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-faint">
+          <p className="px-1 mb-1.5 text-xs font-medium uppercase tracking-wide text-text-faint">
             Quitadas
           </p>
           <ul className="space-y-1.5">
@@ -502,6 +503,7 @@ function ItemParcela({
     parcela.mesReferencia ?? mesPadrao()
   );
   const toast = useToast();
+  const nomesCartoes = useNomesCartoes();
 
   const referencia = parcela.mesReferencia ?? mesPadrao();
   // decorridos < 0 cobre dois casos que parecem iguais de fora (0 parcelas
@@ -596,7 +598,7 @@ function ItemParcela({
             className="campo"
           >
             <option value="">Qual cartão?</option>
-            {CARTOES_PREDEFINIDOS.map((c) => (
+            {nomesCartoes.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -715,7 +717,7 @@ function ItemParcela({
             onClick={() => {
               toast.sucessoSe(onDarBaixa(parcela.id), `Baixa dada em "${parcela.nome}".`);
             }}
-            className="text-xs text-brand hover:text-brand-dark"
+            className="inline-flex min-h-[44px] items-center px-2 -mx-2 text-xs text-brand hover:text-brand-dark"
           >
             Dar baixa neste mês
           </button>

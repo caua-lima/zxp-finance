@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { formatarMoeda, formatarMes, mesPadrao, mesSeguinte } from "@/lib/types";
+import { formatarMoeda, formatarMes, mesPadrao, mesSeguinte, taxaImpostoAtual } from "@/lib/types";
 import { hojeISO } from "@/lib/finance/calculations";
 import { calcularComissaoDoDia } from "@/lib/finance/comissoes";
 import { useComissoes } from "@/lib/useComissoes";
@@ -49,7 +49,7 @@ function ContadorCampo({
     <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/40 py-2 pl-3 pr-2">
       <div className="min-w-0 flex-1">
         <p className="text-sm leading-tight">{titulo}</p>
-        <p className="text-[11px] text-text-faint">{formatarMoeda(unitario)} cada</p>
+        <p className="text-xs text-text-faint">{formatarMoeda(unitario)} cada</p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button
@@ -247,7 +247,7 @@ export default function ComissoesPage() {
         </div>
 
         {jaLancadoNoDia && (
-          <p className="text-[11px] text-gold">
+          <p className="text-xs text-gold">
             Esse dia já tem {formatarMoeda(jaLancadoNoDia.valorTotal)} lançado —
             salvar substitui.
           </p>
@@ -352,9 +352,10 @@ export default function ComissoesPage() {
                     {formatarMoeda(prevista.liquido)}
                   </span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-text-faint">
+                <p className="mt-0.5 text-xs text-text-faint">
                   {formatarMoeda(prevista.bruto)} − {formatarMoeda(prevista.imposto)} de imposto
-                  (6%). Já aparece como entrada prevista no Resumo de {nomeMesPagamento}.
+                  ({(taxaImpostoAtual() * 100).toFixed(1).replace(".0", "")}%). Já aparece como
+                  entrada prevista no Início de {nomeMesPagamento}.
                 </p>
                 {registrandoRecebimento ? (
                   <div className="mt-2 space-y-2">

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -15,3 +15,14 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+/**
+ * Modo emulador (desenvolvimento e testes de ponta a ponta com usuários
+ * sintéticos): Auth e Firestore locais, nunca a produção. Liga só com
+ * NEXT_PUBLIC_EMULADOR=1 — ver `npm run dev:emulador` e docs/operacao.md.
+ */
+if (process.env.NEXT_PUBLIC_EMULADOR === "1" && !(globalThis as { __zxpEmulador?: boolean }).__zxpEmulador) {
+  (globalThis as { __zxpEmulador?: boolean }).__zxpEmulador = true;
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8089);
+}

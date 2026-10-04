@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { mesPadrao, formatarMoeda, TAXA_IMPOSTO, Ganho } from "@/lib/types";
+import { mesPadrao, formatarMoeda, taxaImpostoAtual, Ganho } from "@/lib/types";
 import { CATEGORIAS_RECEITA, iconeCategoriaReceita } from "@/lib/categoriasFinanceiras";
 import { useGanhos } from "@/lib/useGanhos";
 import { usePagamentos } from "@/lib/usePagamentos";
@@ -164,7 +164,7 @@ export default function GanhosPage() {
         </div>
         <div className="flex justify-between items-center">
           <span className="text-sm text-text-muted">
-            Imposto ({(TAXA_IMPOSTO * 100).toFixed(0)}% sobre o que não é &quot;sem imposto&quot;)
+            Imposto ({(taxaImpostoAtual() * 100).toFixed(1).replace(".0", "")}% sobre o que não é &quot;sem imposto&quot;)
           </span>
           <span className="text-base font-medium text-negative">
             − {formatarMoeda(imposto)}
@@ -256,7 +256,7 @@ function SecaoOrfaos({
             </div>
             <button
               onClick={() => setConfirmandoId(g.id)}
-              className="shrink-0 text-[10px] text-text-faint hover:text-negative whitespace-nowrap"
+              className="shrink-0 text-xs text-text-faint hover:text-negative whitespace-nowrap"
             >
               Excluir
             </button>
@@ -454,7 +454,7 @@ function ItemGanho({
             {ganho.descricao}
           </p>
           {ganho.semImposto && (
-            <span className="text-[10px] text-text-faint">sem imposto</span>
+            <span className="text-xs text-text-faint">sem imposto</span>
           )}
         </div>
         <span className="shrink-0 text-sm font-medium text-positive">
@@ -477,7 +477,7 @@ function ItemGanho({
       </div>
       <button
         onClick={() => onAlternarRecebido(!recebido)}
-        className={`mt-1 ml-8 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${
+        className={`mt-1 ml-8 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
           recebido
             ? "border-positive/30 bg-positive-soft text-positive"
             : "border-info/30 bg-info/10 text-info"

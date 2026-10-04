@@ -92,6 +92,14 @@ export async function POST(req: NextRequest) {
   if (!acesso.ok) return acesso.resposta;
   const uid = acesso.identidade.uid;
 
+  // recurso opcional: sem chave configurada, desligado de forma explícita
+  if (!process.env.ANTHROPIC_API_KEY || process.env.CONSULTOR_DESLIGADO === "1") {
+    return NextResponse.json(
+      { erro: "O Consultor não está disponível neste ambiente." },
+      { status: 503 }
+    );
+  }
+
   const corpo = await lerJson(req);
   const pergunta = texto(corpo?.pergunta, 3, 500);
   if (!pergunta) {

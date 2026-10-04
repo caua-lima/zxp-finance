@@ -269,12 +269,24 @@ export function mesAtual(): string {
 // timestamp") moraram em src/lib/finance/calculations.ts — não duplicar
 // aqui.
 
-// Nenhum mês antes deste fica visível no app, mesmo que o mês real seja anterior.
+// Início do histórico: nenhum mês antes dele aparece no app. Era fixo em
+// agosto/2026 (o mês em que o app nasceu, pro dono); pra outros clientes
+// é o mês em que eles começaram (auditoria O03). Configurado no carregamento
+// do app — ver useConfigApp.
 export const MES_MINIMO = "2026-08";
+let mesMinimo = MES_MINIMO;
+
+export function configurarInicioHistorico(mes: string) {
+  if (/^\d{4}-\d{2}$/.test(mes)) mesMinimo = mes;
+}
+
+export function mesMinimoAtual(): string {
+  return mesMinimo;
+}
 
 export function mesPadrao(): string {
   const atual = mesAtual();
-  return atual > MES_MINIMO ? atual : MES_MINIMO;
+  return atual > mesMinimo ? atual : mesMinimo;
 }
 
 export function diferencaMeses(de: string, para: string): number {
@@ -333,10 +345,24 @@ export function arredondarCentavos(valor: number): number {
 }
 
 // Desconto padrão sobre tudo que é emitido (nota/recibo) — salário + comissões.
+/**
+ * Imposto sobre a renda, em fração. 6% era a regra do dono (Simples); pra
+ * outro cliente é configurável no Perfil (auditoria O03) — não é regra
+ * fiscal universal.
+ */
 export const TAXA_IMPOSTO = 0.06;
+let taxaImposto = TAXA_IMPOSTO;
 
-export function calcularImposto(valorBruto: number): number {
-  return valorBruto * TAXA_IMPOSTO;
+export function configurarTaxaImposto(taxa: number) {
+  if (Number.isFinite(taxa) && taxa >= 0 && taxa <= 0.5) taxaImposto = taxa;
+}
+
+export function taxaImpostoAtual(): number {
+  return taxaImposto;
+}
+
+export function calcularImposto(valorBruto: number, taxa: number = taxaImposto): number {
+  return valorBruto * taxa;
 }
 
 // ---------------------------------------------------------------------------

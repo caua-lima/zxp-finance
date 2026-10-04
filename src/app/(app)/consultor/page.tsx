@@ -6,7 +6,7 @@ import { useParcelas } from "@/lib/useParcelas";
 import { useDesejosEmAberto } from "@/lib/useDesejosEmAberto";
 import { SeletorDesejo } from "@/components/SeletorDesejo";
 import { formatarMoeda, mesPadrao, VinculoDesejo, TipoParcela } from "@/lib/types";
-import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
+import { useNomesCartoes } from "@/lib/useCartoesConfig";
 import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { useToast } from "@/components/Toast";
@@ -213,6 +213,7 @@ function RespostaConsultor({
   toast: ReturnType<typeof useToast>;
 }) {
   const [criando, setCriando] = useState(false);
+  const nomesCartoes = useNomesCartoes();
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<TipoParcela>("financiamento");
   const [cartao, setCartao] = useState("");
@@ -326,7 +327,7 @@ function RespostaConsultor({
           {tipo === "cartao" && (
             <select value={cartao} onChange={(e) => setCartao(e.target.value)} className="campo">
               <option value="">Qual cartão?</option>
-              {CARTOES_PREDEFINIDOS.map((c) => (
+              {nomesCartoes.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>

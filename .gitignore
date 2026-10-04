@@ -47,3 +47,4 @@ backups/
 # logs do emulador do Firestore
 firestore-debug.log
 *-debug.log
+backups-ensaio/

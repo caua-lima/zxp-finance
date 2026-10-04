@@ -1,6 +1,10 @@
 import { accessToken, credenciais } from "./googleAuth";
 
-const BASE = "https://identitytoolkit.googleapis.com/v1";
+// com o emulador de Auth (testes/desenvolvimento), fala com ele — nunca produção
+const EMULADOR_AUTH = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+const BASE = EMULADOR_AUTH
+  ? `http://${EMULADOR_AUTH}/identitytoolkit.googleapis.com/v1`
+  : "https://identitytoolkit.googleapis.com/v1";
 
 export interface UsuarioFirebase {
   uid: string;
@@ -22,8 +26,8 @@ async function chamar(
   caminho: string,
   corpo: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const { projectId } = credenciais();
-  const token = await accessToken();
+  const projectId = EMULADOR_AUTH ? (process.env.GCLOUD_PROJECT ?? "demo-zxp") : credenciais().projectId;
+  const token = EMULADOR_AUTH ? "owner" : await accessToken();
 
   const resposta = await fetch(`${BASE}/projects/${projectId}${caminho}`, {
     method: "POST",
@@ -77,6 +81,11 @@ function paraUsuario(conta: RespostaConta): UsuarioFirebase {
  * com mais clientes que isso o cron de notificação pulava gente calado.
  */
 export async function listarUsuarios(): Promise<UsuarioFirebase[]> {
+  if (EMULADOR_AUTH) {
+    // o emulador de Auth não implementa `limit`/`offset`: devolve tudo de uma vez
+    const dados = await chamar("/accounts:query", { returnUserInfo: true });
+    return ((dados.userInfo ?? []) as RespostaConta[]).map(paraUsuario);
+  }
   const todos: UsuarioFirebase[] = [];
   const porPagina = 500;
   for (let offset = 0; ; offset += porPagina) {

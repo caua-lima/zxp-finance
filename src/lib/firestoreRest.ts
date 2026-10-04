@@ -69,11 +69,11 @@ export interface DocumentoFirestore<T = Record<string, unknown>> {
   dados: T;
 }
 
-/** Lista todos os documentos de uma coleção/subcoleção, paginando sozinho. */
-export async function listarDocumentos<T = Record<string, unknown>>(
-  caminho: string
-): Promise<DocumentoFirestore<T>[]> {
-  const resultado: DocumentoFirestore<T>[] = [];
+/** Campos do jeito que o Firestore guarda, com o tipo junto (backup/restauração). */
+export type CamposBrutos = Record<string, ValorFirestore>;
+
+async function listarCrus(caminho: string): Promise<{ id: string; campos: CamposBrutos }[]> {
+  const resultado: { id: string; campos: CamposBrutos }[] = [];
   let pageToken: string | undefined;
   const headers = await cabecalhos();
 
@@ -89,15 +89,56 @@ export async function listarDocumentos<T = Record<string, unknown>>(
     }
     const json = await resposta.json();
     for (const doc of json.documents ?? []) {
-      resultado.push({
-        id: doc.name.split("/").pop(),
-        dados: decodificarCampos(doc.fields ?? {}) as T,
-      });
+      resultado.push({ id: doc.name.split("/").pop(), campos: doc.fields ?? {} });
     }
     pageToken = json.nextPageToken;
   } while (pageToken);
 
   return resultado;
+}
+
+/** Lista todos os documentos de uma coleção/subcoleção, paginando sozinho. */
+export async function listarDocumentos<T = Record<string, unknown>>(
+  caminho: string
+): Promise<DocumentoFirestore<T>[]> {
+  return (await listarCrus(caminho)).map((d) => ({
+    id: d.id,
+    dados: decodificarCampos(d.campos) as T,
+  }));
+}
+
+/**
+ * Mesma listagem, sem decodificar: timestamp continua timestamp, 1.0
+ * continua double. É o que o backup precisa pra restaurar sem mudar tipo.
+ */
+export async function listarDocumentosBrutos(
+  caminho: string
+): Promise<{ id: string; campos: CamposBrutos }[]> {
+  return listarCrus(caminho);
+}
+
+/** Substitui o documento inteiro pelos campos crus (restauração de backup). */
+export async function regravarDocumentoBruto(caminho: string, campos: CamposBrutos): Promise<void> {
+  const headers = await cabecalhos();
+  const resposta = await fetch(`${urlBase()}/${caminho}`, {
+    method: "PATCH",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: campos }),
+  });
+  if (!resposta.ok) throw new Error(`Erro ao regravar ${caminho}: ${resposta.status}`);
+}
+
+/** JSON com chaves ordenadas — compara documentos sem depender da ordem dos campos. */
+export function jsonCanonico(valor: unknown): string {
+  if (Array.isArray(valor)) return `[${valor.map(jsonCanonico).join(",")}]`;
+  if (valor && typeof valor === "object") {
+    const obj = valor as Record<string, unknown>;
+    return `{${Object.keys(obj)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${jsonCanonico(obj[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(valor);
 }
 
 /** Busca um único documento por caminho completo. Retorna null se não existe. */

@@ -1,6 +1,7 @@
 import { listarDocumentos, obterDocumento } from "@/lib/firestoreRest";
 import {
   calcularImposto,
+  TAXA_IMPOSTO,
   arredondarCentavos,
   mesPadrao,
   Ganho,
@@ -32,7 +33,7 @@ const comId = <T,>(docs: Doc<T>[]) => docs.map((d) => ({ ...d.dados, id: d.id })
 
 export async function montarContextoSimulacao(uid: string): Promise<ContextoSimulacao | null> {
   const base = `usuarios/${uid}`;
-  const [saldoDoc, contas, assinaturas, parcelas, ganhos, faturas, gastos, pagamentos, cartoes] =
+  const [saldoDoc, contas, assinaturas, parcelas, ganhos, faturas, gastos, pagamentos, cartoes, prefsApp] =
     await Promise.all([
       obterDocumento<{ valor: number; atualizadoEm: number; reservaMeta?: number }>(`${base}/saldo/atual`),
       listarDocumentos<ContaFixa>(`${base}/contasFixas`),
@@ -43,7 +44,14 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
       listarDocumentos<Gasto>(`${base}/gastos`),
       listarDocumentos<MovimentoPagamento>(`${base}/pagamentos`),
       listarDocumentos<{ nome: string; diaVencimento?: number | null }>(`${base}/cartoesConfig`),
+      obterDocumento<{ taxaImposto?: number }>(`${base}/preferencias/app`),
     ]);
+  // taxa do CLIENTE, passada explicitamente — no servidor não existe
+  // configuração global por usuário
+  const taxa =
+    typeof prefsApp?.taxaImposto === "number" && prefsApp.taxaImposto >= 0 && prefsApp.taxaImposto <= 0.5
+      ? prefsApp.taxaImposto
+      : TAXA_IMPOSTO;
 
   if (!saldoDoc || typeof saldoDoc.valor !== "number") return null;
 
@@ -78,7 +86,7 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
   const rendaMensalLiquida = arredondarCentavos(
     listaGanhos
       .filter((g) => g.tipo === "recorrente" && g.ativo !== false)
-      .reduce((acc, g) => acc + g.valor - (g.semImposto ? 0 : calcularImposto(g.valor)), 0)
+      .reduce((acc, g) => acc + g.valor - (g.semImposto ? 0 : calcularImposto(g.valor, taxa)), 0)
   );
 
   return {

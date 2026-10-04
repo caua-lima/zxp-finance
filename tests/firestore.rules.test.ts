@@ -200,9 +200,22 @@ describe("notificações (N01/N07)", () => {
       });
     });
     const ref = doc(dbDe("userA"), "usuarios/userA/notificacoes/n1");
-    await assertSucceeds(updateDoc(ref, { lidaEm: 123 }));
+    // timestamp de verdade (Date.now(), na casa do trilhão) — o teste antigo
+    // usava 123 e deixou passar uma regra que recusava qualquer data real
+    await assertSucceeds(updateDoc(ref, { lidaEm: Date.now() }));
+    await assertFails(updateDoc(ref, { lidaEm: "ontem" }));
     await assertFails(updateDoc(ref, { titulo: "outra coisa" }));
     await assertFails(deleteDoc(ref));
     await assertFails(getDoc(doc(dbDe("userB"), "usuarios/userA/notificacoes/n1")));
+  });
+});
+
+describe("pagamento com data real (regressão: timestamp em ms)", () => {
+  test("marcar conta como paga agora é aceito; valor negativo e data inválida não", async () => {
+    const db = dbDe("userA");
+    const base = { mes: "2026-10", origem: "conta", itemId: "c1", nome: "Internet", valor: 100, afetaSaldo: true };
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/pagamentos/2026-10__conta__c1"), { ...base, pagoEm: Date.now() }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/pagamentos/2026-10__conta__c2"), { ...base, itemId: "c2", pagoEm: 5 }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/pagamentos/2026-10__conta__c3"), { ...base, itemId: "c3", valor: -1, pagoEm: Date.now() }));
   });
 });

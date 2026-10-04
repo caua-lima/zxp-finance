@@ -29,8 +29,14 @@ import {
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
-  const { faturas, loading, erro, total, salvar, excluir } = useFaturasCartao(mes);
   const cartoesConfig = useCartoesConfig();
+  const { faturas, loading, erro, total, salvar, excluir } = useFaturasCartao(
+    mes,
+    cartoesConfig.configs.map((c) => c.nome)
+  );
+  const [novoCartao, setNovoCartao] = useState("");
+  const [adicionando, setAdicionando] = useState(false);
+  const toastPagina = useToast();
   const monthClose = useMonthClose(mes);
   const parcelas = useParcelas();
   const assinaturas = useAssinaturas();
@@ -75,7 +81,7 @@ export default function FaturaPage() {
 
   return (
     <div>
-      <PageHeader titulo="Fatura do cartão" descricao="Valor e vencimento de cada cartão no mês" />
+      <PageHeader titulo="Cartões" descricao="Fatura, fechamento e vencimento de cada cartão no mês" />
       <MonthSelector mes={mes} onChange={setMes} />
       <ErroBanner mensagem={erro || cartoesConfig.erro || monthClose.erro || pagamentos.erro} />
       {monthClose.fechado && (
@@ -104,6 +110,37 @@ export default function FaturaPage() {
       ) : (
         <>
           <ul className="space-y-3">{emUso.map(renderizar)}</ul>
+          {adicionando ? (
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const nome = novoCartao.trim();
+                if (!nome) return;
+                toastPagina.sucessoSe(cartoesConfig.salvar(nome, {}), `Cartão "${nome}" adicionado.`);
+                setNovoCartao("");
+                setAdicionando(false);
+              }}
+            >
+              <label htmlFor="novo-cartao" className="sr-only">
+                Nome do cartão
+              </label>
+              <input
+                id="novo-cartao"
+                value={novoCartao}
+                onChange={(e) => setNovoCartao(e.target.value.slice(0, 40))}
+                placeholder="ex: C6, Itaú, BB"
+                className="campo flex-1"
+              />
+              <Botao type="submit" disabled={!novoCartao.trim()}>
+                Adicionar
+              </Botao>
+            </form>
+          ) : (
+            <Botao onClick={() => setAdicionando(true)} variante="secundario" larguraTotal className="mt-3">
+              + Adicionar cartão
+            </Botao>
+          )}
           {semUso.length > 0 && (
             <details className="mt-4">
               <summary className="cursor-pointer px-1 text-xs text-text-faint">
@@ -201,7 +238,7 @@ function ItemFatura({
       </div>
 
       {vencimento && (
-        <p className="mt-0.5 text-[11px] text-text-faint">
+        <p className="mt-0.5 text-xs text-text-faint">
           Vence dia {Number(vencimento.efetivo.split("-")[2])}
           {vencimento.adiado && ` (${vencimento.motivo})`}
           {config.diaFechamento ? ` · fecha dia ${config.diaFechamento}` : ""}
@@ -209,7 +246,12 @@ function ItemFatura({
       )}
 
       <div className="mt-2.5 flex items-center gap-2">
-        <MoneyInput value={valor} onChange={setValor} className="campo flex-1 text-right font-semibold" />
+        <MoneyInput
+          value={valor}
+          onChange={setValor}
+          aria-label={`Valor da fatura ${fatura.nome}`}
+          className="campo flex-1 text-right font-semibold"
+        />
         <Botao
           onClick={() => {
             toast.sucessoSe(onSalvar(fatura.nome, valor), `Fatura de "${fatura.nome}" atualizada.`);
@@ -245,7 +287,7 @@ function ItemFatura({
               usar esse valor
             </button>
           </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-text-faint">
+          <p className="mt-1 text-xs leading-relaxed text-text-faint">
             {prevista.itens.map((i) => `${i.nome} ${formatarMoeda(i.valor)}`).join(" · ")}
           </p>
         </div>

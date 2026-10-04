@@ -14,6 +14,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { ConfiguracoesConta } from "@/components/ConfiguracoesConta";
 
 const ESCOLARIDADES: { valor: NivelEscolaridade; label: string }[] = [
   { valor: "sem_instrucao", label: "Sem instrução formal" },
@@ -104,7 +105,7 @@ export default function PerfilPage() {
     <div>
       <PageHeader
         titulo="Perfil"
-        descricao="Seu cenário — usado só pra comparar com médias no DRE"
+        descricao="Seu cenário, módulos do app e seus dados"
       />
       <ErroBanner mensagem={erro} />
 
@@ -126,7 +127,7 @@ export default function PerfilPage() {
                 className="campo"
               />
               {idade !== null && (
-                <p className="mt-1 text-[11px] text-text-faint">
+                <p className="mt-1 text-xs text-text-faint">
                   {idade} anos
                   {diasAniversario === 0
                     ? " · é hoje! 🎂"
@@ -173,7 +174,7 @@ export default function PerfilPage() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-text-faint">
+              <p className="mt-1 text-xs text-text-faint">
                 É o que define com qual média sua renda é comparada no DRE
               </p>
             </div>
@@ -226,7 +227,7 @@ export default function PerfilPage() {
                 onChange={setRendaAproximada}
                 className="campo"
               />
-              <p className="mt-1 text-[11px] text-text-faint">
+              <p className="mt-1 text-xs text-text-faint">
                 Opcional — o DRE usa seus ganhos reais lançados, não este campo
               </p>
             </div>
@@ -273,7 +274,7 @@ export default function PerfilPage() {
         {/* biografia */}
         <fieldset className="rounded-2xl border border-line bg-surface p-4 space-y-2">
           <legend className="px-2 text-xs font-medium text-text-muted">Seu cenário</legend>
-          <p className="text-[11px] text-text-faint">
+          <p className="text-xs text-text-faint">
             O contexto que os números sozinhos não contam — de onde você veio,
             o que está construindo, o que muda nos próximos meses.
           </p>
@@ -293,6 +294,10 @@ export default function PerfilPage() {
           Salvar perfil
         </button>
       </form>
+
+      <div className="mt-6">
+        <ConfiguracoesConta />
+      </div>
     </div>
   );
 }

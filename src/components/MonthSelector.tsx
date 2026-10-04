@@ -1,6 +1,6 @@
 "use client";
 
-import { formatarMes, MES_MINIMO } from "@/lib/types";
+import { formatarMes, mesMinimoAtual } from "@/lib/types";
 
 function somarMes(mes: string, delta: number): string {
   const [ano, m] = mes.split("-").map(Number);
@@ -19,7 +19,7 @@ export function MonthSelector({
   // corrente. Usar o mês corrente aqui fazia o piso andar junto com o
   // calendário, então a seta de voltar ficava sempre desabilitada e nenhum
   // mês passado era acessível — o histórico sumia conforme o tempo passava.
-  const podeVoltar = mes > MES_MINIMO;
+  const podeVoltar = mes > mesMinimoAtual();
 
   return (
     <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-line bg-surface p-1">

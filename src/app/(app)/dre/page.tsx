@@ -7,7 +7,7 @@ import {
   formatarMoeda,
   parcelasRestantesEm,
   valorMinhaParte,
-  TAXA_IMPOSTO,
+  taxaImpostoAtual,
   calcularImposto,
   Ganho,
   ContaFixa,
@@ -182,13 +182,13 @@ export default function DrePage() {
   return (
     <div>
       <PageHeader
-        titulo="DRE do mês"
-        descricao="Pra onde foi o dinheiro, em detalhe"
+        titulo="Relatório mensal"
+        descricao="Pra onde foi o dinheiro no mês (o DRE: resultado de receitas menos despesas)"
         acao={
           !monthClose.loading &&
           (monthClose.fechado ? (
             <div className="flex items-center gap-2">
-              <span className="rounded-full border border-line-soft bg-surface-2 px-2.5 py-1 text-[11px] text-text-faint">
+              <span className="rounded-full border border-line-soft bg-surface-2 px-2.5 py-1 text-xs text-text-faint">
                 🔒 Fechado
               </span>
               <button
@@ -258,7 +258,7 @@ export default function DrePage() {
                 ? "border-brand/25 bg-positive-soft"
                 : "border-negative/40 bg-negative-soft"
             }`}
-            title={`Receita operacional sem reembolso (− imposto de ${(TAXA_IMPOSTO * 100).toFixed(0)}%) − despesas variáveis − despesas recorrentes − parcelas e cartão`}
+            title={`Receita operacional sem reembolso (− imposto de ${(taxaImpostoAtual() * 100).toFixed(1).replace(".0", "")}%) − despesas variáveis − despesas recorrentes − parcelas e cartão`}
           >
             <p className="text-sm text-text-muted">Resultado operacional pessoal</p>
             <p
@@ -453,7 +453,7 @@ export default function DrePage() {
             </SubGrupo>
             <TotalLinha label="Receita bruta" valor={ganhos.total} />
             <TotalLinha
-              label={`(−) Imposto (${(TAXA_IMPOSTO * 100).toFixed(0)}%)`}
+              label={`(−) Imposto (${(taxaImpostoAtual() * 100).toFixed(1).replace(".0", "")}%)`}
               valor={ganhos.imposto}
               cor="text-negative"
             />
@@ -537,7 +537,7 @@ export default function DrePage() {
                 </div>
               </div>
 
-              <p className="mt-3 pt-3 border-t border-line-soft text-[11px] text-text-faint">
+              <p className="mt-3 pt-3 border-t border-line-soft text-xs text-text-faint">
                 {FONTE_RENDA.nome}. A pesquisa publica média por escolaridade,
                 nacional e somando todas as idades — <strong>não</strong> existe
                 corte oficial por escola pública/particular nem por ano de idade
@@ -714,7 +714,7 @@ function CardComparativo({
     <div className="rounded-2xl border border-line bg-surface p-4" title={tooltip}>
       <p className="text-xs text-text-faint">{titulo}</p>
       <p className="text-lg font-semibold text-gold mt-1">{formatarMoeda(valor)}</p>
-      <p className="text-[11px] text-text-faint mt-1">
+      <p className="text-xs text-text-faint mt-1">
         {(percentual * 100).toFixed(0)}% das despesas
         {delta !== null && (
           <span className={delta > 0 ? "text-negative" : "text-positive"}>

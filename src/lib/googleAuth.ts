@@ -120,9 +120,28 @@ export interface TokenVerificado {
 }
 
 /** Valida o ID token que o app do usuário mandou no header Authorization. */
+/**
+ * Token do EMULADOR de Auth: não tem assinatura (alg "none"). Só é aceito
+ * com FIREBASE_AUTH_EMULATOR_HOST definido E fora de produção — as duas
+ * condições nunca existem no deploy.
+ */
+function verificarTokenDoEmulador(idToken: string): TokenVerificado | null {
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.NODE_ENV === "production") return null;
+  try {
+    const corpo = JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString());
+    const projeto = process.env.GCLOUD_PROJECT ?? "demo-zxp";
+    if (corpo.aud !== projeto || !corpo.sub) return null;
+    if (problemaTemporalDoToken(corpo, Math.floor(Date.now() / 1000))) return null;
+    return { uid: corpo.sub, email: corpo.email, claims: corpo, iat: corpo.iat };
+  } catch {
+    return null;
+  }
+}
+
 export async function verificarIdToken(
   idToken: string
 ): Promise<TokenVerificado | null> {
+  if (process.env.FIREBASE_AUTH_EMULATOR_HOST) return verificarTokenDoEmulador(idToken);
   const partes = idToken.split(".");
   if (partes.length !== 3) return null;
 

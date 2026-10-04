@@ -44,8 +44,12 @@ export function useCartoesConfig() {
     return unsubscribe;
   }, [user]);
 
+  // lista padrão + os cartões que o cliente cadastrou (auditoria O03:
+  // os 6 cartões padrão eram os do dono do app, não de todo cliente)
   const configs = useMemo(() => {
-    return CARTOES_PREDEFINIDOS.map(
+    const padrao = CARTOES_PREDEFINIDOS as readonly string[];
+    const proprios = todas.map((c) => c.nome).filter((n) => !padrao.includes(n));
+    return [...padrao, ...proprios].map(
       (cartao) => todas.find((c) => c.nome === cartao) ?? { nome: cartao }
     );
   }, [todas]);
@@ -71,4 +75,10 @@ export function useCartoesConfig() {
   }
 
   return { configs, loading, erro, salvar };
+}
+
+/** Nomes de cartão pra listas de escolha: os padrão + os que você cadastrou. */
+export function useNomesCartoes(): string[] {
+  const { configs } = useCartoesConfig();
+  return configs.map((c) => c.nome);
 }

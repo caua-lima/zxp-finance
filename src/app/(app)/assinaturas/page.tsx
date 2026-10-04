@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { formatarMoeda, Assinatura, UsoPercebidoAssinatura } from "@/lib/types";
 import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
+import { useNomesCartoes } from "@/lib/useCartoesConfig";
 import { useAssinaturas } from "@/lib/useAssinaturas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -49,6 +50,7 @@ export default function AssinaturasPage() {
   const [naFatura, setNaFatura] = useState(false);
   const [diaRenovacao, setDiaRenovacao] = useState("");
   const toast = useToast();
+  const nomesCartoes = useNomesCartoes();
 
   const grupos = useMemo(() => agruparPorCartao(assinaturas), [assinaturas]);
 
@@ -112,7 +114,7 @@ export default function AssinaturasPage() {
             className="campo"
           >
             <option value="">Sem cartão</option>
-            {CARTOES_PREDEFINIDOS.map((c) => (
+            {nomesCartoes.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -236,6 +238,7 @@ function ItemAssinatura({
     assinatura.usoPercebido ?? ""
   );
   const toast = useToast();
+  const nomesCartoes = useNomesCartoes();
 
   function salvar() {
     const nomeAparado = nome.trim();
@@ -289,7 +292,7 @@ function ItemAssinatura({
             className="campo"
           >
             <option value="">Sem cartão</option>
-            {CARTOES_PREDEFINIDOS.map((c) => (
+            {nomesCartoes.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
