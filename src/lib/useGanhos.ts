@@ -13,12 +13,15 @@ import { Ganho, calcularImposto } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
+import { useComissoes } from "./useComissoes";
+import { comissaoAReceber } from "./finance/comissaoPrevista";
 
 export function useGanhos(mes: string) {
   const { user } = useAuth();
   const [todos, setTodos] = useState<Ganho[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const comissoes = useComissoes(mes);
 
   useEffect(() => {
     if (!user) return;
@@ -302,19 +305,24 @@ export function useGanhos(mes: string) {
     }
   }
 
+  // Comissão lançada no mês anterior cai neste mês: é ganho como qualquer
+  // outro (com imposto), só que calculada a partir dos lançamentos diários.
+  const comissaoDoMes = comissaoAReceber(mes, comissoes.todas, todos);
+  const brutoComissao = comissaoDoMes?.restanteBruto ?? 0;
+
   const totalRecorrentes = recorrentes
     .filter((g) => g.ativo !== false)
     .reduce((acc, g) => acc + g.valor, 0);
   const totalPontuais = pontuais
     .filter((g) => !g.arquivado)
     .reduce((acc, g) => acc + g.valor, 0);
-  const total = totalRecorrentes + totalPontuais;
+  const total = totalRecorrentes + totalPontuais + brutoComissao;
   // Imposto só incide sobre o que não foi marcado como "sem imposto" (ex:
   // bico/trabalho por fora recebido já líquido) — não é uma taxa sobre o
   // total, é a soma do imposto de cada ganho tributável individualmente.
   const totalTributavel = [...recorrentes, ...pontuais]
     .filter((g) => !g.semImposto && (g.tipo === "recorrente" ? g.ativo !== false : !g.arquivado))
-    .reduce((acc, g) => acc + g.valor, 0);
+    .reduce((acc, g) => acc + g.valor, 0) + brutoComissao;
   const imposto = calcularImposto(totalTributavel);
   const totalLiquido = total - imposto;
 
@@ -322,7 +330,8 @@ export function useGanhos(mes: string) {
     recorrentes,
     pontuais,
     orfaos,
-    loading,
+    comissaoDoMes,
+    loading: loading || comissoes.loading,
     erro,
     total,
     imposto,

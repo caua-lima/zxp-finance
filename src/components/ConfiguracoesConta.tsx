@@ -18,12 +18,14 @@ export function ConfiguracoesConta() {
   const toast = useToast();
   const [imposto, setImposto] = useState<string | null>(null);
   const [inicio, setInicio] = useState<string | null>(null);
+  const [uso, setUso] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
   const [erroExport, setErroExport] = useState<string | null>(null);
 
   const impostoAtual = config ? String(Math.round(config.taxaImposto * 1000) / 10).replace(".", ",") : "";
   const impostoCampo = imposto ?? impostoAtual;
   const inicioCampo = inicio ?? config?.inicioHistorico ?? "";
+  const usoCampo = uso ?? config?.inicioUso ?? "";
 
   async function exportar() {
     if (!user) return;
@@ -132,6 +134,42 @@ export function ConfiguracoesConta() {
           </Botao>
         </div>
         <p className="mt-1 text-xs text-text-muted">Meses antes disso não aparecem na navegação.</p>
+      </div>
+
+      <div>
+        <label htmlFor="config-uso" className="rotulo">
+          Começar a contar em
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="config-uso"
+            type="date"
+            value={usoCampo}
+            onChange={(e) => setUso(e.target.value)}
+            className="campo flex-1"
+          />
+          <Botao
+            variante="secundario"
+            disabled={uso === null}
+            onClick={async () => {
+              const dia = uso ?? "";
+              const ok = /^\d{4}-\d{2}-\d{2}$/.test(dia)
+                ? await salvar({ inicioUso: dia, inicioHistorico: dia.slice(0, 7) })
+                : await salvar({ inicioUso: "" });
+              if (ok) {
+                setUso(null);
+                toast.sucesso(dia ? "Pronto: a contagem começa nesse dia." : "Contagem de volta ao normal.");
+              }
+            }}
+          >
+            Salvar
+          </Botao>
+        </div>
+        <p className="mt-1 text-xs text-text-muted">
+          Gastos lançados com data anterior a esse dia saem dos totais e do relatório, e os meses
+          anteriores somem da navegação. Nada é apagado: apague a data e tudo volta. Contas, parcelas,
+          faturas e assinaturas seguem como estão.
+        </p>
       </div>
 
       <div className="border-t border-line-soft pt-3">

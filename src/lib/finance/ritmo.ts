@@ -1,5 +1,6 @@
-import { Gasto, arredondarCentavos } from "@/lib/types";
+import { Gasto, arredondarCentavos, contaNoPeriodo } from "@/lib/types";
 import { diaISOde, diasRestantesNoMes } from "./calculations";
+import { dataEfetivaDoGasto } from "./saldo";
 
 /**
  * Projeção de ritmo — a parte "GPS" do app.
@@ -12,7 +13,9 @@ import { diaISOde, diasRestantesNoMes } from "./calculations";
 
 /** Gastos do mês que contam como "consumo": ignora ajuste de conciliação. */
 function gastosReais(gastos: Gasto[], mes: string): Gasto[] {
-  return gastos.filter((g) => g.mes === mes && !g.ajusteConciliacaoId);
+  return gastos.filter(
+    (g) => g.mes === mes && !g.ajusteConciliacaoId && contaNoPeriodo(dataEfetivaDoGasto(g))
+  );
 }
 
 export interface ProjecaoRitmo {

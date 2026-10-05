@@ -284,6 +284,24 @@ export function mesMinimoAtual(): string {
   return mesMinimo;
 }
 
+// Dia a partir do qual o cliente "começou a valer" no app. Gasto lançado
+// com data anterior não entra em totais e relatórios (continua guardado e
+// continua contando pro saldo, que tem a própria referência).
+let inicioUso = "";
+
+export function configurarInicioUso(dia: string) {
+  inicioUso = /^\d{4}-\d{2}-\d{2}$/.test(dia) ? dia : "";
+}
+
+export function inicioUsoAtual(): string {
+  return inicioUso;
+}
+
+/** `diaISO` (AAAA-MM-DD) já é do período contado? Sem início definido, tudo conta. */
+export function contaNoPeriodo(diaISO: string): boolean {
+  return !inicioUso || diaISO >= inicioUso;
+}
+
 export function mesPadrao(): string {
   const atual = mesAtual();
   return atual > mesMinimo ? atual : mesMinimo;

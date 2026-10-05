@@ -7,6 +7,7 @@ import {
   formatarMes,
   mesPadrao,
   arredondarCentavos,
+  contaNoPeriodo,
   Gasto,
 } from "@/lib/types";
 import {
@@ -246,7 +247,9 @@ export default function SaldoPage() {
 
   // Ajuste de conciliação não é gasto (é correção de saldo antiga) — fica
   // fora da lista e do total. Com "Atualizar saldo" ele nem existe mais.
-  const gastosDoMes = gastos.filter((g) => g.mes === mes && !g.ajusteConciliacaoId);
+  const gastosDoMes = gastos.filter(
+    (g) => g.mes === mes && !g.ajusteConciliacaoId && contaNoPeriodo(dataEfetivaDoGasto(g))
+  );
   const totalDoMes = arredondarCentavos(
     gastosDoMes.reduce((acc, g) => acc + g.valor, 0)
   );

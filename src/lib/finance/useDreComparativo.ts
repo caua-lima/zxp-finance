@@ -12,6 +12,7 @@ import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { construirFinancialEntries } from "./adapters";
 import { calculateDreBreakdown, DreBreakdown } from "./calculations";
+import { comissaoBrutaParaEntry } from "./comissaoPrevista";
 
 /**
  * Monta o DRE do mês selecionado e do mês anterior (pra comparação),
@@ -61,6 +62,9 @@ export function useDreComparativo(mes: string) {
     pagamentosAtual.erro ||
     pagamentosAnterior.erro;
 
+  const comissaoAtual = ganhosAtual.comissaoDoMes;
+  const comissaoAnterior = ganhosAnterior.comissaoDoMes;
+
   const diaVencimentoPorCartao = useMemo(() => {
     const mapa: Record<string, number> = {};
     for (const c of cartoesConfig.configs) {
@@ -81,8 +85,9 @@ export function useDreComparativo(mes: string) {
       estaPago: pagamentosAtual.estaPago,
       mes,
       diaVencimentoPorCartao,
-    });
+    }).concat(comissaoAtual ? [comissaoBrutaParaEntry(comissaoAtual, mes)] : []);
   }, [
+    comissaoAtual,
     loading,
     ganhosAtual.recorrentes,
     ganhosAtual.pontuais,
@@ -108,8 +113,9 @@ export function useDreComparativo(mes: string) {
       estaPago: pagamentosAnterior.estaPago,
       mes: mesAnterior,
       diaVencimentoPorCartao,
-    });
+    }).concat(comissaoAnterior ? [comissaoBrutaParaEntry(comissaoAnterior, mesAnterior)] : []);
   }, [
+    comissaoAnterior,
     loading,
     ganhosAnterior.recorrentes,
     ganhosAnterior.pontuais,
@@ -129,5 +135,17 @@ export function useDreComparativo(mes: string) {
     [entriesAnterior]
   );
 
-  return { entriesAtual, entriesAnterior, atual, anterior, mesAnterior, loading, erro };
+  // Imposto só do que é tributável (pensão/bico "sem imposto" fica de fora).
+  // O DRE não conhece essa marca, então quem exibe usa estes valores.
+  return {
+    entriesAtual,
+    entriesAnterior,
+    atual,
+    anterior,
+    impostoAtual: ganhosAtual.imposto,
+    impostoAnterior: ganhosAnterior.imposto,
+    mesAnterior,
+    loading,
+    erro,
+  };
 }

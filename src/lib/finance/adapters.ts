@@ -10,7 +10,9 @@ import {
   parcelasRestantesEm,
   valorMinhaParte,
   diaVencimentoNoMes,
+  contaNoPeriodo,
 } from "@/lib/types";
+import { dataEfetivaDoGasto } from "./saldo";
 import { ultimoDiaMes, diaISOde, hojeISO as hojeNoBrasil } from "./calculations";
 import { vencimentoEfetivo } from "./diasUteis";
 import {
@@ -293,7 +295,7 @@ export function faturasPrevistasParaEntries(
 
 export function gastosParaEntries(gastos: Gasto[], mes: string): FinancialEntry[] {
   return gastos
-    .filter((g) => g.mes === mes)
+    .filter((g) => g.mes === mes && contaNoPeriodo(dataEfetivaDoGasto(g)))
     .map((g) => ({
       id: `gasto__${g.id}`,
       type: "expense" as const,

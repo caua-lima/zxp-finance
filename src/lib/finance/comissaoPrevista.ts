@@ -61,6 +61,63 @@ export function comissaoPrevistaPara(
   };
 }
 
+export interface ComissaoAReceber extends ComissaoPrevista {
+  /** Já recebido e vinculado a essa comissão (bruto). */
+  recebidoBruto: number;
+  /** O que ainda falta cair (bruto) — é o que entra em Ganhos. */
+  restanteBruto: number;
+  restanteImposto: number;
+  restanteLiquido: number;
+}
+
+/**
+ * Comissão que ainda vai cair em `mes` (lançada no mês anterior), já
+ * descontado o que foi recebido e vinculado. É a linha de comissão da
+ * tela de Ganhos e do DRE. `null` quando não há nada a receber.
+ */
+export function comissaoAReceber(
+  mes: string,
+  comissoes: Comissao[],
+  ganhos: Ganho[]
+): ComissaoAReceber | null {
+  const prevista = comissaoPrevistaPara(mes, comissoes);
+  if (!prevista) return null;
+  const recebidoBruto = arredondarCentavos(
+    pagamentosDaComissao(prevista.mesOrigem, ganhos).reduce((acc, g) => acc + g.valor, 0)
+  );
+  const restanteBruto = arredondarCentavos(prevista.bruto - recebidoBruto);
+  if (restanteBruto <= 0) return null;
+  const restanteImposto = arredondarCentavos(calcularImposto(restanteBruto));
+  return {
+    ...prevista,
+    recebidoBruto,
+    restanteBruto,
+    restanteImposto,
+    restanteLiquido: arredondarCentavos(restanteBruto - restanteImposto),
+  };
+}
+
+/**
+ * A mesma comissão como entrada do DRE, em valor BRUTO: o DRE aplica o
+ * imposto uma vez só, sobre o que é tributável (não dá pra entrar líquida
+ * aqui senão o imposto seria descontado duas vezes).
+ */
+export function comissaoBrutaParaEntry(c: ComissaoAReceber, mes: string): FinancialEntry {
+  return {
+    id: `comissao-bruta__${c.mesOrigem}`,
+    type: "income",
+    status: "planned",
+    amount: c.restanteBruto,
+    dueDate: `${mes}-01`,
+    competenceMonth: mes,
+    description: "Comissão do mês passado",
+    categoryId: "Comissão",
+    source: "income",
+    createdAt: 0,
+    updatedAt: 0,
+  };
+}
+
 /**
  * Entrada prevista de comissão pro `mes`, descontando o que já foi
  * recebido e vinculado a ela. Pagamento parcial deixa o RESTANTE previsto

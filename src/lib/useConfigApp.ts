@@ -6,6 +6,7 @@ import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import {
   configurarInicioHistorico,
+  configurarInicioUso,
   configurarTaxaImposto,
   MES_MINIMO,
   TAXA_IMPOSTO,
@@ -16,6 +17,8 @@ export interface ConfigApp {
   taxaImposto: number;
   /** "AAAA-MM". */
   inicioHistorico: string;
+  /** "AAAA-MM-DD" ou "" — dia em que o cliente começou a valer no app. */
+  inicioUso: string;
 }
 
 /**
@@ -47,11 +50,13 @@ export function useConfigApp() {
         const taxa = typeof dados.taxaImposto === "number" ? dados.taxaImposto : TAXA_IMPOSTO;
         const inicio =
           typeof dados.inicioHistorico === "string" ? dados.inicioHistorico : inicioPadrao;
+        const uso = typeof dados.inicioUso === "string" ? dados.inicioUso : "";
         configurarTaxaImposto(taxa);
         configurarInicioHistorico(inicio);
-        setConfig({ taxaImposto: taxa, inicioHistorico: inicio });
+        configurarInicioUso(uso);
+        setConfig({ taxaImposto: taxa, inicioHistorico: inicio, inicioUso: uso });
       },
-      () => setConfig({ taxaImposto: TAXA_IMPOSTO, inicioHistorico: inicioPadrao })
+      () => setConfig({ taxaImposto: TAXA_IMPOSTO, inicioHistorico: inicioPadrao, inicioUso: "" })
     );
   }, [user]);
 
@@ -67,7 +72,7 @@ export function useConfigApp() {
 
   return {
     config,
-    versao: config ? `${config.taxaImposto}:${config.inicioHistorico}` : null,
+    versao: config ? `${config.taxaImposto}:${config.inicioHistorico}:${config.inicioUso}` : null,
     salvar,
   };
 }

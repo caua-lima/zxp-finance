@@ -8,7 +8,6 @@ import {
   parcelasRestantesEm,
   valorMinhaParte,
   taxaImpostoAtual,
-  calcularImposto,
   Ganho,
   ContaFixa,
   Assinatura,
@@ -127,8 +126,10 @@ export default function DrePage() {
 
   // A quebra de FinancialEntry não conhece a regra de imposto (é específica
   // de Ganho) — aplica aqui em cima da receita operacional já sem reembolso.
-  function resultadoLiquido(breakdown: typeof dre.atual): number {
-    const receitaLiquida = breakdown.receitaOperacional - calcularImposto(breakdown.receitaOperacional);
+  // Imposto só sobre o que é tributável: pensão e bico "sem imposto"
+  // chegam líquidos. Antes os 6% incidiam sobre tudo, inclusive a pensão.
+  function resultadoLiquido(breakdown: typeof dre.atual, imposto: number): number {
+    const receitaLiquida = breakdown.receitaOperacional - imposto;
     return (
       receitaLiquida -
       breakdown.despesasVariaveis -
@@ -136,8 +137,8 @@ export default function DrePage() {
       breakdown.parcelasCartao
     );
   }
-  const resultadoOperacionalLiquido = resultadoLiquido(dre.atual);
-  const resultadoOperacionalLiquidoAnterior = resultadoLiquido(dre.anterior);
+  const resultadoOperacionalLiquido = resultadoLiquido(dre.atual, dre.impostoAtual);
+  const resultadoOperacionalLiquidoAnterior = resultadoLiquido(dre.anterior, dre.impostoAnterior);
 
   function variacao(atualValor: number, anteriorValor: number): string | null {
     if (anteriorValor === 0) return null;
@@ -438,7 +439,15 @@ export default function DrePage() {
               )}
             </SubGrupo>
             <SubGrupo titulo="Só este mês">
-              {ganhos.pontuais.length === 0 ? (
+              {ganhos.comissaoDoMes && (
+                <ItemLinha
+                  nome="Comissão do mês passado"
+                  valor={ganhos.comissaoDoMes.restanteBruto}
+                  cor="text-positive"
+                  nota="a receber"
+                />
+              )}
+              {ganhos.pontuais.length === 0 && !ganhos.comissaoDoMes ? (
                 <Vazio />
               ) : (
                 ganhos.pontuais.map((g: Ganho) => (
