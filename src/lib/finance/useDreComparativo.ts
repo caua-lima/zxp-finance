@@ -144,6 +144,7 @@ export function useDreComparativo(mes: string) {
     anterior,
     impostoAtual: ganhosAtual.imposto,
     impostoAnterior: ganhosAnterior.imposto,
+    gastos: gastosHook.gastos,
     mesAnterior,
     loading,
     erro,

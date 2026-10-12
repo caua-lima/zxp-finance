@@ -57,19 +57,42 @@ export function useSaldo() {
    *
    * `saldoEsperado` é o que o app calculava antes (pra esse registro).
    */
-  async function atualizar(valorNovo: number, saldoEsperado: number | null) {
+  /**
+   * Define o saldo. Com `registrarDiferenca`, o que faltou em relação ao
+   * que o app esperava vira um gasto "Gastos não lançados" de hoje — entra
+   * nos totais e no relatório, mas NÃO desconta do saldo de novo: é gravado
+   * um instante antes da nova referência, que já inclui esse dinheiro.
+   */
+  async function atualizar(
+    valorNovo: number,
+    saldoEsperado: number | null,
+    registrarDiferenca: boolean = false
+  ) {
     if (!user) return false;
     const valor = arredondarCentavos(valorNovo);
+    const agora = Date.now();
+    const faltou = saldoEsperado !== null ? arredondarCentavos(saldoEsperado - valor) : 0;
     try {
       const batch = writeBatch(db);
       batch.set(
         doc(db, "usuarios", user.uid, "saldo", "atual"),
         {
           valor,
-          atualizadoEm: Date.now(),
+          atualizadoEm: agora,
         },
         { merge: true }
       );
+      if (registrarDiferenca && faltou > 0) {
+        const dia = hojeISO();
+        batch.set(doc(collection(db, "usuarios", user.uid, "gastos")), {
+          descricao: "Gastos não lançados",
+          valor: faltou,
+          categoria: "Não lançado",
+          mes: dia.slice(0, 7),
+          data: dia,
+          criadoEm: agora - 1,
+        });
+      }
       if (saldoEsperado !== null) {
         const diferenca = arredondarCentavos(valor - saldoEsperado);
         batch.set(doc(collection(db, "usuarios", user.uid, "conciliacoes")), {
@@ -77,10 +100,10 @@ export function useSaldo() {
           saldoInformado: valor,
           saldoEsperado,
           diferenca,
-          ajusteCriado: false,
+          ajusteCriado: registrarDiferenca && faltou > 0,
           responsavelUid: user.uid,
           ...(user.email ? { responsavelEmail: user.email } : {}),
-          criadoEm: Date.now(),
+          criadoEm: agora,
         });
         anexarAuditLog(batch, user.uid, user.email, {
           action: "reconciled",

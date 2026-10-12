@@ -22,7 +22,8 @@ import { useParcelas } from "@/lib/useParcelas";
 import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { useDreComparativo } from "@/lib/finance/useDreComparativo";
 import { groupByCategory } from "@/lib/finance/entries";
-import { formatPercent } from "@/lib/finance/calculations";
+import { formatPercent, hojeISO } from "@/lib/finance/calculations";
+import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
 import {
   sugerirCrescimentoCategorias,
   compararComBenchmarkIBGE,
@@ -96,6 +97,10 @@ export default function DrePage() {
         dre.entriesAnterior.filter((e) => e.type === "expense" && e.source !== "adjustment")
       ),
     [dre.entriesAnterior]
+  );
+  const gastosDiarios = useMemo(
+    () => resumoGastosDiarios(dre.gastos, mes, hojeISO()),
+    [dre.gastos, mes]
   );
   const categoriasEmCrescimento = useMemo(
     () => sugerirCrescimentoCategorias(despesasPorCategoria, despesasPorCategoriaAnterior),
@@ -306,6 +311,70 @@ export default function DrePage() {
               valorAnterior={dre.anterior.parcelasCartao}
               percentual={totalDespesasEntries ? dre.atual.parcelasCartao / totalDespesasEntries : 0}
             />
+          </div>
+
+          {/* GASTOS DO DIA A DIA — só o que você lança todo dia */}
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-medium text-text-muted">Seus gastos do dia a dia</h2>
+              <Link href="/saldo" className="text-xs text-brand">
+                Ver lançamentos
+              </Link>
+            </div>
+            {gastosDiarios.quantidade === 0 ? (
+              <p className="mt-2 text-sm text-text-muted">
+                Nenhum gasto lançado neste mês ainda. O que você registrar em Gastos aparece aqui,
+                separado das contas e faturas.
+              </p>
+            ) : (
+              <>
+                <p className="mt-1 text-2xl font-semibold text-gold">
+                  {formatarMoeda(gastosDiarios.total)}
+                </p>
+                <p className="text-xs text-text-muted">
+                  {gastosDiarios.quantidade}{" "}
+                  {gastosDiarios.quantidade === 1 ? "lançamento" : "lançamentos"} em{" "}
+                  {gastosDiarios.diasComGasto} {gastosDiarios.diasComGasto === 1 ? "dia" : "dias"} ·
+                  média de {formatarMoeda(gastosDiarios.mediaPorDia)} por dia
+                  {gastosDiarios.maiorDia &&
+                    ` · dia mais caro: ${gastosDiarios.maiorDia.dia.slice(8, 10)}/${gastosDiarios.maiorDia.dia.slice(5, 7)} (${formatarMoeda(gastosDiarios.maiorDia.total)})`}
+                </p>
+
+                <h3 className="mt-4 mb-2 text-xs font-medium text-text-muted">Por categoria</h3>
+                <div className="space-y-2">
+                  {gastosDiarios.porCategoria.map((c) => (
+                    <div key={c.categoria} className="flex items-center gap-3">
+                      <span className="w-28 truncate text-xs text-text-muted">{c.categoria}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                        <div
+                          className="h-full bg-gold"
+                          style={{ width: `${(c.total / gastosDiarios.total) * 100}%` }}
+                        />
+                      </div>
+                      <span className="w-28 shrink-0 text-right text-xs text-text-faint">
+                        {formatarMoeda(c.total)} · {formatPercent((c.total / gastosDiarios.total) * 100)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 className="mt-4 mb-2 text-xs font-medium text-text-muted">Por dia</h3>
+                <ul className="divide-y divide-line-soft text-sm">
+                  {gastosDiarios.porDia.map((d) => (
+                    <li key={d.dia} className="flex justify-between py-1.5">
+                      <span className="text-text-muted">
+                        {d.dia.slice(8, 10)}/{d.dia.slice(5, 7)}
+                        <span className="text-xs text-text-faint">
+                          {" "}
+                          · {d.quantidade} {d.quantidade === 1 ? "gasto" : "gastos"}
+                        </span>
+                      </span>
+                      <span className="font-medium text-text">{formatarMoeda(d.total)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
 
           {despesasPorCategoria.length > 0 && (

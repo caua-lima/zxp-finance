@@ -356,7 +356,7 @@ export default function SaldoPage() {
               </p>
             </div>
             <Botao onClick={() => setAtualizandoSaldo(true)} variante="secundario" tamanho="pequeno">
-              Atualizar
+              Reajustar
             </Botao>
           </div>
 
@@ -561,11 +561,16 @@ export default function SaldoPage() {
       {atualizandoSaldo && saldoAtual !== null && (
         <AtualizarSaldo
           saldoAtual={saldoAtual}
-          onSalvar={async (valor) => {
-            const ok = await atualizar(valor, saldoAtual);
+          onSalvar={async (valor, registrarDiferenca) => {
+            const faltou = arredondarCentavos(saldoAtual - valor);
+            const ok = await atualizar(valor, saldoAtual, registrarDiferenca);
             if (ok) {
               toast.sucesso(
-                valor === 0 ? "Saldo zerado." : `Saldo atualizado pra ${formatarMoeda(valor)}.`
+                registrarDiferenca && faltou > 0
+                  ? `Saldo em ${formatarMoeda(valor)}. ${formatarMoeda(faltou)} entrou como gasto não lançado.`
+                  : valor === 0
+                    ? "Saldo zerado."
+                    : `Saldo atualizado pra ${formatarMoeda(valor)}.`
               );
               setAtualizandoSaldo(false);
             }
@@ -615,26 +620,33 @@ function AtualizarSaldo({
   onFechar,
 }: {
   saldoAtual: number;
-  onSalvar: (valor: number) => Promise<boolean>;
+  onSalvar: (valor: number, registrarDiferenca: boolean) => Promise<boolean>;
   onFechar: () => void;
 }) {
   const [valor, setValor] = useState(Math.max(0, saldoAtual));
+  const [registrar, setRegistrar] = useState(true);
   const [enviando, setEnviando] = useState(false);
+  // positivo = saiu dinheiro que você não lançou; negativo = entrou a mais
+  const faltou = arredondarCentavos(saldoAtual - valor);
 
-  async function salvar(v: number) {
+  async function salvar(v: number, registrarDiferenca: boolean) {
     setEnviando(true);
-    await onSalvar(v);
+    await onSalvar(v, registrarDiferenca);
     setEnviando(false);
   }
 
   return (
     <Dialogo
       aberto
-      titulo="Quanto tem na conta agora?"
-      descricao="Olhe no app do banco e digite o saldo disponível. Ele vira o seu saldo — sem ajuste, sem conta escondida."
+      titulo="Reajustar saldo"
+      descricao="Olhe no app do banco e digite o saldo disponível. Ele vira o seu saldo."
       onFechar={onFechar}
       bloqueado={enviando}
     >
+      <p className="mb-3 flex justify-between rounded-xl bg-surface-2/60 px-3 py-2 text-sm">
+        <span className="text-text-muted">O app calcula</span>
+        <span className="font-medium text-text">{formatarMoeda(saldoAtual)}</span>
+      </p>
       <label htmlFor="saldo-novo" className="rotulo">
         Saldo disponível no banco
       </label>
@@ -644,8 +656,38 @@ function AtualizarSaldo({
         onChange={setValor}
         className="campo text-center text-lg font-semibold"
       />
+
+      <div aria-live="polite" className="mt-3 text-sm">
+        {faltou > 0 && (
+          <>
+            <p className="text-negative">
+              Faltam {formatarMoeda(faltou)} em relação ao que o app calcula.
+            </p>
+            <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-text-muted">
+              <input
+                type="checkbox"
+                checked={registrar}
+                onChange={(e) => setRegistrar(e.target.checked)}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-brand"
+              />
+              <span>
+                Registrar {formatarMoeda(faltou)} como &quot;Gastos não lançados&quot; de hoje. Entra no
+                total do mês e no relatório; o saldo não é descontado duas vezes.
+              </span>
+            </label>
+          </>
+        )}
+        {faltou < 0 && (
+          <p className="text-positive">
+            Tem {formatarMoeda(-faltou)} a mais do que o app calcula (entrada que não estava
+            lançada). O saldo sobe; nenhum gasto é criado.
+          </p>
+        )}
+        {faltou === 0 && <p className="text-text-muted">Bate com o que o app calcula.</p>}
+      </div>
+
       <div className="mt-3 flex gap-2">
-        <Botao onClick={() => salvar(valor)} disabled={enviando} larguraTotal>
+        <Botao onClick={() => salvar(valor, registrar)} disabled={enviando} larguraTotal>
           {enviando ? "Salvando..." : "Salvar"}
         </Botao>
         <Botao onClick={onFechar} disabled={enviando} variante="secundario" larguraTotal>
@@ -654,11 +696,11 @@ function AtualizarSaldo({
       </div>
       <button
         type="button"
-        onClick={() => salvar(0)}
+        onClick={() => salvar(0, false)}
         disabled={enviando}
         className="mt-3 w-full rounded-xl py-2 text-sm font-medium text-negative active:bg-negative-soft disabled:opacity-40"
       >
-        Zerar saldo
+        Zerar saldo (sem registrar gasto)
       </button>
     </Dialogo>
   );

@@ -50,3 +50,42 @@ describe("começar a contar em (zerar sem apagar)", () => {
     assert.equal(contaNoPeriodo("2026-01-01"), true);
   });
 });
+
+describe("relatório dos gastos do dia a dia", () => {
+  const g = (id: string, data: string, valor: number, categoria: string, extra: object = {}) =>
+    ({ id, descricao: id, valor, categoria, mes: data.slice(0, 7), data, criadoEm: 1, ...extra }) as never;
+
+  test("soma por categoria e por dia, média pelos dias decorridos", async () => {
+    const { resumoGastosDiarios } = await import("./gastosDiarios");
+    const r = resumoGastosDiarios(
+      [
+        g("a", "2026-10-09", 30, "Alimentação"),
+        g("b", "2026-10-09", 20, "Transporte"),
+        g("c", "2026-10-10", 60, "Alimentação"),
+        g("ajuste", "2026-10-10", 500, "Ajuste", { ajusteConciliacaoId: "x" }),
+        g("estornado", "2026-10-10", 40, "Outros", { estornado: true }),
+        g("setembro", "2026-09-30", 99, "Outros"),
+      ],
+      "2026-10",
+      "2026-10-10"
+    );
+    assert.equal(r.total, 110);
+    assert.equal(r.quantidade, 3);
+    assert.equal(r.mediaPorDia, 11);
+    assert.deepEqual(r.porCategoria[0], { categoria: "Alimentação", total: 90, quantidade: 2 });
+    assert.deepEqual(r.porDia.map((d) => d.dia), ["2026-10-10", "2026-10-09"]);
+    assert.deepEqual(r.maiorDia, { dia: "2026-10-10", total: 60 });
+  });
+
+  test("gasto anterior ao início da contagem fica fora", async () => {
+    const { resumoGastosDiarios } = await import("./gastosDiarios");
+    configurarInicioUso("2026-10-09");
+    const r = resumoGastosDiarios(
+      [g("antes", "2026-10-05", 70, "Outros"), g("depois", "2026-10-09", 10, "Outros")],
+      "2026-10",
+      "2026-10-10"
+    );
+    configurarInicioUso("");
+    assert.equal(r.total, 10);
+  });
+});
