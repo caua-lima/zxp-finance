@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/finance/finance.test.ts src/lib/finance/comissaoAReceber.test.ts src/lib/notificacoes/notificacoes.test.ts",
+    "test": "node --import tsx --test src/lib/finance/finance.test.ts src/lib/finance/comissaoAReceber.test.ts src/lib/abundancia.test.ts src/lib/notificacoes/notificacoes.test.ts",
     "test:restauracao": "npx --yes firebase-tools@15 emulators:exec --only firestore,auth --project demo-zxp \"node tests/ensaio-restauracao.mjs\"",
     "test:regras": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-zxp \"node --import tsx --test --test-concurrency=1 tests/firestore.rules.test.ts tests/notificacoes.test.ts\"",
     "dev:emulador": "npx --yes firebase-tools@15 emulators:exec --only auth,firestore --project demo-zxp \"node scripts/dev-emulador.mjs\""
