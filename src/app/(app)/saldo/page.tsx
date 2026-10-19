@@ -26,8 +26,6 @@ import { usePagamentos } from "@/lib/usePagamentos";
 import { Dialogo } from "@/components/Dialogo";
 import {
   saldoConfirmado,
-  saidasDeHoje,
-  orcamentoDoDia,
   dataEfetivaDoGasto,
   gastoContaNoSaldo,
 } from "@/lib/finance/saldo";
@@ -40,9 +38,8 @@ import { SkeletonLista } from "@/components/Skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { IconMicrofone } from "@/components/icons";
-import { diasRestantesNoMes, hojeISO } from "@/lib/finance/calculations";
-import { projetarRitmo } from "@/lib/finance/ritmo";
-import { avaliarDiasFechados, resumirConquistas } from "@/lib/finance/conquistas";
+import { hojeISO } from "@/lib/finance/calculations";
+import { fraseDoDia } from "@/lib/abundancia";
 import { useMonthClose } from "@/lib/useMonthClose";
 
 const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -178,8 +175,8 @@ function CartaoPrevia({
 }
 
 /**
- * Tela do dia a dia: quanto tem na conta, quanto pode gastar hoje, e
- * registrar gasto. Refeita pra ser só isso — antes tinha conquistas,
+ * Tela do dia a dia: quanto tem na conta, o sinal do dia, e registrar o
+ * que você investiu em você. Refeita pra ser só isso — antes tinha conquistas,
  * meta, notificação, histórico de conciliação e ajustes com sinal
  * invertido tudo empilhado na mesma coluna.
  */
@@ -219,24 +216,11 @@ export default function SaldoPage() {
   const loading = loadingSaldo || loadingGastos;
   const erro = erroSaldo || erroGastos;
 
-  // Contrato único (docs/modelo-financeiro.md): saldo confirmado e
-  // orçamento do dia — o gasto de hoje é descontado UMA vez (auditoria F01).
+  // Contrato único (docs/modelo-financeiro.md): saldo confirmado. O
+  // "pode gastar hoje" saiu a pedido do dono (linguagem de abundância,
+  // ver lib/abundancia.ts) — o cálculo continua em finance/saldo.ts.
   const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos);
   const reservaMeta = saldo?.reservaMeta ?? 0;
-  const diasRestantes = diasRestantesNoMes(hoje);
-  const saidasHoje = saidasDeHoje(saldo, gastos, pagamentos.movimentos, hoje);
-  const orcamento = orcamentoDoDia(saldoAtual, saidasHoje, reservaMeta, diasRestantes);
-  const semDinheiroLivre = orcamento !== null && orcamento.orcamento <= 0;
-  const projecao = semDinheiroLivre
-    ? null
-    : projetarRitmo(saldoAtual, reservaMeta, gastos, mes, hoje);
-  const conquistas =
-    orcamento && orcamento.orcamento > 0
-      ? resumirConquistas(
-          avaliarDiasFechados(gastos, orcamento.orcamento, mes, hoje),
-          orcamento.orcamento
-        )
-      : null;
   // rendimento é só estimativa — nunca entra no saldo (auditoria F07)
   const percentualCdiSaldo = saldo?.percentualCdi ?? 0;
   const rendimentoEstimado =
@@ -360,79 +344,13 @@ export default function SaldoPage() {
             </Botao>
           </div>
 
-          {/* quanto pode gastar hoje — o número do dia */}
+          {/* sinal do dia + o que você já investiu em você no mês */}
           <div className="mt-4 border-t border-line-soft pt-4">
-            <p className="text-xs font-medium uppercase tracking-[0.1em] text-text-faint">
-              Pode gastar hoje
+            <p className="text-sm italic leading-relaxed text-brand">“{fraseDoDia(hoje)}”</p>
+            <p className="mt-2 text-xs text-text-muted">
+              Investido em qualidade de vida em {formatarMes(mes).split(" ")[0].toLowerCase()}:{" "}
+              <span className="font-semibold text-text">{formatarMoeda(totalDoMes)}</span>
             </p>
-            {semDinheiroLivre ? (
-              <>
-                <p className="mt-0.5 text-4xl font-bold tracking-tight text-text-faint">
-                  {formatarMoeda(0)}
-                </p>
-                <p className="mt-1.5 text-xs leading-relaxed text-text-muted">
-                  {saldoAtual !== null && saldoAtual <= 0
-                    ? "Saldo zerado. Quando o dinheiro entrar, toque em Atualizar e coloque o valor da conta."
-                    : `Seu saldo está abaixo dos ${formatarMoeda(reservaMeta)} que você quer guardar.`}
-                </p>
-              </>
-            ) : orcamento && orcamento.restante < 0 ? (
-              <>
-                <p className="mt-0.5 text-2xl font-bold tracking-tight text-negative">
-                  Passou {formatarMoeda(-orcamento.restante)} do limite
-                </p>
-                <p className="mt-1 text-xs text-text-muted">
-                  Limite de hoje era {formatarMoeda(orcamento.orcamento)}. Amanhã ele se ajusta
-                  sozinho ao que sobrou.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="mt-0.5 text-4xl font-bold tracking-tight text-brand">
-                  {formatarMoeda(orcamento?.restante ?? 0)}
-                </p>
-                {orcamento && orcamento.orcamento > 0 && (
-                  <>
-                    <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface-2">
-                      <div
-                        className="h-full rounded-full bg-brand transition-all"
-                        style={{
-                          width: `${Math.min(100, (orcamento.gastoHoje / orcamento.orcamento) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs text-text-faint">
-                      Saiu {formatarMoeda(orcamento.gastoHoje)} de{" "}
-                      {formatarMoeda(orcamento.orcamento)} ·{" "}
-                      {diasRestantes} dia{diasRestantes === 1 ? "" : "s"} até o fim do mês
-                    </p>
-                  </>
-                )}
-              </>
-            )}
-
-            {projecao && (
-              <p
-                className={`mt-2 text-xs font-medium ${
-                  projecao.diaQueZera
-                    ? "text-negative"
-                    : projecao.batendoMeta
-                    ? "text-positive"
-                    : "text-gold"
-                }`}
-              >
-                {projecao.diaQueZera
-                  ? `⚠ No seu ritmo, o dinheiro acaba dia ${projecao.diaQueZera.split("-")[2]}`
-                  : `${projecao.batendoMeta ? "✓" : "⚠"} No seu ritmo, o mês fecha com ${formatarMoeda(
-                      projecao.sobraProjetada
-                    )}`}
-              </p>
-            )}
-            {conquistas && conquistas.sequencia >= 2 && (
-              <p className="mt-1 text-xs text-positive">
-                🔥 {conquistas.sequencia} dias seguidos dentro do limite
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -440,7 +358,7 @@ export default function SaldoPage() {
       {/* registrar — a ação mais frequente, logo abaixo do número */}
       <form onSubmit={handleSubmit} className="mb-4 rounded-2xl border border-line bg-surface p-3">
         <label htmlFor="saldo-form-texto" className="rotulo px-1">
-          Registrar gasto
+          Investi em mim
         </label>
         <div className="flex gap-2">
           <input
@@ -498,7 +416,7 @@ export default function SaldoPage() {
       {/* gastos do mês, por dia */}
       <div className="mb-2 flex items-baseline justify-between px-1">
         <h2 className="text-sm font-medium text-text-muted">
-          Gastos de {formatarMes(mes).split(" ")[0].toLowerCase()}
+          Investido em você em {formatarMes(mes).split(" ")[0].toLowerCase()}
         </h2>
         <span className="text-sm font-semibold text-gold">{formatarMoeda(totalDoMes)}</span>
       </div>
@@ -507,7 +425,7 @@ export default function SaldoPage() {
         <SkeletonLista linhas={4} />
       ) : porDia.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-sm text-text-faint">
-          Nenhum gasto neste mês ainda.
+          Nada registrado neste mês ainda. Cada registro é um voto na pessoa que cuida bem do próprio dinheiro.
         </p>
       ) : (
         <div className="space-y-4">
@@ -590,7 +508,7 @@ function PrimeiroSaldo({ onSalvar }: { onSalvar: (valor: number) => Promise<bool
     <div className="mb-3 rounded-2xl border border-brand/25 bg-surface-elevated p-5">
       <p className="text-sm font-medium">Quanto você tem na conta agora?</p>
       <p className="mt-1 mb-3 text-xs text-text-faint">
-        É desse valor que sai quanto você pode gastar por dia. Pode ser zero.
+        Pode ser zero.
       </p>
       <MoneyInput value={valor} onChange={setValor} className="campo text-center text-lg font-semibold" />
       <Botao
@@ -734,7 +652,7 @@ function Configuracoes({
       <summary className="cursor-pointer text-sm text-text-muted">Configurações do saldo</summary>
       <div className="mt-3 space-y-4">
         <div>
-          <label className="rotulo">Quero que sobre no fim do mês</label>
+          <label className="rotulo">Quero guardar no fim do mês</label>
           <div className="flex gap-2">
             <MoneyInput value={reserva} onChange={setReserva} className="campo flex-1" />
             <Botao
@@ -746,7 +664,7 @@ function Configuracoes({
             </Botao>
           </div>
           <p className="mt-1 text-xs text-text-faint">
-            Sai do cálculo de quanto pode gastar por dia.
+            Sua meta de guardar no mês.
           </p>
         </div>
 
