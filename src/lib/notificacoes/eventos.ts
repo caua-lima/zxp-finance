@@ -1,12 +1,10 @@
 import { formatarMoeda, mesSeguinte, mesAnteriorDe, Gasto, FinancialEntry } from "@/lib/types";
 import { construirFinancialEntries, DadosFinanceiros } from "@/lib/finance/adapters";
-import { diasRestantesNoMes } from "@/lib/finance/calculations";
-import { saldoConfirmado, saidasDeHoje, orcamentoDoDia, MovimentoPagamento } from "@/lib/finance/saldo";
+import { saldoConfirmado, MovimentoPagamento } from "@/lib/finance/saldo";
+import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
+import { notificacaoDoDia } from "@/lib/abundancia";
 import { saldoEstaVelho } from "@/lib/finance/alerts";
-import { projetarRitmo } from "@/lib/finance/ritmo";
 import {
-  notificacaoDiaria,
-  avisoRitmoPerigoso,
   avisoComissaoEsquecida,
   avisoChecklistParado,
 } from "@/lib/finance/notificacoes";
@@ -120,36 +118,28 @@ export function eventosDoDia(dados: DadosDoUsuario, hojeISO: string): Evento[] {
     eventos.push(
       doTexto("saldo_desatualizado", "saldo", {
         title: "Atualize seu saldo",
-        body: "O valor guardado é do mês passado — o quanto você pode gastar por dia não vale mais.",
+        body: "Um mês novo começou. Informe quanto tem na conta hoje e siga construindo.",
         url: "/saldo",
       })
     );
   } else if (dados.saldo) {
-    // MESMO contrato da tela (docs/modelo-financeiro.md) — tela e push iguais
+    // MESMO contrato da tela (docs/modelo-financeiro.md) — tela e push iguais.
+    // Linguagem de abundância (lib/abundancia.ts): sem limite diário e sem
+    // alerta de ritmo — a pedido do dono.
     const gastos: Gasto[] = dados.gastos;
     const saldoAtual = saldoConfirmado(dados.saldo, gastos, dados.pagamentos);
-    const reserva = dados.saldo.reservaMeta ?? 0;
-    const saidas = saidasDeHoje(dados.saldo, gastos, dados.pagamentos, hojeISO);
-    const orcamento = orcamentoDoDia(saldoAtual, saidas, reserva, diasRestantesNoMes(hojeISO));
-    if (orcamento && saldoAtual !== null) {
-      const projecao = projetarRitmo(saldoAtual, reserva, gastos, mes, hojeISO);
+    if (saldoAtual !== null) {
       eventos.push(
         doTexto(
           "saldo_diario",
           "saldo",
-          notificacaoDiaria({
+          notificacaoDoDia({
             hojeISO,
             saldoAtual,
-            reservaMeta: reserva,
-            gastavelPorDia: orcamento.orcamento,
-            gastoHoje: orcamento.gastoHoje,
-            gastos,
-            projecao,
+            investidoNoMes: resumoGastosDiarios(gastos, mes, hojeISO).total,
           })
         )
       );
-      const perigo = avisoRitmoPerigoso(projecao, hojeISO);
-      if (perigo) eventos.push(doTexto("ritmo", "ritmo", perigo));
     }
   }
 

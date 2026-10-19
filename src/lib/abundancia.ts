@@ -93,3 +93,25 @@ const CELEBRACOES = [
 export function celebracao(semente: number): string {
   return CELEBRACOES[Math.abs(Math.trunc(semente)) % CELEBRACOES.length];
 }
+
+/**
+ * O aviso diário (push e central). Antes: "Hoje você pode gastar R$ X".
+ * Agora: a frase do dia, o dinheiro disponível e o quanto você já
+ * investiu em você no mês — sem limite, sem "passou do previsto".
+ */
+export function notificacaoDoDia(estado: {
+  hojeISO: string;
+  saldoAtual: number;
+  investidoNoMes: number;
+}): { title: string; body: string; url: string } {
+  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const investido =
+    estado.investidoNoMes > 0
+      ? ` Neste mês você já investiu ${brl(estado.investidoNoMes)} em qualidade de vida.`
+      : "";
+  return {
+    title: fraseDoDia(estado.hojeISO),
+    body: `Disponível na conta: ${brl(estado.saldoAtual)}.${investido}`,
+    url: "/saldo",
+  };
+}
