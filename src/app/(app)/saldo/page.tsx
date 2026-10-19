@@ -12,7 +12,6 @@ import {
 } from "@/lib/types";
 import {
   CATEGORIAS_GASTO,
-  iconeCategoriaGasto,
   inferirCategoriaGasto,
 } from "@/lib/categoriasGasto";
 import { parseGastoTexto } from "@/lib/parseGastoTexto";
@@ -39,7 +38,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { IconMicrofone } from "@/components/icons";
 import { hojeISO } from "@/lib/finance/calculations";
-import { fraseDoDia } from "@/lib/abundancia";
+import { areaDaVida, celebracao, fraseDoDia } from "@/lib/abundancia";
 import { useMonthClose } from "@/lib/useMonthClose";
 
 const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -149,7 +148,7 @@ function CartaoPrevia({
         >
           {CATEGORIAS_GASTO.map((c) => (
             <option key={c} value={c}>
-              {iconeCategoriaGasto(c)} {c}
+              {areaDaVida(c).icone} {areaDaVida(c).nome}
             </option>
           ))}
         </select>
@@ -279,9 +278,9 @@ export default function SaldoPage() {
     setConfirmando(false);
     if (!ok) return; // a prévia continua na tela: nada do que você digitou se perde
     setUltimoRegistro(
-      `${formatarMoeda(previa.valor)} · ${previa.descricao} · ${iconeCategoriaGasto(
+      `${formatarMoeda(previa.valor)} investido em ${areaDaVida(
         previa.categoria
-      )} ${previa.categoria}${previa.data !== hoje ? ` · ${rotuloDoDia(previa.data, hoje).toLowerCase()}` : ""}` +
+      ).nome.toLowerCase()} · ${celebracao(previa.valor * 100)}${previa.data !== hoje ? ` · ${rotuloDoDia(previa.data, hoje).toLowerCase()}` : ""}` +
         (guardaPorGasto > 0 ? ` · 🐷 +${formatarMoeda(guardaPorGasto)}` : "")
     );
     setPrevia(null);
@@ -780,7 +779,7 @@ function ItemGasto({
           <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="campo">
             {CATEGORIAS_GASTO.map((c) => (
               <option key={c} value={c}>
-                {iconeCategoriaGasto(c)} {c}
+                {areaDaVida(c).icone} {areaDaVida(c).nome}
               </option>
             ))}
           </select>
@@ -805,7 +804,7 @@ function ItemGasto({
         className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-surface-2"
       >
         <span className="shrink-0 text-base" aria-hidden="true">
-          {iconeCategoriaGasto(gasto.categoria)}
+          {areaDaVida(gasto.categoria).icone}
         </span>
         <span
           className={`min-w-0 flex-1 truncate text-sm ${
