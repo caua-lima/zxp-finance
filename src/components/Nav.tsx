@@ -69,10 +69,10 @@ const SECOES: Secao[] = [
     itens: [
       {
         href: "/saldo",
-        label: "Saldo e gastos",
-        labelCurto: "Gastos",
+        label: "Saldo e qualidade de vida",
+        labelCurto: "Vida",
         Icon: IconSaldo,
-        descricao: "Registrar gasto e ver quanto pode gastar hoje",
+        descricao: "Seu saldo, a frase do dia e o que você investiu em você",
       },
       {
         href: "/checklist",
@@ -96,10 +96,10 @@ const SECOES: Secao[] = [
       },
       {
         href: "/chat",
-        label: "Anotar por voz",
+        label: "Investi em mim (voz)",
         labelCurto: "Anotar",
         Icon: IconMicrofone,
-        descricao: "Falar ou escrever o que gastou, em conversa",
+        descricao: "Falar ou escrever no que você investiu em você",
       },
     ],
   },
@@ -124,13 +124,13 @@ const SECOES: Secao[] = [
 ];
 
 /**
- * Barra de baixo do celular: Início, Gastos, A pagar e — pra quem usa
+ * Barra de baixo do celular: Início, Vida, A pagar e — pra quem usa
  * comissão — Comissões; pra quem não usa, Metas. O resto fica em "Mais".
  */
 function tabsMobile(comissoes: boolean): ItemNav[] {
   return [
     { href: "/", label: "Início", Icon: IconResumo },
-    { href: "/saldo", label: "Gastos", Icon: IconSaldo },
+    { href: "/saldo", label: "Vida", Icon: IconSaldo },
     { href: "/checklist", label: "A pagar", Icon: IconChecklist },
     comissoes
       ? { href: "/comissoes", label: "Comissões", Icon: IconComissoes }
