@@ -72,7 +72,7 @@ export default function DashboardPage() {
               <p className="text-xs font-medium uppercase tracking-[0.1em] text-text-faint">
                 Saldo na conta agora
               </p>
-              <span className="text-xs text-brand">Saldo e gastos →</span>
+              <span className="text-xs text-brand">Saldo e qualidade de vida →</span>
             </div>
             <p
               className={`mt-1 text-3xl font-bold tracking-tight ${
@@ -291,10 +291,10 @@ function Onboarding({
     },
     {
       feito: passos.gasto,
-      titulo: "Seu primeiro gasto",
+      titulo: "Seu primeiro investimento em você",
       detalhe: "Escreva ou fale: “25 almoço”. O app confere antes de salvar.",
       href: "/saldo",
-      acao: "Registrar gasto",
+      acao: "Registrar",
     },
   ];
   const basicoFeito = itens.every((i) => i.feito);

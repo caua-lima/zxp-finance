@@ -38,7 +38,7 @@ export function CategoryDonut({ grupos }: { grupos: GrupoPorCategoria[] }) {
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
-      <h2 className="text-sm font-medium text-text-muted mb-4">Distribuição de gastos</h2>
+      <h2 className="text-sm font-medium text-text-muted mb-4">Para onde seu dinheiro flui</h2>
       {/* No celular o donut fica em cima e a legenda embaixo, em largura
           total: lado a lado sobravam ~200px pra linhas do tipo
           "Alimentação  R$ 1.234,56 · 45%", que quebravam ou truncavam. */}

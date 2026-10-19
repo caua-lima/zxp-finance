@@ -76,8 +76,8 @@ export default function ChatPage() {
       adicionarMensagem({
         tipo: "app",
         texto: !valor
-          ? "Não achei o valor nessa frase. Tenta algo como “gastei 30 no mercado”."
-          : "Entendi o valor, mas não o que foi. Tenta “gastei 30 no mercado”.",
+          ? "Não achei o valor nessa frase. Tenta algo como “30 no mercado”."
+          : "Entendi o valor, mas não o que foi. Tenta “30 no mercado”.",
       });
       return;
     }
@@ -111,7 +111,7 @@ export default function ChatPage() {
     if (!ok) {
       adicionarMensagem({
         tipo: "app",
-        texto: "Não consegui salvar esse gasto. Veja o aviso acima e tente de novo.",
+        texto: "Não consegui salvar agora. Veja o aviso acima e tente de novo.",
       });
       return;
     }
@@ -287,15 +287,15 @@ export default function ChatPage() {
           <input
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder="Gastei 30 no mercado"
-            aria-label="Descreva o gasto"
+            placeholder="Ex: 80 numa camiseta nova"
+            aria-label="Descreva no que você investiu"
             className="campo flex-1"
           />
           {voz.suportado ? (
             <button
               type="button"
               onClick={voz.ouvindo ? voz.parar : voz.ouvir}
-              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar o gasto"}
+              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar"}
               className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border transition-colors ${
                 voz.ouvindo
                   ? "animate-pulse border-negative bg-negative text-white"

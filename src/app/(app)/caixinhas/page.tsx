@@ -79,7 +79,7 @@ export default function CaixinhasPage() {
     <div>
       <PageHeader
         titulo="Metas e caixinhas"
-        descricao="Seus cofrinhos, rendendo o CDI e recebendo um trocado a cada gasto"
+        descricao="Seus cofrinhos crescendo a cada vez que você investe em você"
       />
       <ErroBanner mensagem={erro} />
 
@@ -153,7 +153,7 @@ export default function CaixinhasPage() {
               />
             </div>
             <div>
-              <label className="rotulo">Guarda por gasto</label>
+              <label className="rotulo">Guarda a cada registro</label>
               <MoneyInput value={porGasto} onChange={setPorGasto} className="campo" />
             </div>
             <div>
@@ -290,7 +290,7 @@ function ItemCaixinha({
             <MoneyInput value={saldo} onChange={setSaldo} className="campo" />
           </div>
           <div>
-            <label className="rotulo">Guarda por gasto</label>
+            <label className="rotulo">Guarda a cada registro</label>
             <MoneyInput
               value={porGasto}
               onChange={setPorGasto}
@@ -358,10 +358,10 @@ function ItemCaixinha({
           </p>
           <p className="text-xs text-text-faint">
             {!caixinha.ativa
-              ? "depósito por gasto pausado"
+              ? "depósito por registro pausado"
               : caixinha.porGasto > 0
               ? `+${formatarMoeda(caixinha.porGasto)} a cada gasto`
-              : "sem depósito por gasto"}
+              : "sem depósito por registro"}
             {caixinha.depositos > 0 && ` · ${caixinha.depositos} depósitos`}
           </p>
         </div>

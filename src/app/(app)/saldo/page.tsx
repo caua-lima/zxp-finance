@@ -252,7 +252,7 @@ export default function SaldoPage() {
     const lido = parseGastoTexto(frase);
     if (!lido.valor || !lido.descricao) {
       setTexto(frase);
-      setAvisoParcial('Não entendi o valor. Tenta assim: "25 almoço" ou "gastei 100 de gasolina".');
+      setAvisoParcial('Não entendi o valor. Tenta assim: "25 almoço" ou "80 camiseta nova".');
       setUltimoRegistro(null);
       return;
     }
@@ -302,7 +302,7 @@ export default function SaldoPage() {
 
   return (
     <div>
-      <PageHeader titulo="Saldo e gastos" />
+      <PageHeader titulo="Saldo e qualidade de vida" />
       <ErroBanner mensagem={erro || voz.erro} />
 
       {loading ? (
@@ -375,7 +375,7 @@ export default function SaldoPage() {
             <button
               type="button"
               onClick={voz.ouvindo ? voz.parar : voz.ouvir}
-              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar o gasto"}
+              aria-label={voz.ouvindo ? "Parar de ouvir" : "Falar"}
               className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border transition-colors md:h-[42px] md:w-[42px] ${
                 voz.ouvindo
                   ? "animate-pulse border-negative bg-negative-soft text-negative"
@@ -765,7 +765,7 @@ function ItemGasto({
   function salvar() {
     const desc = descricao.trim();
     if (!desc || !valor) return;
-    toast.sucessoSe(onEditar(gasto.id, { descricao: desc, valor, categoria }), "Gasto atualizado.");
+    toast.sucessoSe(onEditar(gasto.id, { descricao: desc, valor, categoria }), "Registro atualizado.");
     setEditando(false);
     setAberto(false);
   }
@@ -852,14 +852,14 @@ function ItemGasto({
 
       <ConfirmModal
         aberto={confirmandoEstorno}
-        titulo="Estornar gasto"
+        titulo="Estornar registro"
         descricao={`"${gasto.descricao}" continua no histórico, mas um estorno devolve ${formatarMoeda(
           gasto.valor
         )} pro seu saldo. Use quando o dinheiro voltou (devolução, reembolso).`}
         textoConfirmar="Estornar"
         pedirMotivo
         onConfirmar={(motivo) => {
-          toast.sucessoSe(onEstornar(gasto.id, motivo ?? ""), "Gasto estornado.");
+          toast.sucessoSe(onEstornar(gasto.id, motivo ?? ""), "Registro estornado.");
           setConfirmandoEstorno(false);
           setAberto(false);
         }}
@@ -868,14 +868,14 @@ function ItemGasto({
 
       <ConfirmModal
         aberto={confirmandoExclusao}
-        titulo="Excluir gasto"
+        titulo="Excluir registro"
         descricao={
           bloqueado
-            ? "Esse gasto e o estorno dele são apagados juntos. Como um cancela o outro, o saldo não muda."
+            ? "Esse registro e o estorno dele são apagados juntos. Como um cancela o outro, o saldo não muda."
             : `"${gasto.descricao}" some de vez — use quando lançou errado. ${
                 mudaSaldo
                   ? `O saldo volta ${formatarMoeda(gasto.valor)}.`
-                  : "O saldo não muda (esse gasto é de antes da última atualização de saldo)."
+                  : "O saldo não muda (esse registro é de antes da última atualização de saldo)."
               } Se o dinheiro voltou de verdade, use Estornar.`
         }
         textoConfirmar="Excluir"
@@ -883,7 +883,7 @@ function ItemGasto({
         onConfirmar={() => {
           toast.sucessoSe(
             onRemover(gasto.id, "excluído na tela de saldo"),
-            bloqueado ? "Gasto e estorno excluídos." : "Gasto excluído."
+            bloqueado ? "Registro e estorno excluídos." : "Registro excluído."
           );
           setConfirmandoExclusao(false);
         }}
