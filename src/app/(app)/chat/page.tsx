@@ -4,19 +4,15 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { formatarMoeda } from "@/lib/types";
 import {
   CATEGORIAS_GASTO,
-  iconeCategoriaGasto,
   inferirCategoriaGasto,
 } from "@/lib/categoriasGasto";
 import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
-import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { totalPorGasto } from "@/lib/finance/caixinhas";
-import { diasRestantesNoMes, hojeISO } from "@/lib/finance/calculations";
-import { saldoConfirmado, saidasDeHoje, orcamentoDoDia } from "@/lib/finance/saldo";
-import { usePagamentos } from "@/lib/usePagamentos";
-import { mesPadrao } from "@/lib/types";
+import { hojeISO } from "@/lib/finance/calculations";
+import { areaDaVida, celebracao } from "@/lib/abundancia";
 import { PageHeader } from "@/components/PageHeader";
 import { ErroBanner } from "@/components/ErroBanner";
 import { Botao } from "@/components/Botao";
@@ -42,7 +38,6 @@ type Mensagem =
       valor: number;
       descricao: string;
       categoria: string;
-      restante: number | null;
       guardado: number; // quanto foi pras caixinhas por causa deste gasto
     };
 
@@ -55,10 +50,8 @@ type SemId<T> = T extends unknown ? Omit<T, "id"> : never;
 let proximoId = 1;
 
 export default function ChatPage() {
-  const { saldo } = useSaldo();
-  const { gastos, adicionar, erro } = useGastos();
+  const { adicionar, erro } = useGastos();
   const { caixinhas } = useCaixinhas();
-  const pagamentos = usePagamentos(mesPadrao());
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [salvando, setSalvando] = useState<number | null>(null);
   const [texto, setTexto] = useState("");
@@ -66,15 +59,6 @@ export default function ChatPage() {
 
   const hoje = hojeISO();
 
-  // mesmo contrato da tela de Saldo (docs/modelo-financeiro.md)
-  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos);
-  const orcamento = orcamentoDoDia(
-    saldoAtual,
-    saidasDeHoje(saldo, gastos, pagamentos.movimentos, hoje),
-    saldo?.reservaMeta ?? 0,
-    diasRestantesNoMes(hoje)
-  );
-  const aindaHoje = orcamento ? orcamento.restante : null;
 
   function adicionarMensagem(m: SemId<Mensagem>) {
     setMensagens((atual) => [...atual, { ...m, id: proximoId++ } as Mensagem]);
@@ -131,9 +115,6 @@ export default function ChatPage() {
       });
       return;
     }
-    // O saldo do Firestore só chega no próximo snapshot; o desconto aqui é
-    // otimista pra a resposta ser imediata, e o valor real reaparece sozinho.
-    const restante = aindaHoje === null || m.data !== hoje ? aindaHoje : aindaHoje - m.valor;
     // as caixinhas se encheram junto com o gasto, no mesmo batch — mostrar
     // aqui é o que faz o hábito aparecer em vez de acontecer escondido
     const guardado = totalPorGasto(caixinhas);
@@ -146,7 +127,6 @@ export default function ChatPage() {
               valor: m.valor,
               descricao: m.descricao,
               categoria,
-              restante,
               guardado,
             }
           : x
@@ -171,24 +151,10 @@ export default function ChatPage() {
   return (
     <div className="flex min-h-[calc(100vh-13rem)] flex-col">
       <PageHeader
-        titulo="Anotar gasto"
-        descricao="Fale ou escreva do seu jeito — eu separo valor e categoria"
+        titulo="Investi em mim"
+        descricao="Fale ou escreva do seu jeito — eu separo o valor e a área da vida"
       />
       <ErroBanner mensagem={erro || voz.erro} />
-
-      {/* quanto ainda dá pra gastar, sempre visível */}
-      {aindaHoje !== null && (
-        <div className="mb-4 flex items-center justify-between rounded-2xl border border-brand/25 bg-surface-elevated px-4 py-3">
-          <span className="text-xs text-text-faint">Ainda posso gastar hoje</span>
-          <span
-            className={`text-lg font-bold ${
-              aindaHoje >= 0 ? "text-brand" : "text-negative"
-            }`}
-          >
-            {formatarMoeda(aindaHoje)}
-          </span>
-        </div>
-      )}
 
       {/* conversa */}
       <div className="flex-1 space-y-3">
@@ -196,8 +162,8 @@ export default function ChatPage() {
           <div className="rounded-2xl border border-dashed border-line px-4 py-6 text-center">
             <p className="text-sm text-text-muted">
               {voz.suportado
-                ? "Toque no microfone e diga o que gastou."
-                : "Escreva o que gastou no campo abaixo."}
+                ? "Toque no microfone e diga no que você investiu em você."
+                : "Escreva no que você investiu em você no campo abaixo."}
             </p>
             <p className="mt-2 text-xs text-text-faint">
               Ex: “acabei de gastar 3 reais em paieiro”
@@ -260,7 +226,7 @@ export default function ChatPage() {
                           : "border-line text-text-faint active:bg-surface-2"
                       }`}
                     >
-                      {iconeCategoriaGasto(c)} {c}
+                      {areaDaVida(c).icone} {areaDaVida(c).nome}
                     </button>
                   ))}
                 </div>
@@ -291,12 +257,10 @@ export default function ChatPage() {
               className="rounded-2xl border border-positive/30 bg-positive-soft/40 px-4 py-3"
             >
               <p className="text-sm font-semibold text-positive">
-                ✓ {formatarMoeda(m.valor)} · {m.descricao}
+                ✓ {formatarMoeda(m.valor)} investido em {areaDaVida(m.categoria).nome.toLowerCase()}
               </p>
               <p className="mt-0.5 text-xs text-text-faint">
-                {iconeCategoriaGasto(m.categoria)} {m.categoria}
-                {m.restante !== null &&
-                  ` · ainda pode gastar ${formatarMoeda(m.restante)} hoje`}
+                {areaDaVida(m.categoria).icone} {m.descricao} · {celebracao(m.id)}
                 {m.guardado > 0 &&
                   ` · 🐷 ${formatarMoeda(m.guardado)} guardado`}
               </p>
@@ -347,7 +311,7 @@ export default function ChatPage() {
         </div>
         {voz.ouvindo && (
           <p className="mt-1.5 text-center text-xs text-negative">
-            Ouvindo… fale o que gastou
+            Ouvindo… fale no que você investiu
           </p>
         )}
         {!voz.suportado && (
