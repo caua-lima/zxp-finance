@@ -42,7 +42,7 @@ const REGRAS_CATEGORIA: [RegExp, string][] = [
     "Lazer",
   ],
   [
-    /roupa|loja|shopping|t[eê]nis|sapato|presente|shopee|mercado livre|amazon|magalu|aliexpress|perfume|cosm[eé]tico|cabelo|barbeiro|sal[aã]o|manicure/i,
+    /roupa|camis[ae]|camiseta|blusa|cal[cç]a|bermuda|short|vestido|saia|jaqueta|casaco|moletom|bon[eé]|bolsa|rel[oó]gio|loja|shopping|t[eê]nis|sapato|presente|shopee|mercado livre|amazon|magalu|aliexpress|perfume|cosm[eé]tico|cabelo|barbeiro|sal[aã]o|manicure/i,
     "Compras",
   ],
   [
