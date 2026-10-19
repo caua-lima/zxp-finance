@@ -38,7 +38,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Botao } from "@/components/Botao";
 import { IconMicrofone } from "@/components/icons";
 import { hojeISO } from "@/lib/finance/calculations";
-import { areaDaVida, celebracao, fraseDoDia } from "@/lib/abundancia";
+import { areaDaVida, celebracao, fraseDoDia, investidoEm } from "@/lib/abundancia";
 import { useMonthClose } from "@/lib/useMonthClose";
 
 const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -278,9 +278,7 @@ export default function SaldoPage() {
     setConfirmando(false);
     if (!ok) return; // a prévia continua na tela: nada do que você digitou se perde
     setUltimoRegistro(
-      `${formatarMoeda(previa.valor)} investido em ${areaDaVida(
-        previa.categoria
-      ).nome.toLowerCase()} · ${celebracao(previa.valor * 100)}${previa.data !== hoje ? ` · ${rotuloDoDia(previa.data, hoje).toLowerCase()}` : ""}` +
+      `${formatarMoeda(previa.valor)} investido em ${investidoEm(previa.categoria)} · ${celebracao(previa.valor * 100)}${previa.data !== hoje ? ` · ${rotuloDoDia(previa.data, hoje).toLowerCase()}` : ""}` +
         (guardaPorGasto > 0 ? ` · 🐷 +${formatarMoeda(guardaPorGasto)}` : "")
     );
     setPrevia(null);

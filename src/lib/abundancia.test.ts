@@ -9,6 +9,13 @@ describe("linguagem de abundância", () => {
     assert.equal(areaDaVida("Pet").nome, "Pet");
   });
 
+  test("'investido em' cai em 'você' quando a categoria é genérica", async () => {
+    const { investidoEm } = await import("./abundancia");
+    const { inferirCategoriaGasto } = await import("./categoriasGasto");
+    assert.equal(investidoEm(inferirCategoriaGasto("camiseta nova")), "estilo e autoestima");
+    assert.equal(investidoEm("Outros"), "você");
+  });
+
   test("frase do dia é estável no dia e muda no dia seguinte", () => {
     assert.equal(fraseDoDia("2026-10-18"), fraseDoDia("2026-10-18"));
     assert.notEqual(fraseDoDia("2026-10-18"), fraseDoDia("2026-10-19"));

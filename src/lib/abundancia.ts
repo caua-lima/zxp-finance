@@ -33,6 +33,12 @@ export function areaDaVida(categoria: string): AreaDaVida {
   return AREAS[categoria] ?? { nome: categoria, icone: "🌱" };
 }
 
+/** Complemento de "investido em …": "estilo e autoestima", ou "você" quando é genérico. */
+export function investidoEm(categoria: string): string {
+  if (!(categoria in AREAS) || categoria === "Outros" || categoria === "Não lançado") return "você";
+  return AREAS[categoria].nome.toLowerCase();
+}
+
 /**
  * Frases curtas, uma por dia, sempre a mesma no mesmo dia. Afirmações no
  * presente, sobre merecimento, gratidão, movimento e construção — nada de

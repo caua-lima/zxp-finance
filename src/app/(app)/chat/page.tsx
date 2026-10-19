@@ -12,7 +12,7 @@ import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { totalPorGasto } from "@/lib/finance/caixinhas";
 import { hojeISO } from "@/lib/finance/calculations";
-import { areaDaVida, celebracao } from "@/lib/abundancia";
+import { areaDaVida, celebracao, investidoEm } from "@/lib/abundancia";
 import { PageHeader } from "@/components/PageHeader";
 import { ErroBanner } from "@/components/ErroBanner";
 import { Botao } from "@/components/Botao";
@@ -257,7 +257,7 @@ export default function ChatPage() {
               className="rounded-2xl border border-positive/30 bg-positive-soft/40 px-4 py-3"
             >
               <p className="text-sm font-semibold text-positive">
-                ✓ {formatarMoeda(m.valor)} investido em {areaDaVida(m.categoria).nome.toLowerCase()}
+                ✓ {formatarMoeda(m.valor)} investido em {investidoEm(m.categoria)}
               </p>
               <p className="mt-0.5 text-xs text-text-faint">
                 {areaDaVida(m.categoria).icone} {m.descricao} · {celebracao(m.id)}
