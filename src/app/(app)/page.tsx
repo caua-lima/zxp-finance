@@ -13,6 +13,7 @@ import { UpcomingList } from "@/components/UpcomingList";
 import { CategoryDonut } from "@/components/CategoryDonut";
 import { SkeletonHome } from "@/components/Skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { fraseDoDia } from "@/lib/abundancia";
 
 const HREF_COMPROMISSO: Record<LinhaCompromisso["chave"], string> = {
   contas: "/contas",
@@ -45,6 +46,11 @@ export default function DashboardPage() {
         <PageHeader titulo="Início" descricao={formatarMes(mes)} />
         <MonthSelector mes={mes} onChange={setMes} />
       </div>
+
+      {/* sinal do dia — pequeno, sempre no topo */}
+      <p className="rounded-2xl border border-brand/20 bg-surface px-4 py-3 text-sm italic leading-relaxed text-brand">
+        “{fraseDoDia(hojeISO())}”
+      </p>
 
       <ErroBanner mensagem={dash.erro} />
 
@@ -302,8 +308,9 @@ function Onboarding({
       </h2>
       {!compacto && (
         <p className="mt-1 text-sm text-text-muted">
-          O app compara o que você TEM (saldo) com o que você DEVE (contas, parcelas, cartões) e com o
-          que você GASTA no dia a dia. Com esses três, ele diz quanto dá pra gastar hoje sem aperto.
+          O app junta o que você TEM (saldo), os seus compromissos (contas, parcelas, cartões) e o
+          que você INVESTE em você no dia a dia. Com os três, você enxerga sua vida financeira com
+          clareza e tranquilidade.
         </p>
       )}
       <ol className="mt-3 space-y-2">
