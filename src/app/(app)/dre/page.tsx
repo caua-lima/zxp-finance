@@ -335,7 +335,7 @@ export default function DrePage() {
                 <p className="text-xs text-text-muted">
                   {gastosDiarios.quantidade}{" "}
                   {gastosDiarios.quantidade === 1 ? "registro" : "registros"} em{" "}
-                  {gastosDiarios.diasComGasto} {gastosDiarios.diasComGasto === 1 ? "dia" : "dias"} ·
+                  {gastosDiarios.diasComGasto} {gastosDiarios.diasComGasto === 1 ? "dia" : "dias"} ·{" "}
                   {formatarMoeda(gastosDiarios.mediaPorDia)} por dia em média
                   {gastosDiarios.maiorDia &&
                     ` · dia em que mais investiu em você: ${gastosDiarios.maiorDia.dia.slice(8, 10)}/${gastosDiarios.maiorDia.dia.slice(5, 7)} (${formatarMoeda(gastosDiarios.maiorDia.total)})`}

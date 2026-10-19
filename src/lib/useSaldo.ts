@@ -59,7 +59,7 @@ export function useSaldo() {
    */
   /**
    * Define o saldo. Com `registrarDiferenca`, o que faltou em relação ao
-   * que o app esperava vira um gasto "Gastos não lançados" de hoje — entra
+   * que o app esperava vira um registro "Investimentos não registrados" de hoje — entra
    * nos totais e no relatório, mas NÃO desconta do saldo de novo: é gravado
    * um instante antes da nova referência, que já inclui esse dinheiro.
    */
@@ -85,7 +85,7 @@ export function useSaldo() {
       if (registrarDiferenca && faltou > 0) {
         const dia = hojeISO();
         batch.set(doc(collection(db, "usuarios", user.uid, "gastos")), {
-          descricao: "Gastos não lançados",
+          descricao: "Investimentos não registrados",
           valor: faltou,
           categoria: "Não lançado",
           mes: dia.slice(0, 7),

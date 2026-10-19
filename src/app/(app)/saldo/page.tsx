@@ -484,7 +484,7 @@ export default function SaldoPage() {
             if (ok) {
               toast.sucesso(
                 registrarDiferenca && faltou > 0
-                  ? `Saldo em ${formatarMoeda(valor)}. ${formatarMoeda(faltou)} entrou como gasto não lançado.`
+                  ? `Saldo em ${formatarMoeda(valor)}. ${formatarMoeda(faltou)} entrou como investimento não registrado.`
                   : valor === 0
                     ? "Saldo zerado."
                     : `Saldo atualizado pra ${formatarMoeda(valor)}.`
@@ -588,8 +588,8 @@ function AtualizarSaldo({
                 className="mt-0.5 h-5 w-5 shrink-0 accent-brand"
               />
               <span>
-                Registrar {formatarMoeda(faltou)} como &quot;Gastos não lançados&quot; de hoje. Entra no
-                total do mês e no relatório; o saldo não é descontado duas vezes.
+                Registrar {formatarMoeda(faltou)} como &quot;Investimentos não registrados&quot; de hoje.
+                Entra no total do mês e no relatório; o saldo não é descontado duas vezes.
               </span>
             </label>
           </>
@@ -597,7 +597,7 @@ function AtualizarSaldo({
         {faltou < 0 && (
           <p className="text-positive">
             Tem {formatarMoeda(-faltou)} a mais do que o app calcula (entrada que não estava
-            lançada). O saldo sobe; nenhum gasto é criado.
+            lançada). O saldo sobe; nenhum registro é criado.
           </p>
         )}
         {faltou === 0 && <p className="text-text-muted">Bate com o que o app calcula.</p>}
@@ -617,7 +617,7 @@ function AtualizarSaldo({
         disabled={enviando}
         className="mt-3 w-full rounded-xl py-2 text-sm font-medium text-negative active:bg-negative-soft disabled:opacity-40"
       >
-        Zerar saldo (sem registrar gasto)
+        Zerar saldo (sem criar registro)
       </button>
     </Dialogo>
   );

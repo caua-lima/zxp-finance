@@ -4,7 +4,7 @@ import { dataEfetivaDoGasto } from "./saldo";
 /**
  * Relatório só dos gastos que você lança no dia a dia (chat/Gastos) — sem
  * contas fixas, parcelas e faturas, que o DRE já mostra à parte. Ajuste
- * antigo de conciliação e estorno ficam fora; "Gastos não lançados"
+ * antigo de conciliação e estorno ficam fora; "Investimentos não registrados"
  * (reajuste de saldo) entra, porque é dinheiro que saiu.
  */
 export interface ResumoGastosDiarios {
