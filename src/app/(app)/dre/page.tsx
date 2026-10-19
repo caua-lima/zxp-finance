@@ -24,6 +24,7 @@ import { useDreComparativo } from "@/lib/finance/useDreComparativo";
 import { groupByCategory } from "@/lib/finance/entries";
 import { formatPercent, hojeISO } from "@/lib/finance/calculations";
 import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
+import { areaDaVida } from "@/lib/abundancia";
 import {
   sugerirCrescimentoCategorias,
   compararComBenchmarkIBGE,
@@ -289,8 +290,8 @@ export default function DrePage() {
           {/* 3 CATEGORIAS DE DESPESA, COMPARADAS COM O MÊS ANTERIOR */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <CardComparativo
-              titulo="Despesas variáveis"
-              tooltip="Gastos do dia a dia + ajustes de conciliação"
+              titulo="Qualidade de vida"
+              tooltip="O que você investiu em você no dia a dia"
               valor={dre.atual.despesasVariaveis}
               valorAnterior={dre.anterior.despesasVariaveis}
               percentual={totalDespesasEntries ? dre.atual.despesasVariaveis / totalDespesasEntries : 0}
@@ -313,17 +314,17 @@ export default function DrePage() {
             />
           </div>
 
-          {/* GASTOS DO DIA A DIA — só o que você lança todo dia */}
+          {/* INVESTIDO EM QUALIDADE DE VIDA — o que você registra todo dia */}
           <div className="rounded-2xl border border-line bg-surface p-4">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-medium text-text-muted">Seus gastos do dia a dia</h2>
+              <h2 className="text-sm font-medium text-text-muted">Investido em qualidade de vida</h2>
               <Link href="/saldo" className="text-xs text-brand">
                 Ver lançamentos
               </Link>
             </div>
             {gastosDiarios.quantidade === 0 ? (
               <p className="mt-2 text-sm text-text-muted">
-                Nenhum gasto lançado neste mês ainda. O que você registrar em Gastos aparece aqui,
+                Nada registrado neste mês ainda. Tudo que você investir em você aparece aqui,
                 separado das contas e faturas.
               </p>
             ) : (
@@ -333,18 +334,20 @@ export default function DrePage() {
                 </p>
                 <p className="text-xs text-text-muted">
                   {gastosDiarios.quantidade}{" "}
-                  {gastosDiarios.quantidade === 1 ? "lançamento" : "lançamentos"} em{" "}
+                  {gastosDiarios.quantidade === 1 ? "registro" : "registros"} em{" "}
                   {gastosDiarios.diasComGasto} {gastosDiarios.diasComGasto === 1 ? "dia" : "dias"} ·
-                  média de {formatarMoeda(gastosDiarios.mediaPorDia)} por dia
+                  {formatarMoeda(gastosDiarios.mediaPorDia)} por dia em média
                   {gastosDiarios.maiorDia &&
-                    ` · dia mais caro: ${gastosDiarios.maiorDia.dia.slice(8, 10)}/${gastosDiarios.maiorDia.dia.slice(5, 7)} (${formatarMoeda(gastosDiarios.maiorDia.total)})`}
+                    ` · dia em que mais investiu em você: ${gastosDiarios.maiorDia.dia.slice(8, 10)}/${gastosDiarios.maiorDia.dia.slice(5, 7)} (${formatarMoeda(gastosDiarios.maiorDia.total)})`}
                 </p>
 
-                <h3 className="mt-4 mb-2 text-xs font-medium text-text-muted">Por categoria</h3>
+                <h3 className="mt-4 mb-2 text-xs font-medium text-text-muted">Por área da vida</h3>
                 <div className="space-y-2">
                   {gastosDiarios.porCategoria.map((c) => (
                     <div key={c.categoria} className="flex items-center gap-3">
-                      <span className="w-28 truncate text-xs text-text-muted">{c.categoria}</span>
+                      <span className="w-36 truncate text-xs text-text-muted">
+                        {areaDaVida(c.categoria).icone} {areaDaVida(c.categoria).nome}
+                      </span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
                         <div
                           className="h-full bg-gold"
@@ -366,7 +369,7 @@ export default function DrePage() {
                         {d.dia.slice(8, 10)}/{d.dia.slice(5, 7)}
                         <span className="text-xs text-text-faint">
                           {" "}
-                          · {d.quantidade} {d.quantidade === 1 ? "gasto" : "gastos"}
+                          · {d.quantidade} {d.quantidade === 1 ? "registro" : "registros"}
                         </span>
                       </span>
                       <span className="font-medium text-text">{formatarMoeda(d.total)}</span>
