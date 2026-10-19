@@ -37,8 +37,7 @@ const TEXTO_ESTADO: Record<EstadoPush, { titulo: string; detalhe: string }> = {
 
 const PREFERENCIAS: Array<{ chave: keyof PreferenciasNotificacao; titulo: string; detalhe: string }> = [
   { chave: "vencimentos", titulo: "Vencimentos", detalhe: "Faturas e contas: 5 dias antes, na véspera e no dia" },
-  { chave: "saldoDiario", titulo: "Resumo do dia", detalhe: "Quanto dá pra gastar hoje (1 aviso por dia)" },
-  { chave: "ritmo", titulo: "Ritmo de gastos", detalhe: "Quando o ritmo zera o dinheiro antes do fim do mês" },
+  { chave: "saldoDiario", titulo: "Resumo do dia", detalhe: "Frase do dia e o que você investiu em você (1 aviso por dia)" },
   { chave: "checklist", titulo: "Contas do mês", detalhe: "Lembrete se nada foi marcado como pago até o dia 8" },
   { chave: "comissao", titulo: "Comissões", detalhe: "Lembrete de lançar o dia de trabalho" },
   {

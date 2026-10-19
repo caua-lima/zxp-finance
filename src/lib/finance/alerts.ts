@@ -88,7 +88,7 @@ export function gerarAlertas(dados: DadosAlertas): FinanceAlert[] {
       severidade: "critical",
       titulo: "Seu saldo é do mês passado",
       contexto:
-        "O quanto você pode gastar por dia está sendo calculado com um valor antigo. Depois de pagar as contas do mês, informe o que sobrou.",
+        "Um mês novo começou. Depois de pagar as contas do mês, informe quanto tem na conta e siga com clareza.",
       impacto: `Conferido em ${formatarDataCurta(diaISOde(dados.saldoAtualizadoEm))}`,
       cta: "Atualizar saldo",
       href: "/saldo",
