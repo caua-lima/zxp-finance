@@ -25,6 +25,10 @@ const AREAS: Record<string, AreaDaVida> = {
   Saúde: { nome: "Saúde e energia", icone: "🌿" },
   Lazer: { nome: "Experiências e alegria", icone: "✨" },
   Compras: { nome: "Estilo e autoestima", icone: "👕" },
+  Beleza: { nome: "Autocuidado", icone: "💈" },
+  Educação: { nome: "Crescimento pessoal", icone: "📚" },
+  Presentes: { nome: "Generosidade", icone: "🎁" },
+  Pets: { nome: "Amor de pet", icone: "🐾" },
   Outros: { nome: "Vida", icone: "🌱" },
   "Não lançado": { nome: "Vida vivida", icone: "🌱" },
 };
