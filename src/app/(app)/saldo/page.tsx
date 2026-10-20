@@ -12,9 +12,9 @@ import {
 } from "@/lib/types";
 import {
   CATEGORIAS_GASTO,
-  inferirCategoriaGasto,
 } from "@/lib/categoriasGasto";
 import { parseGastoTexto } from "@/lib/parseGastoTexto";
+import { sugerirCategoria, OrigemPalpite, Sugestao } from "@/lib/categorizacao";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
@@ -61,6 +61,8 @@ interface Previa {
   descricao: string;
   valor: number;
   categoria: string;
+  /** De onde veio a categoria sugerida; "você" quando você escolheu. */
+  origemCategoria: OrigemPalpite | "você";
   data: string;
 }
 
@@ -76,6 +78,14 @@ function diaMenos(iso: string, dias: number): string {
  * Prévia do lançamento: o que foi entendido, editável, antes de gravar.
  * Enter no campo de cima também confirma.
  */
+const DICA_ORIGEM: Record<Previa["origemCategoria"], string> = {
+  "seus registros": "como você já registrou antes",
+  "palavra parecida": "pelo seu jeito de registrar",
+  dicionário: "sugerida automaticamente",
+  nenhuma: "",
+  você: "",
+};
+
 function CartaoPrevia({
   previa,
   hoje,
@@ -83,11 +93,13 @@ function CartaoPrevia({
   onMudar,
   onConfirmar,
   onCancelar,
+  sugerir,
 }: {
   previa: Previa;
   hoje: string;
   enviando: boolean;
   onMudar: (p: Previa) => void;
+  sugerir: (descricao: string) => Sugestao;
   onConfirmar: () => void;
   onCancelar: () => void;
 }) {
@@ -132,18 +144,27 @@ function CartaoPrevia({
         <input
           id="previa-descricao"
           value={previa.descricao}
-          onChange={(e) => onMudar({ ...previa, descricao: e.target.value })}
+          onChange={(e) => {
+            const descricao = e.target.value;
+            // enquanto você não escolheu a categoria na mão, ela acompanha o texto
+            if (previa.origemCategoria === "você") return onMudar({ ...previa, descricao });
+            const s = sugerir(descricao);
+            onMudar({ ...previa, descricao, categoria: s.categoria, origemCategoria: s.origem });
+          }}
           className="campo"
         />
       </div>
       <div>
         <label htmlFor="previa-categoria" className="rotulo">
-          Categoria
+          Área da vida
+          {DICA_ORIGEM[previa.origemCategoria] && (
+            <span className="ml-1 font-normal text-brand">· {DICA_ORIGEM[previa.origemCategoria]}</span>
+          )}
         </label>
         <select
           id="previa-categoria"
           value={previa.categoria}
-          onChange={(e) => onMudar({ ...previa, categoria: e.target.value })}
+          onChange={(e) => onMudar({ ...previa, categoria: e.target.value, origemCategoria: "você" })}
           className="campo"
         >
           {CATEGORIAS_GASTO.map((c) => (
@@ -154,7 +175,7 @@ function CartaoPrevia({
         </select>
       </div>
       <p className="text-xs text-text-muted">
-        Gasto aqui = dinheiro que saiu da conta (Pix, débito). Compra no cartão de crédito entra
+        Registro aqui = dinheiro que saiu da conta (Pix, débito). Compra no cartão de crédito entra
         pela fatura.
       </p>
       <div className="flex gap-2">
@@ -258,12 +279,14 @@ export default function SaldoPage() {
     }
     setAvisoParcial(null);
     setUltimoRegistro(null);
+    const sugestao = sugerirCategoria(lido.descricao, gastos);
     setPrevia({
       chave: crypto.randomUUID(),
       fraseOriginal: frase,
       descricao: lido.descricao,
       valor: lido.valor,
-      categoria: inferirCategoriaGasto(lido.descricao),
+      categoria: sugestao.categoria,
+      origemCategoria: sugestao.origem,
       data: diaMenos(hoje, lido.diasAtras),
     });
   }
@@ -395,6 +418,7 @@ export default function SaldoPage() {
             hoje={hoje}
             enviando={confirmando}
             onMudar={setPrevia}
+            sugerir={(d) => sugerirCategoria(d, gastos)}
             onConfirmar={confirmarPrevia}
             onCancelar={() => {
               setTexto(previa.fraseOriginal);
