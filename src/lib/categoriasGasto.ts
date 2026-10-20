@@ -56,6 +56,7 @@ const DICIONARIO: Record<string, string[]> = {
     "sem parar", "conectcar", "veloe", "mecanico", "oficina", "pneu", "oleo", "troca de oleo",
     "lavagem", "lava jato", "lava rapido", "ipva", "licenciamento", "multa", "revisao",
     "seguro do carro", "guincho", "borracharia", "bike", "patinete", "moto", "carro",
+    "busao", "gasosa", "corrida", "mototaxi", "van",
   ],
   Alimentação: [
     "mercado", "supermercado", "atacadao", "assai", "carrefour", "pao de acucar",
@@ -70,6 +71,8 @@ const DICIONARIO: Record<string, string[]> = {
     "agua com gas", "pao", "pao de queijo", "leite", "energetico", "amendoim", "biscoito",
     "bolacha", "fruta", "verdura", "carne", "frango", "ovo", "arroz", "feijao", "comida",
     "delivery", "quentinha", "self service", "buffet", "lanche da tarde", "snack",
+    "padoca", "lanchinho", "rangao", "podrao", "dogao", "cachorro quente", "x tudo", "xis",
+    "pf", "prato feito",
   ],
   Saúde: [
     "farmacia", "drogaria", "drogasil", "droga raia", "raia", "pague menos", "panvel",
@@ -88,7 +91,7 @@ const DICIONARIO: Record<string, string[]> = {
   ],
   Lazer: [
     "cinema", "cinemark", "ingresso", "show", "teatro", "museu", "bar", "boteco", "balada",
-    "festa", "role", "cerveja", "chopp", "bebida", "drink", "vinho", "whisky", "narguile",
+    "festa", "role", "rolezinho", "breja", "gelada", "cerveja", "chopp", "bebida", "drink", "vinho", "whisky", "narguile",
     "viagem", "passeio", "hotel", "pousada", "airbnb", "booking", "passagem aerea",
     "streaming", "netflix", "spotify", "disney", "disney plus", "prime video", "hbo", "hbo max",
     "globoplay", "youtube premium", "deezer", "jogo", "game", "games", "steam", "playstation",
@@ -98,7 +101,7 @@ const DICIONARIO: Record<string, string[]> = {
   Compras: [
     "roupa", "camisa", "camiseta", "blusa", "calca", "bermuda", "short", "vestido", "saia",
     "jaqueta", "casaco", "moletom", "bone", "meia", "cueca", "calcinha", "sutia", "pijama",
-    "tenis", "sapato", "chinelo", "sandalia", "bota", "bolsa", "mochila", "carteira",
+    "tenis", "sapato", "look", "roupinha", "chinelo", "sandalia", "bota", "bolsa", "mochila", "carteira",
     "relogio", "oculos de sol", "acessorio", "joia", "anel", "colar", "loja", "shopping",
     "shein", "shopee", "mercado livre", "amazon", "magalu", "magazine luiza", "aliexpress",
     "americanas", "casas bahia", "renner", "riachuelo", "c a", "zara", "hering",

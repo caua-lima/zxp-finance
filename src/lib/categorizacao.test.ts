@@ -26,6 +26,10 @@ describe("categoria automática pelo dicionário", () => {
     ["conta de água", "Casa"],
     ["água com gás", "Alimentação"],
     ["Pão de Açúcar", "Alimentação"],
+    ["padoca", "Alimentação"],
+    ["busão", "Transporte"],
+    ["breja", "Lazer"],
+    ["look novo", "Compras"],
     ["asdfgh", "Outros"],
     ["", "Outros"],
   ];
@@ -47,7 +51,7 @@ describe("categoria que aprende com seus registros", async () => {
     ({ id: String(++id), descricao, valor: 10, categoria, mes: "2026-10", criadoEm: id, ...extra }) as never;
 
   test("mesma descrição: usa a categoria que você escolheu antes", () => {
-    const s = sugerirCategoria("Padoca", [g("padoca", "Alimentação")]);
+    const s = sugerirCategoria("Seu Zé", [g("seu zé", "Alimentação")]);
     assert.equal(s.categoria, "Alimentação");
     assert.equal(s.origem, "seus registros");
   });
@@ -77,11 +81,11 @@ describe("categoria que aprende com seus registros", async () => {
 
   test("ajuste, estorno e 'Outros' não ensinam nada", () => {
     const hist = [
-      g("padoca", "Ajuste", { ajusteConciliacaoId: "a" }),
-      g("padoca", "Lazer", { estornado: true }),
-      g("padoca", "Outros"),
+      g("seu zé", "Ajuste", { ajusteConciliacaoId: "a" }),
+      g("seu zé", "Lazer", { estornado: true }),
+      g("seu zé", "Outros"),
     ];
-    assert.equal(sugerirCategoria("padoca", hist).origem, "nenhuma");
+    assert.equal(sugerirCategoria("seu zé", hist).origem, "nenhuma");
   });
 
   test("sem histórico, cai no dicionário", () => {
