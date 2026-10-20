@@ -2,10 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { formatarMoeda } from "@/lib/types";
-import {
-  CATEGORIAS_GASTO,
-  inferirCategoriaGasto,
-} from "@/lib/categoriasGasto";
+import { CATEGORIAS_GASTO } from "@/lib/categoriasGasto";
+import { sugerirCategoria, OrigemPalpite } from "@/lib/categorizacao";
 import { parseGastoTexto } from "@/lib/parseGastoTexto";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
 import { useGastos } from "@/lib/useGastos";
@@ -27,6 +25,8 @@ type Mensagem =
       valor: number;
       descricao: string;
       categoria: string;
+      /** De onde veio a categoria — mostra "como você já registrou antes". */
+      origem: OrigemPalpite;
       /** Dia do gasto ("ontem" dito na frase não é descartado). */
       data: string;
       /** Idempotência: confirmar duas vezes grava um gasto só. */
@@ -50,7 +50,7 @@ type SemId<T> = T extends unknown ? Omit<T, "id"> : never;
 let proximoId = 1;
 
 export default function ChatPage() {
-  const { adicionar, erro } = useGastos();
+  const { gastos, adicionar, erro } = useGastos();
   const { caixinhas } = useCaixinhas();
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [salvando, setSalvando] = useState<number | null>(null);
@@ -84,11 +84,13 @@ export default function ChatPage() {
 
     const [ano, mes, dia] = hoje.split("-").map(Number);
     const d = new Date(ano, mes - 1, dia - diasAtras);
+    const sugestao = sugerirCategoria(descricao, gastos);
     adicionarMensagem({
       tipo: "confirmar",
       valor,
       descricao,
-      categoria: inferirCategoriaGasto(descricao),
+      categoria: sugestao.categoria,
+      origem: sugestao.origem,
       data: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
         d.getDate()
       ).padStart(2, "0")}`,
@@ -206,7 +208,15 @@ export default function ChatPage() {
                     : `Dia ${m.data.split("-").reverse().slice(0, 2).join("/")} (como você disse)`}
                 </p>
 
-                <p className="rotulo mt-3">Categoria</p>
+                <p className="rotulo mt-3">
+                  Área da vida
+                  {m.origem === "seus registros" && (
+                    <span className="ml-1 font-normal text-brand">· como você já registrou antes</span>
+                  )}
+                  {m.origem === "palavra parecida" && (
+                    <span className="ml-1 font-normal text-brand">· pelo seu jeito de registrar</span>
+                  )}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {CATEGORIAS_GASTO.map((c) => (
                     <button
