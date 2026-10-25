@@ -250,3 +250,39 @@ describe("concessão de acesso (mentoria B09)", () => {
     await assertFails(getDoc(doc(dbDe("userA"), "turmas/t1")));
   });
 });
+
+describe("concessão aplicada nos dados (mentoria B10)", () => {
+  const exigir = async (sim: boolean) =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "plataforma/config"), { exigirConcessao: sim });
+    });
+  const conceder = async (uid: string, dados: Record<string, unknown>) =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `acessos/${uid}`), { estado: "ativo", inicioEm: 0, fimEm: null, versao: 1, ...dados });
+    });
+
+  test("transição (chave desligada): sem concessão, tudo como antes", async () => {
+    await exigir(false);
+    await assertSucceeds(setDoc(doc(dbDe("semConcessao"), "usuarios/semConcessao/gastos/g1"), gastoValido));
+  });
+
+  test("exigindo: ativa passa; sem concessão, suspensa e vencida não", async () => {
+    await exigir(true);
+    await conceder("ativa", {});
+    await conceder("suspensa", { estado: "suspenso" });
+    await conceder("vencida", { fimEm: Date.now() - 60_000 });
+    await conceder("futura", { inicioEm: Date.now() + 86_400_000 });
+    await assertSucceeds(setDoc(doc(dbDe("ativa"), "usuarios/ativa/gastos/g1"), gastoValido));
+    await assertSucceeds(getDoc(doc(dbDe("ativa"), "usuarios/ativa/gastos/g1")));
+    for (const uid of ["semNada", "suspensa", "vencida", "futura"]) {
+      await assertFails(setDoc(doc(dbDe(uid), `usuarios/${uid}/gastos/g1`), gastoValido));
+      await assertFails(getDoc(doc(dbDe(uid), `usuarios/${uid}/saldo/atual`)));
+    }
+  });
+
+  test("bloqueada ainda lê a própria concessão (pra tela explicar o motivo)", async () => {
+    await exigir(true);
+    await conceder("suspensa", { estado: "suspenso" });
+    await assertSucceeds(getDoc(doc(dbDe("suspensa"), "acessos/suspensa")));
+  });
+});

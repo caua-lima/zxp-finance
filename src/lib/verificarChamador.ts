@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verificarIdToken, TokenVerificado } from "./googleAuth";
 import { consultarConta } from "./usuariosFirebase";
 import { ehAdminGlobal, sessaoRevogada } from "./autorizacao";
+import { decisaoDeAcesso } from "./acesso/servidor";
+import { MENSAGEM_BLOQUEIO } from "./acesso/concessao";
 import { adicionarDocumento } from "./firestoreRest";
 
 /** Só autentica: assinatura, emissor, audience e prazos do token. */
@@ -37,6 +39,11 @@ export async function verificarChamadorAtivo(req: NextRequest): Promise<Resultad
     if (!conta.existe || conta.disabled) return negar(403, "Conta suspensa.");
     if (sessaoRevogada(identidade.authTime, conta.validSince)) {
       return negar(401, "Sessão expirada. Entre de novo.");
+    }
+    // concessão da mentoria: a mesma decisão das regras do Firestore
+    const acesso = await decisaoDeAcesso(identidade.uid);
+    if (!acesso.liberado && !ehAdminGlobal(identidade.uid, identidade.claims, process.env.ADMIN_UIDS)) {
+      return negar(403, MENSAGEM_BLOQUEIO[acesso.motivo ?? "sem_concessao"]);
     }
   } catch {
     // sem conseguir confirmar o estado, nega — deny-by-default

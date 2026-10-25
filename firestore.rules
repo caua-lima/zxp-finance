@@ -18,8 +18,24 @@ service cloud.firestore {
     function logado() {
       return request.auth != null;
     }
+    // Concessão da mentoria (auditoria 25/10 S04/B10): com a chave
+    // plataforma/config.exigirConcessao ligada, só passa quem tem concessão
+    // ativa e dentro do prazo — vale pra SDK direto, não só pra API.
+    // Desligada (transição), todo mundo logado passa como antes.
+    function exigeConcessao() {
+      let config = /databases/$(database)/documents/plataforma/config;
+      return exists(config) && get(config).data.get('exigirConcessao', false) == true;
+    }
+    function concessaoValida(uid) {
+      let caminho = /databases/$(database)/documents/acessos/$(uid);
+      let agora = request.time.toMillis();
+      return exists(caminho)
+        && get(caminho).data.get('estado', '') == 'ativo'
+        && get(caminho).data.get('inicioEm', 0) <= agora
+        && (get(caminho).data.get('fimEm', null) == null || get(caminho).data.get('fimEm', 0) > agora);
+    }
     function dono(uid) {
-      return logado() && request.auth.uid == uid;
+      return logado() && request.auth.uid == uid && (!exigeConcessao() || concessaoValida(uid));
     }
     // número de verdade: rejeita string, NaN (NaN != NaN) e valor absurdo
     function numero(v) {
