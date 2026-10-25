@@ -41,6 +41,9 @@ export function gastoContaNoSaldo(g: Gasto, ref: ReferenciaSaldo): boolean {
  */
 export function saidaDoGasto(g: Gasto): number {
   const guardado = Object.values(g.guardado ?? {}).reduce((acc, v) => acc + v, 0);
+  // compra no crédito: o valor sai da conta quando a fatura for paga, não
+  // agora. O que foi pros cofrinhos é transferência e sai na hora.
+  if (g.pagoCom === "credito") return guardado;
   return g.valor + guardado;
 }
 

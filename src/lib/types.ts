@@ -127,6 +127,15 @@ export interface Gasto {
    * tenha mudado depois.
    */
   guardado?: Record<string, number>;
+  /**
+   * Por onde o dinheiro saiu. Ausente = da conta (Pix/débito/dinheiro), como
+   * sempre foi. "credito": comprado no cartão de crédito — NÃO sai do saldo
+   * agora; sai quando a fatura for paga (senão o mesmo dinheiro saía duas
+   * vezes: no registro e na fatura).
+   */
+  pagoCom?: "conta" | "credito";
+  /** Nome do cartão, quando `pagoCom` é "credito". */
+  cartao?: string;
 }
 
 /**

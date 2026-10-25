@@ -71,9 +71,10 @@ orçamento 100, **restante 70** — e não 40.
 
 - Previsão (fatura prevista, comissão prevista, entrada a receber) somada ao saldo.
 - Rendimento estimado somado ao saldo ou à caixinha.
-- Compra no cartão de crédito registrada como gasto **e** o pagamento da
-  fatura descontado de novo. Gasto registrado no Saldo = saída da conta
-  (Pix, débito, dinheiro). Compra no cartão entra pela fatura.
+- Compra no cartão de crédito descontada do saldo duas vezes (no registro
+  **e** no pagamento da fatura). Registro com `pagoCom: "credito"` não sai do
+  saldo (só o que vai pros cofrinhos sai); o dinheiro sai quando a fatura é
+  paga. Registro sem `pagoCom` = saída da conta (Pix, débito, dinheiro).
 - Excluir um par gasto/estorno quando os dois lados estão em lados
   diferentes da referência (o saldo mudaria sem explicação) — o app recusa;
   o par fica no histórico.
