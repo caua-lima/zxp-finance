@@ -339,6 +339,8 @@ export default function DrePage() {
                   {formatarMoeda(gastosDiarios.mediaPorDia)} por dia em média
                   {gastosDiarios.maiorDia &&
                     ` · dia em que mais investiu em você: ${gastosDiarios.maiorDia.dia.slice(8, 10)}/${gastosDiarios.maiorDia.dia.slice(5, 7)} (${formatarMoeda(gastosDiarios.maiorDia.total)})`}
+                {gastosDiarios.noCredito > 0 &&
+                    ` · ${formatarMoeda(gastosDiarios.noCredito)} no cartão de crédito (entra na fatura)`}
                 </p>
 
                 <h3 className="mt-4 mb-2 text-xs font-medium text-text-muted">Por área da vida</h3>

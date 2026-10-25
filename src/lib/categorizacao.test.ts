@@ -235,3 +235,22 @@ describe("forma de pagamento aprendida", async () => {
     assert.equal(sugerirPagamento("perfume", []), null);
   });
 });
+
+describe("crédito não conta duas vezes no relatório do mês", async () => {
+  const { gastosParaEntries } = await import("./finance/adapters");
+  const { resumoGastosDiarios } = await import("./finance/gastosDiarios");
+  const gastos = [
+    { id: "a", descricao: "açaí", valor: 20, categoria: "Alimentação", mes: "2026-10", data: "2026-10-20", criadoEm: 1 },
+    { id: "b", descricao: "perfume", valor: 260, categoria: "Beleza", mes: "2026-10", data: "2026-10-20", criadoEm: 2, pagoCom: "credito", cartao: "Inter" },
+  ] as never[];
+
+  test("no resultado do mês, só o que saiu da conta (o crédito está na fatura)", () => {
+    assert.deepEqual(gastosParaEntries(gastos, "2026-10").map((e) => e.amount), [20]);
+  });
+
+  test("no 'investido em qualidade de vida', tudo — e quanto foi no crédito", () => {
+    const r = resumoGastosDiarios(gastos, "2026-10", "2026-10-25");
+    assert.equal(r.total, 280);
+    assert.equal(r.noCredito, 260);
+  });
+});
