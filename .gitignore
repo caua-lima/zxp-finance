@@ -48,3 +48,5 @@ backups/
 firestore-debug.log
 *-debug.log
 backups-ensaio/
+playwright-report/
+test-results/
