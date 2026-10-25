@@ -42,3 +42,40 @@ export async function sair(page: Page) {
   await page.getByRole("button", { name: "Sair" }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/login/);
 }
+
+// ---- acesso direto ao emulador (Bearer owner), só pra preparar cenário ----
+const FS = process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8089";
+const BASE_FS = `http://${FS}/v1/projects/demo-zxp/databases/(default)/documents`;
+
+function valorFs(v: unknown): unknown {
+  if (v === null) return { nullValue: null };
+  if (typeof v === "boolean") return { booleanValue: v };
+  if (typeof v === "number") return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  return { stringValue: String(v) };
+}
+
+export async function gravarNoEmulador(caminho: string, dados: Record<string, unknown>) {
+  const r = await fetch(`${BASE_FS}/${caminho}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer owner" },
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(dados).map(([k, v]) => [k, valorFs(v)])) }),
+  });
+  if (!r.ok) throw new Error(`emulador: ${caminho} ${r.status}`);
+}
+
+/** Convite criado direto no emulador (mesmo formato do servidor). Devolve o token. */
+export async function conviteNoEmulador(opcoes: { expiraEm?: number } = {}): Promise<string> {
+  const { randomBytes, createHash } = await import("node:crypto");
+  const token = randomBytes(32).toString("base64url");
+  await gravarNoEmulador(`convites/${createHash("sha256").update(token).digest("hex")}`, {
+    turmaId: "turma-e2e",
+    criadoPor: "e2e",
+    criadoEm: Date.now(),
+    expiraEm: opcoes.expiraEm ?? Date.now() + 86_400_000,
+    fimAcessoEm: null,
+    usadoEm: null,
+    usadoPor: null,
+    revogadoEm: null,
+  });
+  return token;
+}

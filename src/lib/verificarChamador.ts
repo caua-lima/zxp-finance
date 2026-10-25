@@ -31,7 +31,11 @@ function negar(status: 401 | 403, erro: string): Resultado {
  * sessão revogada não passa, mesmo com token ainda dentro do prazo. Pra
  * rotas sensíveis (administração, exportar, excluir, notificações).
  */
-export async function verificarChamadorAtivo(req: NextRequest): Promise<Resultado> {
+export async function verificarChamadorAtivo(
+  req: NextRequest,
+  /** false só pra quem ainda vai GANHAR a concessão (aceitar convite). */
+  opcoes: { exigirConcessao?: boolean } = {}
+): Promise<Resultado> {
   const identidade = await verificarChamador(req);
   if (!identidade) return negar(401, "Não autenticado.");
   try {
@@ -41,7 +45,8 @@ export async function verificarChamadorAtivo(req: NextRequest): Promise<Resultad
       return negar(401, "Sessão expirada. Entre de novo.");
     }
     // concessão da mentoria: a mesma decisão das regras do Firestore
-    const acesso = await decisaoDeAcesso(identidade.uid);
+    const acesso =
+      opcoes.exigirConcessao === false ? { liberado: true, motivo: null } : await decisaoDeAcesso(identidade.uid);
     if (!acesso.liberado && !ehAdminGlobal(identidade.uid, identidade.claims, process.env.ADMIN_UIDS)) {
       return negar(403, MENSAGEM_BLOQUEIO[acesso.motivo ?? "sem_concessao"]);
     }
