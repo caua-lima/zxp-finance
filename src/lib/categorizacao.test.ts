@@ -119,3 +119,39 @@ describe("categoria que aprende com seus registros", async () => {
     assert.equal(s.origem, "dicionário");
   });
 });
+
+describe("frase com lixo e vários registros", async () => {
+  const { parseGastoTexto, separarRegistros } = await import("./parseGastoTexto");
+
+  test("'reias' (voz) sai da descrição", () => {
+    const r = parseGastoTexto("4 reias em um pão de queijo");
+    assert.equal(r.valor, 4);
+    assert.equal(r.descricao, "pão de queijo");
+  });
+
+  test("número de lista e pontuação solta saem", () => {
+    assert.equal(parseGastoTexto("33. lanche do McDonald's 41").descricao, "lanche do McDonald's");
+  });
+
+  test("quantidade inteira continua na descrição", () => {
+    const r = parseGastoTexto("2 pizzas de 30");
+    assert.equal(r.valor, 30);
+    assert.equal(r.descricao, "2 pizzas");
+  });
+
+  test("dois registros numa frase viram dois", () => {
+    const partes = separarRegistros("3 de paieiro e 22,89 de lanche");
+    assert.deepEqual(partes, ["3 de paieiro", "22,89 de lanche"]);
+    assert.deepEqual(partes.map((p) => parseGastoTexto(p).valor), [3, 22.89]);
+  });
+
+  test("lista com vírgula e linha", () => {
+    assert.deepEqual(separarRegistros("20 açaí, 49 esfihas\n5,40 uber"), ["20 açaí", "49 esfihas", "5,40 uber"]);
+  });
+
+  test("não quebra o que é um registro só", () => {
+    assert.deepEqual(separarRegistros("lanche, batata e refri 30"), ["lanche, batata e refri 30"]);
+    assert.deepEqual(separarRegistros("trinta e cinco reais no ifood"), ["trinta e cinco reais no ifood"]);
+    assert.deepEqual(separarRegistros("R$ 15,50 no uber"), ["R$ 15,50 no uber"]);
+  });
+});
