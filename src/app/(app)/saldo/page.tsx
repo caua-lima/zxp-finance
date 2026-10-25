@@ -13,8 +13,10 @@ import {
 import {
   CATEGORIAS_GASTO,
 } from "@/lib/categoriasGasto";
-import { parseGastoTexto, separarRegistros } from "@/lib/parseGastoTexto";
-import { sugerirCategoria, OrigemPalpite, Sugestao } from "@/lib/categorizacao";
+import { parseGastoTexto, separarRegistros, casarCartao } from "@/lib/parseGastoTexto";
+import { FormaPagamento, ValorFormaPagamento } from "@/components/FormaPagamento";
+import { useNomesCartoes } from "@/lib/useCartoesConfig";
+import { sugerirCategoria, sugerirPagamento, OrigemPalpite, Sugestao } from "@/lib/categorizacao";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
@@ -64,6 +66,7 @@ interface Previa {
   /** De onde veio a categoria sugerida; "você" quando você escolheu. */
   origemCategoria: OrigemPalpite | "você";
   data: string;
+  pagamento: ValorFormaPagamento;
 }
 
 function diaMenos(iso: string, dias: number): string {
@@ -95,6 +98,7 @@ function CartaoPrevia({
   onCancelar,
   sugerir,
   posicao,
+  cartoes,
 }: {
   previa: Previa;
   hoje: string;
@@ -103,6 +107,7 @@ function CartaoPrevia({
   sugerir: (descricao: string) => Sugestao;
   /** "2 de 3" quando a frase tinha vários registros. */
   posicao: string | null;
+  cartoes: string[];
   onConfirmar: () => void;
   onCancelar: () => void;
 }) {
@@ -179,10 +184,12 @@ function CartaoPrevia({
           ))}
         </select>
       </div>
-      <p className="text-xs text-text-muted">
-        Registro aqui = dinheiro que saiu da conta (Pix, débito). Compra no cartão de crédito entra
-        pela fatura.
-      </p>
+      <FormaPagamento
+        id="previa-pagamento"
+        valor={previa.pagamento}
+        cartoes={cartoes}
+        onChange={(pagamento) => onMudar({ ...previa, pagamento })}
+      />
       <div className="flex gap-2">
         <Botao
           onClick={onConfirmar}
@@ -236,6 +243,7 @@ export default function SaldoPage() {
   const [avisoParcial, setAvisoParcial] = useState<string | null>(null);
   const [atualizandoSaldo, setAtualizandoSaldo] = useState(false);
   const [fila, setFila] = useState<{ restantes: string[]; total: number } | null>(null);
+  const nomesCartoes = useNomesCartoes();
 
   const mes = mesPadrao();
   const hoje = hojeISO();
@@ -293,6 +301,14 @@ export default function SaldoPage() {
     setAvisoParcial(null);
     setUltimoRegistro(null);
     const sugestao = sugerirCategoria(lido.descricao, gastos);
+    // forma de pagamento: o que a frase disse > o que você fez da última vez > conta
+    const daUltimaVez = sugerirPagamento(lido.descricao, gastos);
+    const pagamento: ValorFormaPagamento =
+      lido.pagoCom === "credito"
+        ? { pagoCom: "credito", cartao: casarCartao(lido.cartaoDito, nomesCartoes) ?? daUltimaVez?.cartao ?? nomesCartoes[0] ?? "" }
+        : lido.pagoCom === "conta"
+          ? { pagoCom: "conta", cartao: "" }
+          : daUltimaVez ?? { pagoCom: "conta", cartao: "" };
     setPrevia({
       chave: crypto.randomUUID(),
       fraseOriginal: frase,
@@ -301,6 +317,7 @@ export default function SaldoPage() {
       categoria: sugestao.categoria,
       origemCategoria: sugestao.origem,
       data: diaMenos(hoje, lido.diasAtras),
+      pagamento,
     });
   }
 
@@ -310,6 +327,8 @@ export default function SaldoPage() {
     const ok = await adicionar(previa.descricao, previa.valor, previa.categoria, {
       data: previa.data,
       chave: previa.chave,
+      pagoCom: previa.pagamento.pagoCom,
+      cartao: previa.pagamento.cartao || undefined,
     });
     setConfirmando(false);
     if (!ok) return; // a prévia continua na tela: nada do que você digitou se perde
@@ -447,6 +466,7 @@ export default function SaldoPage() {
               setFila(null);
             }}
             posicao={fila ? `${fila.total - fila.restantes.length} de ${fila.total}` : null}
+            cartoes={nomesCartoes}
           />
         )}
         {ultimoRegistro && !avisoParcial && !previa && (
