@@ -76,3 +76,25 @@ describe("concessão legado pra quem já usa o app", async () => {
     assert.equal(planejarConcessoesLegado([{ uid: "a", disabled: false }], depois, agora).criar.length, 0);
   });
 });
+
+describe("convite: token e validade", async () => {
+  const { gerarToken, hashDoToken, tokenBemFormado, avaliarConvite } = await import("./convite");
+  const conv = { turmaId: null, criadoPor: "adm", criadoEm: agora, expiraEm: agora + DIA, fimAcessoEm: null };
+
+  test("token aleatório de 43 caracteres; o banco guarda só o hash", () => {
+    const t = gerarToken();
+    assert.ok(tokenBemFormado(t));
+    assert.notEqual(gerarToken(), t);
+    assert.match(hashDoToken(t), /^[0-9a-f]{64}$/);
+    assert.ok(!tokenBemFormado("curto"));
+    assert.ok(!tokenBemFormado(42));
+  });
+
+  test("usado, revogado e expirado não valem", () => {
+    assert.equal(avaliarConvite(conv, agora), null);
+    assert.equal(avaliarConvite({ ...conv, usadoEm: agora }, agora), "usado");
+    assert.equal(avaliarConvite({ ...conv, revogadoEm: agora }, agora), "revogado");
+    assert.equal(avaliarConvite(conv, agora + DIA), "expirado");
+    assert.equal(avaliarConvite(null, agora), "inexistente");
+  });
+});
