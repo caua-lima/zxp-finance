@@ -341,7 +341,8 @@ export default function SaldoPage() {
     // próximo da fila, se a frase tinha mais de um registro
     if (fila && fila.restantes.length) {
       const [proximo, ...resto] = fila.restantes;
-      setFila(resto.length ? { ...fila, restantes: resto } : null);
+      // continua com a fila (mesmo vazia) pra mostrar "2 de 2" no último
+      setFila({ ...fila, restantes: resto });
       interpretarUm(proximo);
     } else {
       setFila(null);
