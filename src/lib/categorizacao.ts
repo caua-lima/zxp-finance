@@ -1,5 +1,5 @@
 import type { Gasto } from "./types";
-import { normalizarTexto, palpitePorDicionario, PalpiteCategoria } from "./categoriasGasto";
+import { normalizarTexto, palpitePorDicionario, PalpiteCategoria, raiz } from "./categoriasGasto";
 
 /**
  * Categoria automática "inteligente": primeiro o que VOCÊ já fez, depois o
@@ -40,6 +40,11 @@ function exemplos(historico: Gasto[]): Gasto[] {
   );
 }
 
+/** Chave de comparação: "Lanches do McDonald's" e "lanche do mcdonalds" são o mesmo registro. */
+function chave(texto: string): string {
+  return normalizarTexto(texto).split(" ").map(raiz).join(" ");
+}
+
 function palavras(texto: string): string[] {
   return normalizarTexto(texto)
     .split(" ")
@@ -61,12 +66,12 @@ function maisVotada(itens: Gasto[]): { categoria: string; votos: number; total: 
 }
 
 export function sugerirCategoria(descricao: string, historico: Gasto[] = []): Sugestao {
-  const alvo = normalizarTexto(descricao);
+  const alvo = chave(descricao);
   const base = exemplos(historico);
 
   if (alvo) {
     // 1. a mesma descrição
-    const iguais = base.filter((g) => normalizarTexto(g.descricao) === alvo);
+    const iguais = base.filter((g) => chave(g.descricao) === alvo);
     const exata = maisVotada(iguais);
     if (exata) {
       return {

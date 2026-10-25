@@ -81,6 +81,12 @@ describe("categoria que aprende com seus registros", async () => {
     assert.equal(s.categoria, "Lazer");
   });
 
+  test("singular e plural contam como o mesmo registro", () => {
+    const s = sugerirCategoria("Lanches do Seu Zé", [g("lanche do seu zé", "Lazer")]);
+    assert.equal(s.categoria, "Lazer");
+    assert.equal(s.origem, "seus registros");
+  });
+
   test("empate: a mais recente vence", () => {
     const s = sugerirCategoria("loja x", [g("loja x", "Casa"), g("loja x", "Compras")]);
     assert.equal(s.categoria, "Compras");
