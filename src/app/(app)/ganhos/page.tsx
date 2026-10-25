@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { mesPadrao, formatarMes, formatarMoeda, taxaImpostoAtual, Ganho } from "@/lib/types";
 import { CATEGORIAS_RECEITA, iconeCategoriaReceita } from "@/lib/categoriasFinanceiras";
 import { useGanhos } from "@/lib/useGanhos";
+import { sugerirCategoriaReceita } from "@/lib/categorizacao";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { MonthSelector } from "@/components/MonthSelector";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -47,6 +48,8 @@ export default function GanhosPage() {
   const [tipo, setTipo] = useState<Tipo>("pontual");
   const [categoriaReceita, setCategoriaReceita] = useState("");
   const [semImposto, setSemImposto] = useState(false);
+  // a categoria acompanha a descrição até você escolher uma na mão
+  const [categoriaManual, setCategoriaManual] = useState(false);
   const toast = useToast();
 
   function estaRecebido(g: Ganho): boolean {
@@ -68,6 +71,8 @@ export default function GanhosPage() {
     setDescricao("");
     setValor(0);
     setSemImposto(false);
+    setCategoriaManual(false);
+    setCategoriaReceita("");
     const operacao =
       tipo === "recorrente"
         ? adicionarRecorrente(desc, valor, categoriaReceita || undefined, semImposto)
@@ -117,7 +122,10 @@ export default function GanhosPage() {
             id="ganhos-form-descricao"
             placeholder="ex: Salário, Comissão"
             value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
+            onChange={(e) => {
+              setDescricao(e.target.value);
+              if (!categoriaManual) setCategoriaReceita(sugerirCategoriaReceita(e.target.value));
+            }}
             className="campo"
           />
         </div>
@@ -130,7 +138,10 @@ export default function GanhosPage() {
             <label className="rotulo">Categoria</label>
             <select
               value={categoriaReceita}
-              onChange={(e) => setCategoriaReceita(e.target.value)}
+              onChange={(e) => {
+                setCategoriaReceita(e.target.value);
+                setCategoriaManual(true);
+              }}
               className="campo"
             >
               <option value="">Nenhuma</option>
