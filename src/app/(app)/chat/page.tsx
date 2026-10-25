@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { formatarMoeda } from "@/lib/types";
 import { CATEGORIAS_GASTO } from "@/lib/categoriasGasto";
 import { sugerirCategoria, OrigemPalpite } from "@/lib/categorizacao";
-import { parseGastoTexto } from "@/lib/parseGastoTexto";
+import { parseGastoTexto, separarRegistros } from "@/lib/parseGastoTexto";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
 import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
@@ -70,14 +70,23 @@ export default function ChatPage() {
     if (!limpa) return;
     adicionarMensagem({ tipo: "voce", texto: limpa });
 
-    const { valor, descricao, diasAtras } = parseGastoTexto(limpa);
+    // "20 açaí e 49 esfihas" vira dois cartões pra confirmar
+    const partes = separarRegistros(limpa);
+    if (partes.length > 1) {
+      adicionarMensagem({ tipo: "app", texto: `Encontrei ${partes.length} registros nessa frase.` });
+    }
+    for (const parte of partes) interpretarUm(parte);
+  }
+
+  function interpretarUm(frase: string) {
+    const { valor, descricao, diasAtras } = parseGastoTexto(frase);
 
     if (!valor || !descricao) {
       adicionarMensagem({
         tipo: "app",
         texto: !valor
-          ? "Não achei o valor nessa frase. Tenta algo como “30 no mercado”."
-          : "Entendi o valor, mas não o que foi. Tenta “30 no mercado”.",
+          ? `Não achei o valor em “${frase}”. Tenta algo como “30 no mercado”.`
+          : `Entendi o valor, mas não o que foi em “${frase}”. Tenta “30 no mercado”.`,
       });
       return;
     }
