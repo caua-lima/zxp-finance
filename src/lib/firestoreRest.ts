@@ -380,3 +380,62 @@ export async function consultar<T = Record<string, unknown>>(q: Consulta): Promi
       return { caminho, id: caminho.split("/").pop() as string, dados: decodificarCampos(l.document!.fields ?? {}) as T };
     });
 }
+
+// ---------------------------------------------------------------------------
+// Escrita atômica com pré-condição (commit). Base de tudo que não pode
+// acontecer duas vezes: aceitar convite, pegar entrega da fila, trocar dono
+// de aparelho (auditoria 25/10 B11/N02/N04).
+// ---------------------------------------------------------------------------
+
+export interface DocComVersao<T> {
+  dados: T;
+  /** updateTime do Firestore: a "versão" que a pré-condição confere. */
+  versao: string;
+}
+
+export async function obterComVersao<T = Record<string, unknown>>(caminho: string): Promise<DocComVersao<T> | null> {
+  const headers = await cabecalhos();
+  const resposta = await fetch(`${urlBase()}/${caminho}`, { headers });
+  if (resposta.status === 404) return null;
+  if (!resposta.ok) throw new Error(`Erro ao buscar ${caminho}: ${resposta.status}`);
+  const doc = await resposta.json();
+  return { dados: decodificarCampos(doc.fields ?? {}) as T, versao: doc.updateTime };
+}
+
+export type Condicao = { existe: boolean } | { versao: string };
+
+export type Escrita =
+  | { caminho: string; dados: Record<string, unknown>; condicao?: Condicao; /** só esses campos (merge) */ campos?: string[] }
+  | { caminho: string; apagar: true; condicao?: Condicao };
+
+/**
+ * Grava tudo junto ou nada. "conflito" quando alguma pré-condição falhou
+ * (alguém mexeu antes) — quem chamou decide se relê e tenta de novo.
+ */
+export async function gravarJuntas(escritas: Escrita[]): Promise<"ok" | "conflito"> {
+  const headers = await cabecalhos();
+  const base = urlBase();
+  const nome = (caminho: string) => `${base.replace(/^https?:\/\/[^/]+\/v1\//, "")}/${caminho}`;
+  const writes = escritas.map((e) => {
+    const condicao = e.condicao
+      ? { currentDocument: "existe" in e.condicao ? { exists: e.condicao.existe } : { updateTime: e.condicao.versao } }
+      : {};
+    if ("apagar" in e) return { delete: nome(e.caminho), ...condicao };
+    return {
+      update: { name: nome(e.caminho), fields: codificarCampos(e.dados) },
+      ...(e.campos ? { updateMask: { fieldPaths: e.campos } } : {}),
+      ...condicao,
+    };
+  });
+  const resposta = await fetch(`${base.replace(/\/documents$/, "")}/documents:commit`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ writes }),
+  });
+  if (resposta.ok) return "ok";
+  const corpo = await resposta.text();
+  if ([400, 409, 412].includes(resposta.status) && /precondition|FAILED_PRECONDITION|ALREADY_EXISTS|NOT_FOUND|ABORTED/i.test(corpo)) {
+    return "conflito";
+  }
+  throw new Error(`Erro ao gravar em lote: ${resposta.status}`);
+}
