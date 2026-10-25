@@ -1560,7 +1560,7 @@ describe("interpretar frase de gasto", () => {
   });
 
   test("frase vazia não quebra", () => {
-    assert.deepEqual(parseGastoTexto("   "), { valor: null, descricao: "", diasAtras: 0 });
+    assert.deepEqual(parseGastoTexto("   "), { valor: null, descricao: "", diasAtras: 0, pagoCom: null, cartaoDito: null });
   });
 });
 

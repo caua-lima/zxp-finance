@@ -96,6 +96,10 @@ function paraNumero(bruto: string): number {
 export interface GastoTextoInterpretado {
   valor: number | null;
   descricao: string;
+  /** "credito" quando a frase diz cartão/crédito; "conta" quando diz Pix/débito; null = não disse. */
+  pagoCom: "conta" | "credito" | null;
+  /** Banco/cartão citado ("nubank cnpj"), pra casar com os seus cartões. */
+  cartaoDito: string | null;
   /** 0 = hoje, 1 = ontem, 2 = anteontem. A data dita na frase não é descartada. */
   diasAtras: number;
 }
@@ -106,6 +110,40 @@ export interface GastoTextoInterpretado {
 const NUMERO =
   /\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?(?!\d)|\d+,\d{1,2}(?!\d)|\d+\.\d{1,2}(?!\d)|\d+/;
 
+const BANCOS =
+  "nubank|nu|inter|santander|mercado pago|mp|c6|itau|bradesco|caixa|bb|banco do brasil|picpay|neon|next|will|xp|btg|pan|original|sicredi|sicoob";
+
+/**
+ * Forma de pagamento dita na frase. "no cartão", "no crédito", "no nubank",
+ * "cartão do inter cnpj" → crédito (com o banco, se disse). "no pix",
+ * "no débito", "em dinheiro" → conta. O trecho sai da descrição.
+ */
+function formaDePagamento(texto: string): {
+  pagoCom: "conta" | "credito" | null;
+  cartaoDito: string | null;
+  resto: string;
+} {
+  const credito = new RegExp(
+    `\\b(?:n[oa]s?\\s+|pel[oa]\\s+|com\\s+o\\s+)?(?:(?:cart[aã]o|cr[eé]dito)(?:\\s+de\\s+cr[eé]dito)?(?:\\s+(?:d[oa]\\s+)?(${BANCOS})(?:\\s+(cnpj|cpf|pj|pf))?)?|(${BANCOS})(?:\\s+(cnpj|cpf|pj|pf))?\\s+cr[eé]dito)\\b`,
+    "i"
+  );
+  const c = texto.match(credito);
+  if (c) {
+    const banco = c[1] ?? c[3];
+    const tipo = c[2] ?? c[4];
+    return {
+      pagoCom: "credito",
+      cartaoDito: banco ? `${banco}${tipo ? " " + tipo : ""}`.toLowerCase() : null,
+      resto: texto.replace(c[0], " "),
+    };
+  }
+  // "no nubank" sozinho: o Nubank é cartão pra quase todo mundo, mas também
+  // conta — sem "crédito" ou "cartão" na frase, fica sem decidir
+  const conta = texto.match(/\b(?:n[oa]\s+|em\s+|via\s+|pelo\s+)?(?:pix|d[eé]bito|dinheiro|esp[eé]cie)\b/i);
+  if (conta) return { pagoCom: "conta", cartaoDito: null, resto: texto.replace(conta[0], " ") };
+  return { pagoCom: null, cartaoDito: null, resto: texto };
+}
+
 function diasAtrasDaFrase(texto: string): number {
   const t = semAcento(texto);
   if (/\banteontem\b/.test(t)) return 2;
@@ -114,8 +152,9 @@ function diasAtrasDaFrase(texto: string): number {
 }
 
 export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
-  const texto = textoOriginal.trim();
-  if (!texto) return { valor: null, descricao: "", diasAtras: 0 };
+  const forma = formaDePagamento(textoOriginal.trim());
+  const texto = forma.resto.replace(/\s+/g, " ").trim();
+  if (!texto) return { valor: null, descricao: "", diasAtras: 0, pagoCom: forma.pagoCom, cartaoDito: forma.cartaoDito };
   const diasAtras = diasAtrasDaFrase(texto);
 
   let valor: number | null = null;
@@ -180,7 +219,7 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
   }
 
   const descricao = tokens.join(" ").replace(/[.,!?]+$/, "").trim();
-  return { valor, descricao, diasAtras };
+  return { valor, descricao, diasAtras, pagoCom: forma.pagoCom, cartaoDito: forma.cartaoDito };
 }
 
 /**
@@ -215,4 +254,25 @@ export function separarRegistros(texto: string): string[] {
   }
   const limpos = saida.filter(Boolean);
   return limpos.length ? limpos : [texto];
+}
+
+/**
+ * Casa o banco dito ("nubank cnpj", "inter") com um dos seus cartões
+ * ("Nubank CNPJ", "Inter"). Sem CPF/CNPJ dito e dois cartões do mesmo banco,
+ * fica com o primeiro.
+ */
+export function casarCartao(dito: string | null, cartoes: string[]): string | null {
+  if (!dito) return null;
+  const norm = (t: string) =>
+    t.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/\bpj\b/, "cnpj").replace(/\bpf\b/, "cpf");
+  const apelidos: Record<string, string> = { nu: "nubank", mp: "mercado pago", bb: "banco do brasil" };
+  const partes = norm(dito).split(" ");
+  partes[0] = apelidos[partes[0]] ?? partes[0];
+  const alvo = partes.join(" ");
+  return (
+    cartoes.find((c) => norm(c) === alvo) ??
+    cartoes.find((c) => norm(c).startsWith(partes[0]) && (!partes[1] || norm(c).includes(partes[1]))) ??
+    cartoes.find((c) => norm(c).startsWith(partes[0])) ??
+    null
+  );
 }
