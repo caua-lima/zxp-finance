@@ -227,3 +227,26 @@ describe("pagamento com data real (regressão: timestamp em ms)", () => {
     await assertFails(setDoc(doc(db, "usuarios/userA/pagamentos/2026-10__conta__c3"), { ...base, itemId: "c3", valor: -1, pagoEm: Date.now() }));
   });
 });
+
+describe("concessão de acesso (mentoria B09)", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "acessos/userA"), { estado: "ativo", versao: 1 });
+      await setDoc(doc(ctx.firestore(), "acessos/userB"), { estado: "suspenso", versao: 1 });
+    });
+  });
+
+  test("lê a própria concessão, não a dos outros", async () => {
+    await assertSucceeds(getDoc(doc(dbDe("userA"), "acessos/userA")));
+    await assertFails(getDoc(doc(dbDe("userA"), "acessos/userB")));
+    await assertFails(getDoc(doc(anonimo(), "acessos/userA")));
+  });
+
+  test("ninguém se reativa, se promove ou cria a própria concessão", async () => {
+    await assertFails(updateDoc(doc(dbDe("userB"), "acessos/userB"), { estado: "ativo" }));
+    await assertFails(setDoc(doc(dbDe("userC"), "acessos/userC"), { estado: "ativo" }));
+    await assertFails(setDoc(doc(dbDe("userA"), "plataforma/config"), { exigirConcessao: false }));
+    await assertFails(setDoc(doc(dbDe("userA"), "convites/x"), { turmaId: "t" }));
+    await assertFails(getDoc(doc(dbDe("userA"), "turmas/t1")));
+  });
+});

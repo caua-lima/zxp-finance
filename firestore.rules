@@ -259,6 +259,25 @@ service cloud.firestore {
       }
     }
 
+    // concessão de acesso da mentoria: a pessoa lê a própria (pra tela
+    // explicar por que está bloqueada); só o servidor escreve
+    match /acessos/{uid} {
+      allow read: if logado() && request.auth.uid == uid;
+      allow write: if false;
+    }
+    // chave da plataforma (ex: exigirConcessao): leitura pra quem está logado
+    match /plataforma/{id} {
+      allow read: if logado();
+      allow write: if false;
+    }
+    // turmas e convites: só o servidor (admin pela API)
+    match /turmas/{id} {
+      allow read, write: if false;
+    }
+    match /convites/{id} {
+      allow read, write: if false;
+    }
+
     match /auditoriaPlataforma/{id} {
       allow read, write: if false;
     }
