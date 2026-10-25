@@ -30,6 +30,17 @@ describe("categoria automática pelo dicionário", () => {
     ["busão", "Transporte"],
     ["breja", "Lazer"],
     ["look novo", "Compras"],
+    // tirados dos registros reais de outubro que caíam em Outros
+    ["paieiro", "Lazer"],
+    ["piteira e seda", "Lazer"],
+    ["salgadinho no beer", "Alimentação"],
+    ["coqueteleira", "Saúde"],
+    ["mesa", "Casa"],
+    ["frete pra buscar a mesa", "Transporte"],
+    ["AkiTem", "Alimentação"],
+    ["esfihas", "Alimentação"],
+    ["bolsa de presente para laís", "Presentes"],
+    ["buquê de flores pra Laís", "Presentes"],
     ["asdfgh", "Outros"],
     ["", "Outros"],
   ];

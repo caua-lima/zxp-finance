@@ -1517,7 +1517,7 @@ describe("interpretar frase de gasto", () => {
   // devolve a frase inteira, incluindo "acabei de gastar" — se o parser não
   // limpar isso, a descrição vira a frase toda.
   const casos: [frase: string, valor: number, descricao: string, categoria: string][] = [
-    ["Acabei de gastar 3 reais em paieiro", 3, "paieiro", "Outros"],
+    ["Acabei de gastar 3 reais em paieiro", 3, "paieiro", "Lazer"],
     ["gastei 100 reais de gasolina", 100, "gasolina", "Transporte"],
     ["paguei 50 no mercado", 50, "mercado", "Alimentação"],
     ["torrei 200 no rolê", 200, "rolê", "Lazer"],
