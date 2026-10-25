@@ -106,6 +106,14 @@ describe("validação de campos (S03)", () => {
     await assertFails(setDoc(ref, { ...gastoValido, mes: "outubro" }));
   });
 
+  test("gasto no crédito: aceita 'credito' com cartão, recusa forma inventada", async () => {
+    const db = dbDe("userA");
+    await assertSucceeds(
+      setDoc(doc(db, "usuarios/userA/gastos/c1"), { ...gastoValido, pagoCom: "credito", cartao: "Nubank CNPJ" })
+    );
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/c2"), { ...gastoValido, pagoCom: "fiado" }));
+  });
+
   test("saldo: só o documento 'atual', com número de verdade", async () => {
     const db = dbDe("userA");
     await assertSucceeds(setDoc(doc(db, "usuarios/userA/saldo/atual"), { valor: 100, atualizadoEm: 1 }));

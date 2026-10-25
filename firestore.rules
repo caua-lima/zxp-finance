@@ -76,13 +76,16 @@ service cloud.firestore {
         allow create, update: if dono(uid) && mesLivre(uid)
           && criaOuAltera(['descricao', 'valor', 'categoria', 'mes', 'data', 'criadoEm',
                            'registradoEm', 'guardado', 'estornado', 'estornadoEm',
-                           'estornoDeId', 'ajusteConciliacaoId'])
+                           'estornoDeId', 'ajusteConciliacaoId', 'pagoCom', 'cartao'])
           && texto(request.resource.data.descricao, 200)
           && numeroEntre(request.resource.data.valor, -1000000, 1000000)
           && texto(request.resource.data.categoria, 60)
           && mes(request.resource.data.mes)
           && (opcional(request.resource.data, 'data') || dia(request.resource.data.data))
-          && (opcional(request.resource.data, 'guardado') || request.resource.data.guardado is map);
+          && (opcional(request.resource.data, 'guardado') || request.resource.data.guardado is map)
+          && (opcional(request.resource.data, 'pagoCom')
+              || request.resource.data.pagoCom in ['conta', 'credito'])
+          && (opcional(request.resource.data, 'cartao') || texto(request.resource.data.cartao, 60));
         allow delete: if dono(uid) && mesLivre(uid);
       }
 
