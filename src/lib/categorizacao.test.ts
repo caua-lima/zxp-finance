@@ -41,6 +41,14 @@ describe("categoria automática pelo dicionário", () => {
     ["esfihas", "Alimentação"],
     ["bolsa de presente para laís", "Presentes"],
     ["buquê de flores pra Laís", "Presentes"],
+    // busca aproximada: gênero, plural e erro de digitação
+    ["psicóloga", "Saúde"],
+    ["cabelereiro", "Beleza"],
+    ["hamburgueres", "Alimentação"],
+    ["farmacinha", "Saúde"], // diminutivo cai na mesma raiz
+    ["gasolna", "Transporte"],
+    ["netflx", "Lazer"],
+    ["xyzwq", "Outros"], // longe de tudo: não chuta
     ["asdfgh", "Outros"],
     ["", "Outros"],
   ];
