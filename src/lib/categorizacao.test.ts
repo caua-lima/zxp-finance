@@ -175,3 +175,48 @@ describe("compra no cartão de crédito não sai do saldo na hora", async () => 
     assert.equal(saldoConfirmado(ref, [gasto({ pagoCom: "credito", guardado: { c1: 0.1, c2: 0.1 } })]), 999.8);
   });
 });
+
+describe("forma de pagamento dita na frase", async () => {
+  const { parseGastoTexto, casarCartao } = await import("./parseGastoTexto");
+  const cartoes = ["Nubank CNPJ", "Nubank CPF", "Inter", "Santander CPF", "Mercado Pago"];
+
+  test("'no cartão' vira crédito e sai da descrição", () => {
+    const r = parseGastoTexto("260 perfume no cartão");
+    assert.equal(r.pagoCom, "credito");
+    assert.equal(r.descricao, "perfume");
+    assert.equal(r.valor, 260);
+  });
+
+  test("banco e CNPJ ditos casam com o seu cartão", () => {
+    const r = parseGastoTexto("300 jantar no cartão nubank cnpj");
+    assert.equal(r.pagoCom, "credito");
+    assert.equal(r.descricao, "jantar");
+    assert.equal(casarCartao(r.cartaoDito, cartoes), "Nubank CNPJ");
+  });
+
+  test("'inter crédito' e 'no crédito do santander'", () => {
+    assert.equal(casarCartao(parseGastoTexto("50 mesa inter crédito").cartaoDito, cartoes), "Inter");
+    const r = parseGastoTexto("no crédito do santander 120 pod");
+    assert.equal(r.descricao, "pod");
+    assert.equal(casarCartao(r.cartaoDito, cartoes), "Santander CPF");
+  });
+
+  test("Pix e débito são da conta", () => {
+    const r = parseGastoTexto("20 açaí no pix");
+    assert.equal(r.pagoCom, "conta");
+    assert.equal(r.descricao, "açaí");
+    assert.equal(parseGastoTexto("15 uber no débito").pagoCom, "conta");
+  });
+
+  test("sem dizer, não decide", () => {
+    const r = parseGastoTexto("25 almoço");
+    assert.equal(r.pagoCom, null);
+    assert.equal(r.descricao, "almoço");
+  });
+
+  test("'mercado' sozinho não é o banco Mercado Pago", () => {
+    const r = parseGastoTexto("50 no mercado");
+    assert.equal(r.pagoCom, null);
+    assert.equal(r.descricao, "mercado");
+  });
+});
