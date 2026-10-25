@@ -45,3 +45,34 @@ describe("concessão de acesso da mentoria", () => {
     assert.equal(aplicarAcao(enc.concessao, { tipo: "suspender", motivo: "x" }, agora).ok, false);
   });
 });
+
+describe("concessão legado pra quem já usa o app", async () => {
+  const { planejarConcessoesLegado } = await import("./legado");
+
+  test("cria pra quem não tem, não mexe em quem tem, desativado entra suspenso", () => {
+    const existentes = new Map([["b", novaConcessao("convite", agora)]]);
+    const p = planejarConcessoesLegado(
+      [{ uid: "a", disabled: false }, { uid: "b", disabled: false }, { uid: "c", disabled: true }],
+      existentes,
+      agora
+    );
+    assert.deepEqual(p.criar.map((c) => [c.uid, c.concessao.estado, c.concessao.origem]), [
+      ["a", "ativo", "legado"],
+      ["c", "suspenso", "legado"],
+    ]);
+    assert.equal(p.jaTem, 1);
+    assert.equal(p.podeExigir, true);
+  });
+
+  test("não deixa ligar a exigência se alguém ativo ficaria trancado", () => {
+    const existentes = new Map([["a", { ...novaConcessao("convite", agora), estado: "suspenso" as const }]]);
+    const p = planejarConcessoesLegado([{ uid: "a", disabled: false }], existentes, agora);
+    assert.equal(p.podeExigir, false);
+  });
+
+  test("rodar de novo não cria nada", () => {
+    const primeira = planejarConcessoesLegado([{ uid: "a", disabled: false }], new Map(), agora);
+    const depois = new Map(primeira.criar.map((c) => [c.uid, c.concessao]));
+    assert.equal(planejarConcessoesLegado([{ uid: "a", disabled: false }], depois, agora).criar.length, 0);
+  });
+});
