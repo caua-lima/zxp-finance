@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listarUsuarios } from "@/lib/usuariosFirebase";
 import { listarDocumentos, obterDocumento, atualizarCampos } from "@/lib/firestoreRest";
 import { hojeISO } from "@/lib/finance/calculations";
+import { decisaoDeAcesso } from "@/lib/acesso/servidor";
 import type {
   Gasto,
   Ganho,
@@ -69,6 +70,8 @@ export async function GET(req: NextRequest) {
   });
 
   async function processar(uid: string) {
+    // sem acesso liberado (suspenso, encerrado, vencido): nenhum aviso novo
+    if (!(await decisaoDeAcesso(uid)).liberado) return;
     const base = `usuarios/${uid}`;
     const ler = async <T,>(col: string) =>
       (await listarDocumentos<T>(`${base}/${col}`)).map((d) => ({ ...d.dados, id: d.id }) as T & { id: string });

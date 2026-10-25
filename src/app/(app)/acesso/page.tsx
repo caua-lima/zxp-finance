@@ -6,6 +6,7 @@ import { ErroBanner } from "@/components/ErroBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { PainelMentoria } from "@/components/PainelMentoria";
+import { AcoesConcessao } from "@/components/AcoesConcessao";
 
 interface UsuarioApi {
   uid: string;
@@ -107,7 +108,7 @@ export default function AcessoPage() {
       <PageHeader titulo="Acesso" descricao="Turmas, convites e logins" />
       <ErroBanner mensagem={erro} />
 
-      <PainelMentoria />
+      <PainelMentoria acoes={(pessoa, recarregar) => <AcoesConcessao pessoa={pessoa} recarregar={recarregar} />} />
 
       <form
         onSubmit={handleCriar}

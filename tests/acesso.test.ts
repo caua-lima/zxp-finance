@@ -8,6 +8,7 @@ import { criarConvite, aceitarConvite } from "../src/lib/acesso/convitesServidor
 import { obterDocumento, criarSeNaoExiste } from "../src/lib/firestoreRest";
 import { novaConcessao, Concessao } from "../src/lib/acesso/concessao";
 import { gerarToken } from "../src/lib/acesso/convite";
+import { aplicarAcaoNoServidor } from "../src/lib/acesso/acoesServidor";
 
 const PROJETO = process.env.GCLOUD_PROJECT ?? "demo-zxp";
 const HOST = process.env.FIRESTORE_EMULATOR_HOST;
@@ -63,5 +64,47 @@ describe("convite de uso único (B11)", () => {
     assert.equal(c?.origem, "convite");
     assert.equal(c?.turmaId, "turma-2");
     assert.equal(c?.versao, 2);
+  });
+});
+
+describe("suspender, reativar e renovar (B14)", () => {
+  beforeEach(limparBanco);
+
+  test("suspender cancela as entregas pendentes e preserva as outras", async () => {
+    await criarSeNaoExiste("acessos/alunoA", { ...novaConcessao("convite", Date.now(), { turmaId: "t1" }) });
+    await criarSeNaoExiste("usuarios/alunoA/entregas/e1", { status: "pendente", proximaTentativaEm: 0 });
+    await criarSeNaoExiste("usuarios/alunoA/entregas/e2", { status: "aceita" });
+    const r = await aplicarAcaoNoServidor("alunoA", { tipo: "suspender", motivo: "pagamento pendente" });
+    assert.ok(r.ok);
+    assert.equal(r.ok && r.entregasCanceladas, 1);
+    assert.equal((await obterDocumento<{ status: string }>("usuarios/alunoA/entregas/e1"))?.status, "cancelada");
+    assert.equal((await obterDocumento<{ status: string }>("usuarios/alunoA/entregas/e2"))?.status, "aceita");
+  });
+
+  test("reativar e renovar preservam turma; versão sobe a cada ação", async () => {
+    await criarSeNaoExiste("acessos/alunoA", { ...novaConcessao("convite", Date.now(), { turmaId: "t1" }) });
+    await aplicarAcaoNoServidor("alunoA", { tipo: "suspender", motivo: "teste" });
+    await aplicarAcaoNoServidor("alunoA", { tipo: "reativar" });
+    const fim = Date.now() + 30 * DIA;
+    await aplicarAcaoNoServidor("alunoA", { tipo: "renovar", fimEm: fim });
+    const c = await obterDocumento<Concessao>("acessos/alunoA");
+    assert.equal(c?.estado, "ativo");
+    assert.equal(c?.turmaId, "t1");
+    assert.equal(c?.fimEm, fim);
+    assert.equal(c?.versao, 4);
+  });
+
+  test("duas ações ao mesmo tempo: nenhuma some (pré-condição de versão)", async () => {
+    await criarSeNaoExiste("acessos/alunoA", { ...novaConcessao("convite", Date.now()) });
+    const fim = Date.now() + 10 * DIA;
+    const [a, b] = await Promise.all([
+      aplicarAcaoNoServidor("alunoA", { tipo: "renovar", fimEm: fim }),
+      aplicarAcaoNoServidor("alunoA", { tipo: "suspender", motivo: "teste" }),
+    ]);
+    assert.ok(a.ok && b.ok);
+    const c = await obterDocumento<Concessao>("acessos/alunoA");
+    assert.equal(c?.estado, "suspenso");
+    assert.equal(c?.fimEm, fim);
+    assert.equal(c?.versao, 3);
   });
 });
