@@ -159,10 +159,65 @@ export interface PalpiteCategoria {
   confianca: number;
 }
 
+/** Raiz simples: tira plural e gênero ("psicologas" → "psicolog"). */
+export function raiz(palavra: string): string {
+  return palavra.replace(/(oes|aes|es|s)$/, "").replace(/[aoe]$/, "");
+}
+
+/** Distância de edição (com troca de letras vizinhas), parando cedo acima de `limite`. */
+export function distancia(a: string, b: string, limite: number): number {
+  if (Math.abs(a.length - b.length) > limite) return limite + 1;
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= a.length; i++) {
+    let menorDaLinha = Infinity;
+    for (let j = 1; j <= b.length; j++) {
+      const custo = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + custo);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+      menorDaLinha = Math.min(menorDaLinha, d[i][j]);
+    }
+    if (menorDaLinha > limite) return limite + 1;
+  }
+  return d[a.length][b.length];
+}
+
+/** Termos de uma palavra só, com a raiz já calculada — base da busca aproximada. */
+const PALAVRAS_DO_DICIONARIO = TERMOS.filter((t) => !t.termo.includes(" ") && t.termo.length >= 4).map(
+  (t) => ({ ...t, raiz: raiz(t.termo) })
+);
+
+/**
+ * Busca aproximada pra palavra que o dicionário exato não pegou: mesma raiz
+ * ("psicologa" ~ "psicologo") ou erro de digitação pequeno ("cabelereiro"
+ * ~ "cabeleireiro": 1 letra; até 2 em palavra longa). Pesa menos que o
+ * exato, então só decide quando nada exato bateu.
+ */
+function palpiteAproximado(texto: string): { categoria: string; termo: string; peso: number } | null {
+  let melhor: { categoria: string; termo: string; peso: number } | null = null;
+  for (const palavra of texto.split(" ")) {
+    if (palavra.length < 4 || /^\d+$/.test(palavra)) continue;
+    const r = raiz(palavra);
+    const limite = palavra.length >= 8 ? 2 : palavra.length >= 5 ? 1 : 0;
+    for (const t of PALAVRAS_DO_DICIONARIO) {
+      const mesmaRaiz = r.length >= 4 && r === t.raiz;
+      const perto = !mesmaRaiz && limite > 0 && distancia(palavra, t.termo, limite) <= limite;
+      if (!mesmaRaiz && !perto) continue;
+      const peso = t.termo.length * (mesmaRaiz ? 0.9 : 0.75);
+      if (!melhor || peso > melhor.peso) melhor = { categoria: t.categoria, termo: t.termo, peso };
+    }
+  }
+  return melhor;
+}
+
 /**
  * Categoria pelo dicionário. O termo mais específico vence: "mercado
  * livre" (13 letras) ganha de "mercado" (7), "posto de gasolina" ganha de
- * "posto". Empate: ordem de PRIORIDADE.
+ * "posto". Empate: ordem de PRIORIDADE. Sem termo exato, tenta a busca
+ * aproximada (gênero, plural e erro de digitação).
  */
 export function palpitePorDicionario(descricao: string): PalpiteCategoria {
   const texto = normalizarTexto(descricao);
@@ -179,12 +234,22 @@ export function palpitePorDicionario(descricao: string): PalpiteCategoria {
       melhor = { categoria: t.categoria, termo: t.termo, peso };
     }
   }
-  if (!melhor) return { categoria: "Outros", motivo: null, confianca: 0 };
-  return {
-    categoria: melhor.categoria,
-    motivo: melhor.termo,
-    confianca: Math.min(0.9, 0.5 + melhor.peso / 30),
-  };
+  if (melhor) {
+    return {
+      categoria: melhor.categoria,
+      motivo: melhor.termo,
+      confianca: Math.min(0.9, 0.5 + melhor.peso / 30),
+    };
+  }
+  const aproximado = palpiteAproximado(texto);
+  if (aproximado) {
+    return {
+      categoria: aproximado.categoria,
+      motivo: aproximado.termo,
+      confianca: Math.min(0.75, 0.4 + aproximado.peso / 30),
+    };
+  }
+  return { categoria: "Outros", motivo: null, confianca: 0 };
 }
 
 export function inferirCategoriaGasto(descricao: string): string {
