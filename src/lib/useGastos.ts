@@ -31,6 +31,9 @@ export interface OpcoesNovoGasto {
    * Gere uma por prévia/confirmação, não por clique.
    */
   chave?: string;
+  /** "credito" = comprado no cartão: não sai do saldo agora (sai na fatura). */
+  pagoCom?: "conta" | "credito";
+  cartao?: string;
 }
 
 /** Id aceito pelo Firestore a partir da chave (sem barra, tamanho limitado). */
@@ -143,6 +146,9 @@ export function useGastos() {
           criadoEm: Date.now(),
           registradoEm: serverTimestamp(),
           ...(guardouAlgo ? { guardado: deposito } : {}),
+          ...(opcoes.pagoCom === "credito"
+            ? { pagoCom: "credito", ...(opcoes.cartao ? { cartao: opcoes.cartao } : {}) }
+            : {}),
         });
         aplicarNasCaixinhas(tx, user.uid, deposito, new Set(caixinhas.map((c) => c.id)));
       });
@@ -157,7 +163,14 @@ export function useGastos() {
 
   async function editar(
     id: string,
-    dados: { descricao: string; valor: number; categoria: string; data?: string }
+    dados: {
+      descricao: string;
+      valor: number;
+      categoria: string;
+      data?: string;
+      pagoCom?: "conta" | "credito";
+      cartao?: string;
+    }
   ) {
     if (!user) return false;
     if (!Number.isFinite(dados.valor) || dados.valor <= 0) {
@@ -173,6 +186,10 @@ export function useGastos() {
         valor: dados.valor,
         categoria: dados.categoria,
         ...(dados.data ? { data: dados.data, mes: dados.data.slice(0, 7) } : {}),
+        // corrigir um registro antigo que foi no crédito muda o saldo — é a correção
+        ...(dados.pagoCom
+          ? { pagoCom: dados.pagoCom, cartao: dados.pagoCom === "credito" ? dados.cartao ?? "" : "" }
+          : {}),
       });
       if (gasto) {
         anexarAuditLog(batch, user.uid, user.email, {
@@ -185,6 +202,7 @@ export function useGastos() {
             valor: gasto.valor,
             categoria: gasto.categoria,
             data: gasto.data,
+            pagoCom: gasto.pagoCom ?? "conta",
           },
           after: dados,
         });
@@ -232,6 +250,10 @@ export function useGastos() {
           registradoEm: serverTimestamp(),
           estornoDeId: id,
           ...(original.guardado ? { guardado: inverter(original.guardado) } : {}),
+          // estorno de compra no crédito também não mexe no saldo
+          ...(original.pagoCom === "credito"
+            ? { pagoCom: "credito", ...(original.cartao ? { cartao: original.cartao } : {}) }
+            : {}),
         });
         if (original.guardado) {
           aplicarNasCaixinhas(tx, user.uid, inverter(original.guardado), caixinhas);
