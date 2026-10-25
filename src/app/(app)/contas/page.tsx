@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { formatarMoeda, ContaFixa } from "@/lib/types";
 import { CATEGORIAS_CONTAS, iconeCategoria } from "@/lib/categorias";
+import { sugerirCategoriaConta } from "@/lib/categorizacao";
 import { useContasFixas } from "@/lib/useContasFixas";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ErroBanner } from "@/components/ErroBanner";
@@ -49,6 +50,8 @@ export default function ContasPage() {
   const [valor, setValor] = useState(0);
   const [categoria, setCategoria] = useState<string>(CATEGORIAS_CONTAS[0]);
   const [categoriaCustom, setCategoriaCustom] = useState("");
+  // a categoria acompanha o nome até você escolher uma na mão
+  const [categoriaManual, setCategoriaManual] = useState(false);
   const [diaVencimento, setDiaVencimento] = useState("");
   const toast = useToast();
 
@@ -66,6 +69,7 @@ export default function ContasPage() {
     setNome("");
     setValor(0);
     setCategoriaCustom("");
+    setCategoriaManual(false);
     setDiaVencimento("");
     toast.sucessoSe(adicionar(nomeAparado, valor, cat, dia), `"${nomeAparado}" adicionada.`);
   }
@@ -90,7 +94,10 @@ export default function ContasPage() {
             id="contas-form-nome"
             placeholder="ex: Internet"
             value={nome}
-            onChange={(e) => setNome(e.target.value)}
+            onChange={(e) => {
+              setNome(e.target.value);
+              if (!categoriaManual) setCategoria(sugerirCategoriaConta(e.target.value));
+            }}
             className="campo"
           />
         </div>
@@ -111,10 +118,18 @@ export default function ContasPage() {
           </div>
         </div>
         <div>
-          <label className="rotulo">Categoria</label>
+          <label className="rotulo">
+            Categoria
+            {!categoriaManual && nome.trim() && (
+              <span className="ml-1 font-normal text-brand">· sugerida automaticamente</span>
+            )}
+          </label>
           <select
             value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
+            onChange={(e) => {
+              setCategoria(e.target.value);
+              setCategoriaManual(true);
+            }}
             className="campo"
           >
             {CATEGORIAS_CONTAS.map((cat) => (
