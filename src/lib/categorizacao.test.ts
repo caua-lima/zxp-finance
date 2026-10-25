@@ -220,3 +220,18 @@ describe("forma de pagamento dita na frase", async () => {
     assert.equal(r.descricao, "mercado");
   });
 });
+
+describe("forma de pagamento aprendida", async () => {
+  const { sugerirPagamento } = await import("./categorizacao");
+  const g = (descricao: string, criadoEm: number, extra: object = {}) =>
+    ({ id: String(criadoEm), descricao, valor: 10, categoria: "Beleza", mes: "2026-10", criadoEm, ...extra }) as never;
+
+  test("repete a forma da última vez", () => {
+    const hist = [g("perfume", 1), g("Perfumes", 2, { pagoCom: "credito", cartao: "Inter" })];
+    assert.deepEqual(sugerirPagamento("perfume", hist), { pagoCom: "credito", cartao: "Inter" });
+  });
+
+  test("nunca lançou: não chuta", () => {
+    assert.equal(sugerirPagamento("perfume", []), null);
+  });
+});

@@ -109,3 +109,23 @@ export function sugerirCategoria(descricao: string, historico: Gasto[] = []): Su
 
   return { categoria: "Outros", motivo: null, confianca: 0, origem: "nenhuma" };
 }
+
+/**
+ * Como você costuma pagar esse registro: a forma da última vez que lançou a
+ * mesma coisa ("perfume" foi no crédito do Inter → vem crédito, Inter).
+ * `null` quando nunca lançou.
+ */
+export function sugerirPagamento(
+  descricao: string,
+  historico: Gasto[] = []
+): { pagoCom: "conta" | "credito"; cartao: string } | null {
+  const alvo = chave(descricao);
+  if (!alvo) return null;
+  const ultimo = historico
+    .filter((g) => !g.estornoDeId && !g.ajusteConciliacaoId && chave(g.descricao) === alvo)
+    .sort((a, b) => b.criadoEm - a.criadoEm)[0];
+  if (!ultimo) return null;
+  return ultimo.pagoCom === "credito"
+    ? { pagoCom: "credito", cartao: ultimo.cartao ?? "" }
+    : { pagoCom: "conta", cartao: "" };
+}
