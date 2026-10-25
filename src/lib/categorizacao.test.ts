@@ -155,3 +155,23 @@ describe("frase com lixo e vários registros", async () => {
     assert.deepEqual(separarRegistros("R$ 15,50 no uber"), ["R$ 15,50 no uber"]);
   });
 });
+
+describe("compra no cartão de crédito não sai do saldo na hora", async () => {
+  const { saldoConfirmado } = await import("./finance/saldo");
+  const ref = { valor: 1000, atualizadoEm: new Date("2026-10-20T12:00:00-03:00").getTime() };
+  const depois = new Date("2026-10-20T15:00:00-03:00").getTime();
+  const gasto = (extra: object) =>
+    ({ id: "g", descricao: "perfume", valor: 260, categoria: "Beleza", mes: "2026-10", data: "2026-10-20", criadoEm: depois, ...extra }) as never;
+
+  test("débito/Pix desconta o valor", () => {
+    assert.equal(saldoConfirmado(ref, [gasto({})]), 740);
+  });
+
+  test("crédito não desconta o valor (sai na fatura)", () => {
+    assert.equal(saldoConfirmado(ref, [gasto({ pagoCom: "credito", cartao: "Nubank CNPJ" })]), 1000);
+  });
+
+  test("crédito ainda desconta o que foi pros cofrinhos", () => {
+    assert.equal(saldoConfirmado(ref, [gasto({ pagoCom: "credito", guardado: { c1: 0.1, c2: 0.1 } })]), 999.8);
+  });
+});
