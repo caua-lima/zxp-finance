@@ -144,6 +144,19 @@ function formaDePagamento(texto: string): {
   return { pagoCom: null, cartaoDito: null, resto: texto };
 }
 
+const LETRA = /[a-zà-ÿ]/i;
+
+function coladoEmLetra(texto: string, inicio: number, tamanho: number): boolean {
+  return LETRA.test(texto[inicio - 1] ?? "") || LETRA.test(texto[inicio + tamanho] ?? "");
+}
+
+/** Tem um valor em dígitos "de verdade" (não colado em palavra)? */
+function temValorEmDigito(texto: string): boolean {
+  return [...texto.matchAll(new RegExp(NUMERO.source, "g"))].some(
+    (m) => !coladoEmLetra(texto, m.index ?? 0, m[0].length)
+  );
+}
+
 function diasAtrasDaFrase(texto: string): number {
   const t = semAcento(texto);
   if (/\banteontem\b/.test(t)) return 2;
@@ -175,7 +188,11 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
   } else {
     // 2. sem marcador: pega o ÚLTIMO número da frase — em "almoço 42" e em
     //    "2 pizzas de 30" o preço é sempre o que vem por último.
-    const todos = [...texto.matchAll(new RegExp(NUMERO.source, "g"))];
+    //    Número colado em letra é parte de um nome ("99pop", "galaxy s23",
+    //    "e2e"), não preço — antes "12,34 loja s23" virava R$ 23.
+    const todos = [...texto.matchAll(new RegExp(NUMERO.source, "g"))].filter(
+      (m) => !coladoEmLetra(texto, m.index ?? 0, m[0].length)
+    );
     const ultimo = todos[todos.length - 1];
     if (ultimo) {
       valor = paraNumero(ultimo[0]);
@@ -230,7 +247,7 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
  * nunca é quebrado.
  */
 export function separarRegistros(texto: string): string[] {
-  const temDigito = (t: string) => /\d/.test(t);
+  const temDigito = temValorEmDigito;
   const saida: string[] = [];
   for (const linha of texto.split(/\n|;/)) {
     const pedacos = linha

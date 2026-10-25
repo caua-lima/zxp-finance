@@ -274,3 +274,26 @@ describe("contas fixas e ganhos também se categorizam", async () => {
     assert.equal(sugerirCategoriaReceita("Pensão"), "");
   });
 });
+
+describe("número colado em palavra não é o valor (achado pelo E2E)", async () => {
+  const { parseGastoTexto, separarRegistros } = await import("./parseGastoTexto");
+
+  test("dígito dentro de palavra não vira valor", () => {
+    const r = parseGastoTexto("12,34 e2e padaria mvogg0qd");
+    assert.equal(r.valor, 12.34);
+    assert.equal(r.descricao, "e2e padaria mvogg0qd");
+  });
+
+  test("modelo de produto e app com número no nome", () => {
+    assert.equal(parseGastoTexto("30 capinha galaxy s23").valor, 30);
+    assert.equal(parseGastoTexto("15 99pop").valor, 15);
+  });
+
+  test("'30reais' colado continua funcionando pelo marcador", () => {
+    assert.equal(parseGastoTexto("30reais lanche").valor, 30);
+  });
+
+  test("palavra com dígito não quebra a frase em dois registros", () => {
+    assert.deepEqual(separarRegistros("20 capinha s23 e película"), ["20 capinha s23 e película"]);
+  });
+});
