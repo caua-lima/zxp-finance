@@ -509,6 +509,7 @@ export default function SaldoPage() {
                     onRemover={remover}
                     mesFechado={monthClose.fechado}
                     mudaSaldo={saldo ? gastoContaNoSaldo(g, saldo) : false}
+                    cartoes={nomesCartoes}
                   />
                 ))}
               </ul>
@@ -803,11 +804,19 @@ function ItemGasto({
   onRemover,
   mesFechado,
   mudaSaldo,
+  cartoes,
 }: {
   gasto: Gasto;
+  cartoes: string[];
   onEditar: (
     id: string,
-    dados: { descricao: string; valor: number; categoria: string }
+    dados: {
+      descricao: string;
+      valor: number;
+      categoria: string;
+      pagoCom?: "conta" | "credito";
+      cartao?: string;
+    }
   ) => Promise<boolean>;
   onEstornar: (id: string, motivo: string) => Promise<boolean>;
   onRemover: (id: string, motivo: string) => Promise<boolean>;
@@ -823,6 +832,11 @@ function ItemGasto({
   const [descricao, setDescricao] = useState(gasto.descricao);
   const [valor, setValor] = useState(gasto.valor);
   const [categoria, setCategoria] = useState(gasto.categoria);
+  const [pagamento, setPagamento] = useState<ValorFormaPagamento>({
+    pagoCom: gasto.pagoCom === "credito" ? "credito" : "conta",
+    cartao: gasto.cartao ?? "",
+  });
+  const noCredito = gasto.pagoCom === "credito";
 
   const ehEstorno = !!gasto.estornoDeId;
   const bloqueado = gasto.estornado || ehEstorno;
@@ -830,7 +844,14 @@ function ItemGasto({
   function salvar() {
     const desc = descricao.trim();
     if (!desc || !valor) return;
-    toast.sucessoSe(onEditar(gasto.id, { descricao: desc, valor, categoria }), "Registro atualizado.");
+    toast.sucessoSe(
+      onEditar(gasto.id, { descricao: desc, valor, categoria, ...pagamento }),
+      pagamento.pagoCom !== (gasto.pagoCom ?? "conta")
+        ? pagamento.pagoCom === "credito"
+          ? "Corrigido pra cartão de crédito: o valor volta pro saldo."
+          : "Corrigido pra saída da conta: o valor sai do saldo."
+        : "Registro atualizado."
+    );
     setEditando(false);
     setAberto(false);
   }
@@ -849,6 +870,12 @@ function ItemGasto({
             ))}
           </select>
         </div>
+        <FormaPagamento
+          id={`editar-pagamento-${gasto.id}`}
+          valor={pagamento}
+          cartoes={cartoes}
+          onChange={setPagamento}
+        />
         <div className="flex gap-2">
           <Botao onClick={salvar} larguraTotal tamanho="pequeno">
             Salvar
@@ -878,6 +905,11 @@ function ItemGasto({
         >
           {gasto.descricao}
         </span>
+        {noCredito && (
+          <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-muted">
+            💳 {gasto.cartao || "crédito"}
+          </span>
+        )}
         <span
           className={`shrink-0 text-sm font-medium ${
             gasto.valor < 0 ? "text-positive" : bloqueado ? "text-text-faint" : "text-text"
@@ -918,9 +950,13 @@ function ItemGasto({
       <ConfirmModal
         aberto={confirmandoEstorno}
         titulo="Estornar registro"
-        descricao={`"${gasto.descricao}" continua no histórico, mas um estorno devolve ${formatarMoeda(
-          gasto.valor
-        )} pro seu saldo. Use quando o dinheiro voltou (devolução, reembolso).`}
+        descricao={
+          noCredito
+            ? `"${gasto.descricao}" continua no histórico e sai do total do mês. Foi no cartão, então o saldo não muda — o estorno aparece na fatura.`
+            : `"${gasto.descricao}" continua no histórico, mas um estorno devolve ${formatarMoeda(
+                gasto.valor
+              )} pro seu saldo. Use quando o dinheiro voltou (devolução, reembolso).`
+        }
         textoConfirmar="Estornar"
         pedirMotivo
         onConfirmar={(motivo) => {
@@ -938,7 +974,9 @@ function ItemGasto({
           bloqueado
             ? "Esse registro e o estorno dele são apagados juntos. Como um cancela o outro, o saldo não muda."
             : `"${gasto.descricao}" some de vez — use quando lançou errado. ${
-                mudaSaldo
+                noCredito
+                  ? "Foi no cartão de crédito: o saldo não muda."
+                  : mudaSaldo
                   ? `O saldo volta ${formatarMoeda(gasto.valor)}.`
                   : "O saldo não muda (esse registro é de antes da última atualização de saldo)."
               } Se o dinheiro voltou de verdade, use Estornar.`
