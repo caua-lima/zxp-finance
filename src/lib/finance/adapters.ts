@@ -295,7 +295,9 @@ export function faturasPrevistasParaEntries(
 
 export function gastosParaEntries(gastos: Gasto[], mes: string): FinancialEntry[] {
   return gastos
-    .filter((g) => g.mes === mes && contaNoPeriodo(dataEfetivaDoGasto(g)))
+    // compra no crédito já está dentro da fatura do cartão: contar aqui
+    // também seria a mesma despesa duas vezes no resultado do mês
+    .filter((g) => g.mes === mes && g.pagoCom !== "credito" && contaNoPeriodo(dataEfetivaDoGasto(g)))
     .map((g) => ({
       id: `gasto__${g.id}`,
       type: "expense" as const,

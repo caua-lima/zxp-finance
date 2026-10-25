@@ -9,6 +9,8 @@ import { dataEfetivaDoGasto } from "./saldo";
  */
 export interface ResumoGastosDiarios {
   total: number;
+  /** Quanto do total foi no cartão de crédito (entra na fatura, não sai do saldo agora). */
+  noCredito: number;
   quantidade: number;
   /** Dias do mês com pelo menos um gasto. */
   diasComGasto: number;
@@ -53,6 +55,9 @@ export function resumoGastosDiarios(gastos: Gasto[], mes: string, hojeISO: strin
   );
   return {
     total,
+    noCredito: arredondarCentavos(
+      doMes.filter((g) => g.pagoCom === "credito").reduce((acc, g) => acc + g.valor, 0)
+    ),
     quantidade: doMes.length,
     diasComGasto: porDia.length,
     mediaPorDia: decorridos > 0 ? arredondarCentavos(total / decorridos) : 0,
