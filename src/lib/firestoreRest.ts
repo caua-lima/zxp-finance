@@ -310,3 +310,73 @@ export async function incrementarContador(
   const resultado = json.writeResults?.[0]?.transformResults?.[0];
   return Number(resultado?.integerValue ?? resultado?.doubleValue ?? 0);
 }
+
+// ---------------------------------------------------------------------------
+// Consulta com filtro/ordem/limite (runQuery). Antes, tudo era "listar a
+// coleção inteira e filtrar em memória" (auditoria 25/10 N08).
+// ---------------------------------------------------------------------------
+
+export type OperadorConsulta = "==" | "<" | "<=" | ">" | ">=" | "in";
+
+const OPERADORES: Record<OperadorConsulta, string> = {
+  "==": "EQUAL",
+  "<": "LESS_THAN",
+  "<=": "LESS_THAN_OR_EQUAL",
+  ">": "GREATER_THAN",
+  ">=": "GREATER_THAN_OR_EQUAL",
+  in: "IN",
+};
+
+export interface Consulta {
+  /** Coleção (id, não caminho). */
+  colecao: string;
+  /** Documento pai ("usuarios/abc"); vazio = raiz. */
+  dentroDe?: string;
+  /** true = todas as coleções com esse id em qualquer lugar (collection group). */
+  todas?: boolean;
+  onde?: [campo: string, op: OperadorConsulta, valor: unknown][];
+  ordenarPor?: [campo: string, direcao: "asc" | "desc"][];
+  limite?: number;
+}
+
+export interface DocumentoConsultado<T = Record<string, unknown>> {
+  /** Caminho relativo a documents/ ("usuarios/abc/entregas/x"). */
+  caminho: string;
+  id: string;
+  dados: T;
+}
+
+export async function consultar<T = Record<string, unknown>>(q: Consulta): Promise<DocumentoConsultado<T>[]> {
+  const headers = await cabecalhos();
+  const filtros = (q.onde ?? []).map(([campo, op, valor]) => ({
+    fieldFilter: { field: { fieldPath: campo }, op: OPERADORES[op], value: codificarValor(valor) },
+  }));
+  const estrutura: Record<string, unknown> = {
+    from: [{ collectionId: q.colecao, ...(q.todas ? { allDescendants: true } : {}) }],
+  };
+  if (filtros.length === 1) estrutura.where = filtros[0];
+  if (filtros.length > 1) estrutura.where = { compositeFilter: { op: "AND", filters: filtros } };
+  if (q.ordenarPor?.length) {
+    estrutura.orderBy = q.ordenarPor.map(([campo, d]) => ({
+      field: { fieldPath: campo },
+      direction: d === "desc" ? "DESCENDING" : "ASCENDING",
+    }));
+  }
+  if (q.limite) estrutura.limit = q.limite;
+
+  const pai = q.dentroDe ? `${urlBase()}/${q.dentroDe}` : urlBase();
+  const resposta = await fetch(`${pai}:runQuery`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ structuredQuery: estrutura }),
+  });
+  if (!resposta.ok) throw new Error(`Erro na consulta de ${q.colecao}: ${resposta.status}`);
+  const linhas = (await resposta.json()) as { document?: { name: string; fields?: Record<string, ValorFirestore> } }[];
+  return linhas
+    .filter((l) => l.document)
+    .map((l) => {
+      const nome = l.document!.name;
+      const caminho = nome.slice(nome.indexOf("/documents/") + "/documents/".length);
+      return { caminho, id: caminho.split("/").pop() as string, dados: decodificarCampos(l.document!.fields ?? {}) as T };
+    });
+}

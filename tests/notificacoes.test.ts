@@ -19,7 +19,7 @@ import {
   idAparelho,
 } from "../src/lib/notificacoes/servidor";
 import { preferenciasPadrao } from "../src/lib/notificacoes/regras";
-import { listarDocumentos, obterDocumento } from "../src/lib/firestoreRest";
+import { listarDocumentos, obterDocumento, atualizarCampos, consultar } from "../src/lib/firestoreRest";
 
 const PROJETO = process.env.GCLOUD_PROJECT ?? "demo-zxp";
 const HOST = process.env.FIRESTORE_EMULATOR_HOST;
@@ -170,5 +170,25 @@ describe("cota diária por usuário (S07)", { skip: !HOST && "sem emulador" }, (
     const resultados = await Promise.all([1, 2, 3, 4].map(() => consumirCota("userCota", "teste", 3)));
     assert.equal(resultados.filter(Boolean).length, 3);
     assert.equal(await consumirCota("outroUser", "teste", 3), true);
+  });
+});
+
+describe("consulta com filtro em vez de ler a coleção inteira (N08)", () => {
+  beforeEach(limparBanco);
+
+  test("pendentes de todos os usuários, sem trazer as terminadas", async () => {
+    await atualizarCampos("usuarios/A/entregas/e1", { status: "pendente", proximaTentativaEm: 1 });
+    await atualizarCampos("usuarios/A/entregas/e2", { status: "aceita" });
+    await atualizarCampos("usuarios/B/entregas/e3", { status: "pendente", proximaTentativaEm: 2 });
+    const r = await consultar<{ status: string }>({ colecao: "entregas", todas: true, onde: [["status", "==", "pendente"]] });
+    assert.deepEqual(r.map((d) => d.caminho).sort(), ["usuarios/A/entregas/e1", "usuarios/B/entregas/e3"]);
+  });
+
+  test("ordem e limite: só a execução mais recente", async () => {
+    await atualizarCampos("execucoesNotificacao/a", { inicio: 100 });
+    await atualizarCampos("execucoesNotificacao/b", { inicio: 300 });
+    await atualizarCampos("execucoesNotificacao/c", { inicio: 200 });
+    const r = await consultar<{ inicio: number }>({ colecao: "execucoesNotificacao", ordenarPor: [["inicio", "desc"]], limite: 1 });
+    assert.deepEqual(r.map((d) => d.id), ["b"]);
   });
 });
