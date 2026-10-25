@@ -21,6 +21,8 @@ const RUIDO = new Set([
   "numa", "com", "pra", "para", "por", "o", "a", "os", "as", "um", "uma",
   "uns", "umas", "meu", "minha", "reais", "real", "conto", "contos",
   "pila", "paus", "mango", "mangos", "r$",
+  // como a voz às vezes escreve "reais"
+  "reias", "reals", "reas", "rs",
   // "e" sobra na frente quando o valor veio por extenso ("trinta E cinco
   // reais no ifood"): os números saem e o conector fica órfão no começo.
   "e",
@@ -125,7 +127,7 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
   const comMarcador =
     texto.match(new RegExp(`r\\$\\s*(${NUMERO.source})`, "i")) ??
     texto.match(
-      new RegExp(`(${NUMERO.source})\\s*(?:reais?|contos?|pila|paus|mangos?)\\b`, "i")
+      new RegExp(`(${NUMERO.source})\\s*(?:reais?|reias|contos?|pila|paus|mangos?)\\b`, "i")
     );
 
   if (comMarcador) {
@@ -143,7 +145,14 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
     }
   }
 
-  let tokens = resto.split(/\s+/).filter(Boolean);
+  let tokens = resto
+    .split(/\s+/)
+    // número que sobrou e não é o valor ("3,00", "33." de lista) não é descrição;
+    // quantidade inteira ("2 pizzas") continua
+    .filter((t) => !/^\d+[.,]\d*$/.test(t) && !/^\d+[.)]$/.test(t))
+    // pontuação solta ("e," "-") sai
+    .map((t) => t.replace(/^[,;:\-]+|[,;:]+$/g, ""))
+    .filter(Boolean);
 
   // 3. sem dígito nenhum, tenta número por extenso
   if (valor === null) {
@@ -172,4 +181,38 @@ export function parseGastoTexto(textoOriginal: string): GastoTextoInterpretado {
 
   const descricao = tokens.join(" ").replace(/[.,!?]+$/, "").trim();
   return { valor, descricao, diasAtras };
+}
+
+/**
+ * Separa uma frase com vários registros: "3 de paieiro e 22,89 de lanche"
+ * → ["3 de paieiro", "22,89 de lanche"]. Quebra em linha, ";", ",", " e " e
+ * " + ", mas só onde os DOIS lados têm valor em dígito — "lanche, batata e
+ * refri 30" continua um registro só, e valor por extenso ("trinta e cinco")
+ * nunca é quebrado.
+ */
+export function separarRegistros(texto: string): string[] {
+  const temDigito = (t: string) => /\d/.test(t);
+  const saida: string[] = [];
+  for (const linha of texto.split(/\n|;/)) {
+    const pedacos = linha
+      .split(/\s*,\s+|\s+e\s+|\s+\+\s+/i)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const grupos: string[][] = [];
+    let atual: string[] = [];
+    for (const p of pedacos) {
+      if (atual.length && atual.some(temDigito) && temDigito(p)) {
+        grupos.push(atual);
+        atual = [p];
+      } else {
+        atual.push(p);
+      }
+    }
+    if (atual.length) grupos.push(atual);
+    // um registro só: devolve a linha como foi escrita (vírgula continua vírgula)
+    if (grupos.length === 1) saida.push(linha.trim());
+    else saida.push(...grupos.map((g) => g.join(" e ")));
+  }
+  const limpos = saida.filter(Boolean);
+  return limpos.length ? limpos : [texto];
 }
