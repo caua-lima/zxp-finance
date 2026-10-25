@@ -3,8 +3,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { formatarMoeda } from "@/lib/types";
 import { CATEGORIAS_GASTO } from "@/lib/categoriasGasto";
-import { sugerirCategoria, OrigemPalpite } from "@/lib/categorizacao";
-import { parseGastoTexto, separarRegistros } from "@/lib/parseGastoTexto";
+import { sugerirCategoria, sugerirPagamento, OrigemPalpite } from "@/lib/categorizacao";
+import { parseGastoTexto, separarRegistros, casarCartao } from "@/lib/parseGastoTexto";
+import { useNomesCartoes } from "@/lib/useCartoesConfig";
+import { FormaPagamento, ValorFormaPagamento } from "@/components/FormaPagamento";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
 import { useGastos } from "@/lib/useGastos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
@@ -31,6 +33,7 @@ type Mensagem =
       data: string;
       /** Idempotência: confirmar duas vezes grava um gasto só. */
       chave: string;
+      pagamento: ValorFormaPagamento;
     }
   | {
       tipo: "salvo";
@@ -39,6 +42,7 @@ type Mensagem =
       descricao: string;
       categoria: string;
       guardado: number; // quanto foi pras caixinhas por causa deste gasto
+      cartao: string | null; // no crédito: qual cartão
     };
 
 /**
@@ -51,6 +55,7 @@ let proximoId = 1;
 
 export default function ChatPage() {
   const { gastos, adicionar, erro } = useGastos();
+  const nomesCartoes = useNomesCartoes();
   const { caixinhas } = useCaixinhas();
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [salvando, setSalvando] = useState<number | null>(null);
@@ -79,7 +84,7 @@ export default function ChatPage() {
   }
 
   function interpretarUm(frase: string) {
-    const { valor, descricao, diasAtras } = parseGastoTexto(frase);
+    const { valor, descricao, diasAtras, pagoCom, cartaoDito } = parseGastoTexto(frase);
 
     if (!valor || !descricao) {
       adicionarMensagem({
@@ -94,6 +99,13 @@ export default function ChatPage() {
     const [ano, mes, dia] = hoje.split("-").map(Number);
     const d = new Date(ano, mes - 1, dia - diasAtras);
     const sugestao = sugerirCategoria(descricao, gastos);
+    const daUltimaVez = sugerirPagamento(descricao, gastos);
+    const pagamento: ValorFormaPagamento =
+      pagoCom === "credito"
+        ? { pagoCom: "credito", cartao: casarCartao(cartaoDito, nomesCartoes) ?? daUltimaVez?.cartao ?? nomesCartoes[0] ?? "" }
+        : pagoCom === "conta"
+          ? { pagoCom: "conta", cartao: "" }
+          : daUltimaVez ?? { pagoCom: "conta", cartao: "" };
     adicionarMensagem({
       tipo: "confirmar",
       valor,
@@ -104,6 +116,7 @@ export default function ChatPage() {
         d.getDate()
       ).padStart(2, "0")}`,
       chave: crypto.randomUUID(),
+      pagamento,
     });
   }
 
@@ -117,7 +130,12 @@ export default function ChatPage() {
     // e a chave impede um segundo gasto mesmo com toque duplo.
     if (salvando !== null) return;
     setSalvando(m.id);
-    const ok = await adicionar(m.descricao, m.valor, categoria, { data: m.data, chave: m.chave });
+    const ok = await adicionar(m.descricao, m.valor, categoria, {
+      data: m.data,
+      chave: m.chave,
+      pagoCom: m.pagamento.pagoCom,
+      cartao: m.pagamento.cartao || undefined,
+    });
     setSalvando(null);
     if (!ok) {
       adicionarMensagem({
@@ -139,6 +157,7 @@ export default function ChatPage() {
               descricao: m.descricao,
               categoria,
               guardado,
+              cartao: m.pagamento.pagoCom === "credito" ? m.pagamento.cartao || "crédito" : null,
             }
           : x
       )
@@ -250,6 +269,19 @@ export default function ChatPage() {
                   ))}
                 </div>
 
+                <div className="mt-3">
+                  <FormaPagamento
+                    id={`chat-pagamento-${m.id}`}
+                    valor={m.pagamento}
+                    cartoes={nomesCartoes}
+                    onChange={(pagamento) =>
+                      setMensagens((atual) =>
+                        atual.map((x) => (x.id === m.id && x.tipo === "confirmar" ? { ...x, pagamento } : x))
+                      )
+                    }
+                  />
+                </div>
+
                 <div className="mt-4 flex gap-2">
                   <Botao
                     onClick={() => confirmar(m, m.categoria)}
@@ -282,6 +314,7 @@ export default function ChatPage() {
                 {areaDaVida(m.categoria).icone} {m.descricao} · {celebracao(m.id)}
                 {m.guardado > 0 &&
                   ` · 🐷 ${formatarMoeda(m.guardado)} guardado`}
+                {m.cartao && ` · 💳 ${m.cartao}`}
               </p>
             </div>
           );
