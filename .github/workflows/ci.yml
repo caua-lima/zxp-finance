@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # main e as branches de trabalho (a mentoria é feita em feat/*): CI do SHA
+    # exato de cada push, não só do PR
+    branches: [main, "feat/**", "fix/**", "auditoria-**"]
   pull_request:
     branches: [main]
+
+# push novo na mesma branch cancela o run anterior, que já está superado
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
