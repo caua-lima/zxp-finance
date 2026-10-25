@@ -98,3 +98,20 @@ describe("convite: token e validade", async () => {
     assert.equal(avaliarConvite(null, agora), "inexistente");
   });
 });
+
+describe("turma: acesso sem finanças", async () => {
+  const { idDeTurma, pessoaDaTurma, resumoDaTurma } = await import("./turmas");
+
+  test("id legível e seguro pra caminho", () => {
+    assert.equal(idDeTurma("Mentoria Março/2027 — Turma 1"), "mentoria-marco-2027-turma-1");
+    assert.equal(idDeTurma("!!!"), "turma");
+  });
+
+  test("pessoa da turma: só acesso e login, dias restantes, resumo", () => {
+    const c = novaConcessao("convite", agora, { fimEm: agora + 5 * DIA });
+    const p = pessoaDaTurma("u1", c, { email: "a@b.c", ultimoLogin: null }, agora);
+    assert.equal(p.diasRestantes, 5);
+    assert.deepEqual(Object.keys(p).sort(), ["diasRestantes", "email", "estado", "fimEm", "inicioEm", "origem", "uid", "ultimoLogin"]);
+    assert.deepEqual(resumoDaTurma([p]), { ativo: 1, suspenso: 0, encerrado: 0, vencendo: 1 });
+  });
+});

@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { ErroBanner } from "@/components/ErroBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { PainelMentoria } from "@/components/PainelMentoria";
 
 interface UsuarioApi {
   uid: string;
@@ -103,8 +104,10 @@ export default function AcessoPage() {
 
   return (
     <div>
-      <PageHeader titulo="Acesso" descricao="Logins que podem entrar neste app" />
+      <PageHeader titulo="Acesso" descricao="Turmas, convites e logins" />
       <ErroBanner mensagem={erro} />
+
+      <PainelMentoria />
 
       <form
         onSubmit={handleCriar}
