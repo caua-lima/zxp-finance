@@ -129,3 +129,53 @@ export function sugerirPagamento(
     ? { pagoCom: "credito", cartao: ultimo.cartao ?? "" }
     : { pagoCom: "conta", cartao: "" };
 }
+
+// ---------------------------------------------------------------------------
+// Os outros cadastros também se categorizam sozinhos pelo nome.
+// ---------------------------------------------------------------------------
+
+const TERMOS_CONTAS: Record<string, string[]> = {
+  Moradia: ["aluguel", "condominio", "iptu", "luz", "energia", "enel", "cemig", "copel", "agua", "sabesp", "gas", "comgas", "financiamento da casa"],
+  Internet: ["internet", "wifi", "fibra", "vivo fibra", "claro internet", "net", "oi fibra"],
+  Telefone: ["celular", "plano de celular", "telefone", "tim", "vivo", "claro", "oi", "chip"],
+  Streaming: ["netflix", "spotify", "disney", "prime", "hbo", "max", "globoplay", "youtube", "deezer", "apple tv", "paramount"],
+  "Cartão de crédito": ["cartao", "fatura", "anuidade"],
+  Transporte: ["carro", "ipva", "seguro do carro", "estacionamento", "bilhete", "combustivel", "moto"],
+  Educação: ["faculdade", "curso", "escola", "mensalidade", "ingles", "alura", "udemy"],
+  Saúde: ["plano de saude", "unimed", "amil", "bradesco saude", "sulamerica", "psicologo", "psicologa", "terapia", "dentista", "remedio"],
+  Academia: ["academia", "smart fit", "smartfit", "bluefit", "crossfit", "pilates"],
+  Seguro: ["seguro", "seguro de vida", "seguro residencial"],
+  Lazer: ["clube", "jogo", "game pass", "playstation plus", "psn"],
+};
+
+const TERMOS_RECEITA: Record<string, string[]> = {
+  Salário: ["salario", "salario fixo", "pro labore", "prolabore", "holerite", "fixo", "adiantamento"],
+  Comissão: ["comissao", "comissoes", "bonus", "premio", "premiacao", "plr", "meta batida"],
+  Vendas: ["venda", "vendi", "vendas", "mercado livre", "olx", "enjoei"],
+  Freelas: ["freela", "freelance", "bico", "job", "projeto", "servico", "trampo extra"],
+  Rendimentos: ["rendimento", "rendimentos", "juros", "dividendo", "dividendos", "cdi", "cdb", "tesouro"],
+  Reembolsos: ["reembolso", "estorno", "devolucao", "me pagou", "pagou de volta", "pix de volta"],
+};
+
+function porTermos(texto: string, termos: Record<string, string[]>, padrao: string): string {
+  const alvo = ` ${normalizarTexto(texto)} `;
+  let melhor: { categoria: string; peso: number } | null = null;
+  for (const [categoria, lista] of Object.entries(termos)) {
+    for (const t of lista) {
+      if (alvo.includes(` ${t} `) && (!melhor || t.length > melhor.peso)) {
+        melhor = { categoria, peso: t.length };
+      }
+    }
+  }
+  return melhor?.categoria ?? padrao;
+}
+
+/** Categoria de conta fixa pelo nome ("Plano de Celular" → Telefone). */
+export function sugerirCategoriaConta(nome: string): string {
+  return porTermos(nome, TERMOS_CONTAS, "Outros");
+}
+
+/** Categoria de ganho pela descrição ("Salário Fixo" → Salário). */
+export function sugerirCategoriaReceita(descricao: string): string {
+  return porTermos(descricao, TERMOS_RECEITA, "");
+}

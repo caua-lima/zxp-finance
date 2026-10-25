@@ -254,3 +254,23 @@ describe("crédito não conta duas vezes no relatório do mês", async () => {
     assert.equal(r.noCredito, 260);
   });
 });
+
+describe("contas fixas e ganhos também se categorizam", async () => {
+  const { sugerirCategoriaConta, sugerirCategoriaReceita } = await import("./categorizacao");
+
+  test("contas fixas pelo nome", () => {
+    assert.equal(sugerirCategoriaConta("Plano de Celular"), "Telefone");
+    assert.equal(sugerirCategoriaConta("Internet"), "Internet");
+    assert.equal(sugerirCategoriaConta("Psicóloga"), "Saúde");
+    assert.equal(sugerirCategoriaConta("Smart Fit"), "Academia");
+    assert.equal(sugerirCategoriaConta("Aluguel"), "Moradia");
+    assert.equal(sugerirCategoriaConta("Claude Code"), "Outros");
+  });
+
+  test("ganhos pela descrição", () => {
+    assert.equal(sugerirCategoriaReceita("Salário Fixo"), "Salário");
+    assert.equal(sugerirCategoriaReceita("Comissão de setembro"), "Comissão");
+    assert.equal(sugerirCategoriaReceita("Vendi a bike no OLX"), "Vendas");
+    assert.equal(sugerirCategoriaReceita("Pensão"), "");
+  });
+});
