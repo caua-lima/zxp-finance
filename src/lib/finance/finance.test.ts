@@ -49,7 +49,7 @@ import { recorrenciaNoMes, valorNoMes, historicoAoMudarValor } from "./recorrenc
 import {
   ehAdminGlobal,
   problemaTemporalDoToken,
-  tokenRevogado,
+  sessaoRevogada,
   recursoLiberado,
 } from "../autorizacao";
 import { valorColado } from "../valorColado";
@@ -1808,10 +1808,13 @@ describe("auditoria — autorização (S01/S05, matriz 1–2)", () => {
     assert.ok(problemaTemporalDoToken({ exp: agora + 3600 }, agora));
   });
 
-  test("sessão revogada: token emitido antes do validSince não vale", () => {
-    assert.equal(tokenRevogado(1000, 2000), true);
-    assert.equal(tokenRevogado(3000, 2000), false);
-    assert.equal(tokenRevogado(3000, null), false);
+  test("sessão revogada: vale o auth_time, não o iat do token renovado", () => {
+    // entrou em 100, revogada em 150, SDK renovou o token em 200: continua revogada
+    const renovado = { authTime: 100, iat: 200 };
+    assert.equal(sessaoRevogada(renovado.authTime, 150), true);
+    // entrou de novo em 160 (depois da revogação): vale
+    assert.equal(sessaoRevogada(160, 150), false);
+    assert.equal(sessaoRevogada(100, null), false);
   });
 
   test("ponte com o Tasks desligada pra quem não está na lista", () => {

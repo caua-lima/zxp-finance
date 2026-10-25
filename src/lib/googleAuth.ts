@@ -115,8 +115,10 @@ export interface TokenVerificado {
   email?: string;
   /** Claims do token, incluindo custom claims (ex: `admin`). */
   claims: Record<string, unknown>;
-  /** Quando o token foi emitido (segundos) — base da checagem de revogação. */
+  /** Quando o token foi emitido (segundos). */
   iat: number;
+  /** Quando a pessoa autenticou (segundos) — base da checagem de revogação. */
+  authTime: number;
 }
 
 /** Valida o ID token que o app do usuário mandou no header Authorization. */
@@ -132,7 +134,7 @@ function verificarTokenDoEmulador(idToken: string): TokenVerificado | null {
     const projeto = process.env.GCLOUD_PROJECT ?? "demo-zxp";
     if (corpo.aud !== projeto || !corpo.sub) return null;
     if (problemaTemporalDoToken(corpo, Math.floor(Date.now() / 1000))) return null;
-    return { uid: corpo.sub, email: corpo.email, claims: corpo, iat: corpo.iat };
+    return { uid: corpo.sub, email: corpo.email, claims: corpo, iat: corpo.iat, authTime: corpo.auth_time };
   } catch {
     return null;
   }
@@ -185,5 +187,12 @@ export async function verificarIdToken(
     );
 
   if (!valido) return null;
-  return { uid: corpo.sub, email: corpo.email, claims: corpo, iat: corpo.iat as number };
+  // problemaTemporalDoToken já garantiu iat e auth_time presentes e coerentes
+  return {
+    uid: corpo.sub,
+    email: corpo.email,
+    claims: corpo,
+    iat: corpo.iat as number,
+    authTime: corpo.auth_time as number,
+  };
 }

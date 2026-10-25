@@ -54,13 +54,16 @@ export function problemaTemporalDoToken(corpo: CorpoToken, agoraSeg: number): st
 }
 
 /**
- * Token revogado: o Firebase marca `validSince` quando a sessão do usuário
- * é revogada (troca de senha, "sair de todos os dispositivos"). Token
- * emitido antes disso não vale mais, mesmo com assinatura correta.
+ * Sessão revogada: o Firebase marca `validSince` quando a sessão do usuário
+ * é revogada (troca de senha, "sair de todos os dispositivos", suspensão).
+ * A comparação é com `auth_time` — quando a pessoa ENTROU — e não com
+ * `iat`: o SDK renova o ID token sozinho a cada hora, e um token renovado
+ * depois da revogação tem `iat` novo mas continua sendo a mesma sessão
+ * revogada (auditoria 25/10 S02; ver Firebase "manage sessions").
  */
-export function tokenRevogado(iatSeg: number, validSinceSeg: number | null): boolean {
+export function sessaoRevogada(authTimeSeg: number, validSinceSeg: number | null): boolean {
   if (validSinceSeg === null) return false;
-  return iatSeg < validSinceSeg;
+  return authTimeSeg < validSinceSeg;
 }
 
 /** Recursos em teste liberados só pra UIDs listados (ex: ponte com o ZXP Tasks). */

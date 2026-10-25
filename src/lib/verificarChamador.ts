@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verificarIdToken, TokenVerificado } from "./googleAuth";
 import { consultarConta } from "./usuariosFirebase";
-import { ehAdminGlobal, tokenRevogado } from "./autorizacao";
+import { ehAdminGlobal, sessaoRevogada } from "./autorizacao";
 import { adicionarDocumento } from "./firestoreRest";
 
 /** Só autentica: assinatura, emissor, audience e prazos do token. */
@@ -35,7 +35,7 @@ export async function verificarChamadorAtivo(req: NextRequest): Promise<Resultad
   try {
     const conta = await consultarConta(identidade.uid);
     if (!conta.existe || conta.disabled) return negar(403, "Conta suspensa.");
-    if (tokenRevogado(identidade.iat, conta.validSince)) {
+    if (sessaoRevogada(identidade.authTime, conta.validSince)) {
       return negar(401, "Sessão expirada. Entre de novo.");
     }
   } catch {
