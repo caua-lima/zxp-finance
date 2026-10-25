@@ -13,7 +13,7 @@ import {
 import {
   CATEGORIAS_GASTO,
 } from "@/lib/categoriasGasto";
-import { parseGastoTexto } from "@/lib/parseGastoTexto";
+import { parseGastoTexto, separarRegistros } from "@/lib/parseGastoTexto";
 import { sugerirCategoria, OrigemPalpite, Sugestao } from "@/lib/categorizacao";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
@@ -94,19 +94,24 @@ function CartaoPrevia({
   onConfirmar,
   onCancelar,
   sugerir,
+  posicao,
 }: {
   previa: Previa;
   hoje: string;
   enviando: boolean;
   onMudar: (p: Previa) => void;
   sugerir: (descricao: string) => Sugestao;
+  /** "2 de 3" quando a frase tinha vários registros. */
+  posicao: string | null;
   onConfirmar: () => void;
   onCancelar: () => void;
 }) {
   const dias = [0, 1, 2].map((n) => diaMenos(hoje, n));
   return (
     <div className="mt-3 space-y-2 rounded-xl border border-brand/40 bg-surface-2/40 p-3">
-      <p className="text-xs font-medium text-text-muted">Confere antes de salvar:</p>
+      <p className="text-xs font-medium text-text-muted">
+        Confere antes de salvar{posicao ? ` · registro ${posicao}` : ""}:
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label htmlFor="previa-valor" className="rotulo">
@@ -230,6 +235,7 @@ export default function SaldoPage() {
   const [ultimoRegistro, setUltimoRegistro] = useState<string | null>(null);
   const [avisoParcial, setAvisoParcial] = useState<string | null>(null);
   const [atualizandoSaldo, setAtualizandoSaldo] = useState(false);
+  const [fila, setFila] = useState<{ restantes: string[]; total: number } | null>(null);
 
   const mes = mesPadrao();
   const hoje = hojeISO();
@@ -270,6 +276,13 @@ export default function SaldoPage() {
    * idempotência nasce com a prévia: confirmar duas vezes grava uma só.
    */
   function interpretar(frase: string) {
+    // "20 açaí e 49 esfihas": uma prévia por vez, na ordem
+    const partes = separarRegistros(frase);
+    setFila(partes.length > 1 ? { restantes: partes.slice(1), total: partes.length } : null);
+    interpretarUm(partes[0]);
+  }
+
+  function interpretarUm(frase: string) {
     const lido = parseGastoTexto(frase);
     if (!lido.valor || !lido.descricao) {
       setTexto(frase);
@@ -306,6 +319,14 @@ export default function SaldoPage() {
     );
     setPrevia(null);
     setTexto("");
+    // próximo da fila, se a frase tinha mais de um registro
+    if (fila && fila.restantes.length) {
+      const [proximo, ...resto] = fila.restantes;
+      setFila(resto.length ? { ...fila, restantes: resto } : null);
+      interpretarUm(proximo);
+    } else {
+      setFila(null);
+    }
   }
 
   // depois de `interpretar` existir: a voz entrega a frase pra ela
@@ -421,9 +442,11 @@ export default function SaldoPage() {
             sugerir={(d) => sugerirCategoria(d, gastos)}
             onConfirmar={confirmarPrevia}
             onCancelar={() => {
-              setTexto(previa.fraseOriginal);
+              setTexto([previa.fraseOriginal, ...(fila?.restantes ?? [])].join(", "));
               setPrevia(null);
+              setFila(null);
             }}
+            posicao={fila ? `${fila.total - fila.restantes.length} de ${fila.total}` : null}
           />
         )}
         {ultimoRegistro && !avisoParcial && !previa && (
