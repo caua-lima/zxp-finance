@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { diagnosticarAmbiente } from "@/lib/configAmbiente";
 import webpush from "web-push";
 import {
   listarDocumentos,
@@ -52,13 +53,23 @@ function assinaturaVapid(): string {
     .slice(0, 12);
 }
 
+/**
+ * Prepara o web-push. Falso quando falta chave OU ela está em formato
+ * inválido (antes, chave malformada estourava exceção no meio do cron).
+ * O motivo, sem o valor, está em diagnosticarAmbiente().
+ */
 export function configurarVapid(): boolean {
-  const publica = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privada = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT;
-  if (!publica || !privada || !subject) return false;
-  webpush.setVapidDetails(subject, publica, privada);
-  return true;
+  if (!diagnosticarAmbiente(process.env).recursosAtivos.includes("push")) return false;
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT as string,
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY as string,
+      process.env.VAPID_PRIVATE_KEY as string
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export type ResultadoCadastro =
