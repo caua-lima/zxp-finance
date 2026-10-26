@@ -104,3 +104,21 @@ describe("caixinha é transferência, não receita nem despesa (C21–C22)", asy
     assert.deepEqual(e.map((l) => [l.tipo, l.descricao, l.centavos]), [["transferencia", "Guardado em Viagem", -1000]]);
   });
 });
+
+describe("confirmado separado do previsto (C24)", async () => {
+  const { previsaoDoMes } = await import("./finance/previsao");
+
+  test("fim do mês previsto usa o saldo; o confirmado não muda com previsão", () => {
+    const p = previsaoDoMes(1000, 2444, 1391.61);
+    assert.equal(p.confirmado, 1000);
+    assert.equal(p.fimDoMesPrevisto, 2052.39);
+    assert.equal(p.resultadoPrevisto, 1052.39);
+    assert.match(p.formula, /na conta agora/);
+  });
+
+  test("sem saldo informado não inventa fim de mês", () => {
+    const p = previsaoDoMes(null, 100, 300);
+    assert.equal(p.fimDoMesPrevisto, null);
+    assert.equal(p.resultadoPrevisto, -200);
+  });
+});

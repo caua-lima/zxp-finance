@@ -48,7 +48,7 @@ const SECOES: Secao[] = [
   {
     titulo: "Visão geral",
     itens: [
-      { href: "/", label: "Início", Icon: IconResumo, descricao: "O que entra, o que sai e o que sobra" },
+      { href: "/", label: "Início", Icon: IconResumo, descricao: "Na conta agora, o que vai entrar, o que falta pagar" },
       {
         href: "/dre",
         label: "Relatório mensal",

@@ -14,6 +14,7 @@ import { CategoryDonut } from "@/components/CategoryDonut";
 import { SkeletonHome } from "@/components/Skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { fraseDoDia } from "@/lib/abundancia";
+import { previsaoDoMes } from "@/lib/finance/previsao";
 
 const HREF_COMPROMISSO: Record<LinhaCompromisso["chave"], string> = {
   contas: "/contas",
@@ -29,7 +30,9 @@ export default function DashboardPage() {
   const entradasDoMes = dash.entries.filter(
     (e) => e.type === "income" && e.competenceMonth === mes
   );
-  const sobraPrevista = dash.entradasPendentes - dash.compromissosPendentes;
+  // confirmado × previsto: nenhum número "disponível" inclui o que ainda não entrou
+  const previsao = previsaoDoMes(dash.saldoDisponivel, dash.entradasPendentes, dash.compromissosPendentes);
+  const numeroPrevisto = previsao.fimDoMesPrevisto ?? previsao.resultadoPrevisto;
   const passos = {
     saldo: dash.saldoDisponivel !== null,
     compromissos: dash.entries.some((e) =>
@@ -87,16 +90,19 @@ export default function DashboardPage() {
             </p>
           </Link>
 
-          {/* o mês em três números: o que entra, o que sai, o que sobra */}
+          {/* o mês: o que ainda vai entrar, o que falta pagar e a previsão — tudo estimativa */}
           <div className="grid grid-cols-3 gap-2">
             <Numero titulo="Vai entrar" valor={dash.entradasPendentes} cor="text-positive" />
             <Numero titulo="Falta pagar" valor={dash.compromissosPendentes} cor="text-gold" />
             <Numero
-              titulo="Sobra"
-              valor={sobraPrevista}
-              cor={sobraPrevista >= 0 ? "text-text" : "text-negative"}
+              titulo={previsao.fimDoMesPrevisto !== null ? "Fim do mês (previsto)" : "Resultado previsto"}
+              valor={numeroPrevisto}
+              cor={numeroPrevisto >= 0 ? "text-text" : "text-negative"}
             />
           </div>
+          <p className="-mt-2 px-1 text-xs text-text-faint">
+            Previsto = {previsao.formula}. Só vira dinheiro quando entra ou sai de verdade.
+          </p>
 
           <QuantoPagar mes={mes} compromissos={dash.compromissos} />
 
