@@ -7,7 +7,9 @@ test("recebido entra no saldo uma vez (líquido) e desmarcar desfaz", async ({ p
 
   await page.goto("/perfil");
   const opcao = page.getByRole("checkbox", { name: /Recebido entra no saldo/ });
-  if (!(await opcao.isChecked())) await opcao.check();
+  await expect(opcao).toBeEnabled();
+  // a caixa reflete o valor salvo: clica e espera o banco confirmar
+  if (!(await opcao.isChecked())) await opcao.click();
   await expect(opcao).toBeChecked();
 
   await page.goto("/saldo");
@@ -29,5 +31,8 @@ test("recebido entra no saldo uma vez (líquido) e desmarcar desfaz", async ({ p
 
   // desliga de novo (estado do seed pros outros testes)
   await page.goto("/perfil");
-  await page.getByRole("checkbox", { name: /Recebido entra no saldo/ }).uncheck();
+  const desligar = page.getByRole("checkbox", { name: /Recebido entra no saldo/ });
+  await expect(desligar).toBeEnabled();
+  await desligar.click();
+  await expect(desligar).not.toBeChecked();
 });
