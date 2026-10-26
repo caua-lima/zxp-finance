@@ -10,6 +10,10 @@ test.describe("duas contas no mesmo app", () => {
 
     // sai e entra como B no MESMO navegador
     await sair(page);
+    // "voltar" depois de sair não reabre os dados de A
+    await page.goBack();
+    await expect(page.getByText("almoço")).toHaveCount(0);
+    await page.goto("/login");
     await entrar(page, CONTAS.admin);
 
     await page.goto("/saldo");

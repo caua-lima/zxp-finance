@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * aparelho compartilhado, a próxima pessoa não pode receber avisos
    * financeiros de quem saiu. Se estiver offline e falhar, o próximo login
    * neste navegador revoga (ver usePushNotifications). Sair nunca trava
-   * por causa disso.
+   * por causa disso. Depois de sair, a página recarrega em /login.
    */
   async function logout() {
     try {
@@ -55,6 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* segue pro signOut mesmo assim */
     }
     await signOut(auth);
+    // recarrega do zero: nenhum estado da conta que saiu (telas, listeners,
+    // cache em memória do Firestore) sobra pra próxima pessoa no mesmo
+    // aparelho — e "voltar" no navegador não reabre nada (auditoria 25/10 B16)
+    if (typeof window !== "undefined") window.location.replace("/login");
   }
 
   return (
