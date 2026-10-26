@@ -1,4 +1,4 @@
-import { Gasto, arredondarCentavos } from "@/lib/types";
+import { Gasto, Ganho, arredondarCentavos } from "@/lib/types";
 import { Centavos, centavosDeLegado, deCentavos } from "@/lib/dinheiro";
 import { diaISOde } from "./calculations";
 
@@ -53,25 +53,112 @@ export function saidaDoGastoCentavos(g: Gasto): Centavos {
   return centavosDeLegado(g.valor) + guardado;
 }
 
+/**
+ * Pagamento marcado conta no saldo se foi registrado como movimento
+ * (`afetaSaldo`) e depois da referência. Recebimento de ganho
+ * (origem "ganho") também — só que como ENTRADA (ver sinalDoPagamento).
+ * Recebimento antigo, sem `afetaSaldo`, nunca é reaplicado.
+ */
 export function pagamentoContaNoSaldo(p: MovimentoPagamento, ref: ReferenciaSaldo): boolean {
-  return !!p.afetaSaldo && p.origem !== "ganho" && p.pagoEm > ref.atualizadoEm;
+  return !!p.afetaSaldo && p.pagoEm > ref.atualizadoEm;
 }
 
-/** Saldo confirmado agora = referência − movimentos posteriores a ela. */
+/** +1 = entrou dinheiro (ganho recebido); −1 = saiu (conta, fatura, parcela...). */
+export function sinalDoPagamento(p: MovimentoPagamento): 1 | -1 {
+  return p.origem === "ganho" ? 1 : -1;
+}
+
+/** Recebimentos avulsos que entraram no saldo (ganho "só este mês" marcado recebido). */
+export function recebimentosAvulsos(ganhos: Ganho[]): RecebimentoAvulso[] {
+  return ganhos
+    .filter((g) => g.tipo === "pontual" && g.recebido && g.entrouNoSaldo && g.recebidoEm)
+    .map((g) => ({
+      id: g.id,
+      descricao: g.descricao,
+      valor: g.valorRecebido ?? g.valor,
+      recebidoEm: g.recebidoEm as number,
+    }));
+}
+
+/** Ganho avulso marcado como recebido, já líquido, que entrou no saldo. */
+export interface RecebimentoAvulso {
+  id: string;
+  descricao: string;
+  /** Líquido (o que caiu na conta). */
+  valor: number;
+  recebidoEm: number;
+}
+
+export type TipoLinhaExtrato = "registro" | "pagamento" | "recebimento";
+
+export interface LinhaExtrato {
+  tipo: TipoLinhaExtrato;
+  descricao: string;
+  /** Com sinal: negativo saiu, positivo entrou. */
+  centavos: Centavos;
+  quando: number;
+  /** Caixinha/crédito explicados em texto curto. */
+  detalhe?: string;
+}
+
+/**
+ * O extrato que explica o saldo (auditoria 25/10 F01/C18): cada movimento
+ * depois da referência, com sinal e data. saldoConfirmado é a SOMA disto —
+ * a tela pode mostrar linha a linha de onde saiu o número.
+ */
+export function extratoDoSaldo(
+  ref: ReferenciaSaldo,
+  gastos: Gasto[],
+  pagamentos: MovimentoPagamento[] = [],
+  recebimentos: RecebimentoAvulso[] = []
+): LinhaExtrato[] {
+  const linhas: LinhaExtrato[] = [];
+  for (const g of gastos) {
+    if (!gastoContaNoSaldo(g, ref)) continue;
+    const c = saidaDoGastoCentavos(g);
+    if (c === 0) continue;
+    const guardado = Object.values(g.guardado ?? {}).reduce((acc, v) => acc + centavosDeLegado(v), 0);
+    linhas.push({
+      tipo: "registro",
+      descricao: g.descricao,
+      centavos: -c,
+      quando: g.criadoEm,
+      ...(g.pagoCom === "credito"
+        ? { detalhe: "no crédito: só o que foi pras caixinhas saiu agora" }
+        : guardado > 0
+          ? { detalhe: "inclui o que foi pras caixinhas" }
+          : {}),
+    });
+  }
+  for (const p of pagamentos) {
+    if (!pagamentoContaNoSaldo(p, ref)) continue;
+    linhas.push({
+      tipo: p.origem === "ganho" ? "recebimento" : "pagamento",
+      descricao: (p as MovimentoPagamento & { nome?: string }).nome ?? p.origem,
+      centavos: sinalDoPagamento(p) * centavosDeLegado(p.valor),
+      quando: p.pagoEm,
+    });
+  }
+  for (const r of recebimentos) {
+    if (r.recebidoEm <= ref.atualizadoEm) continue;
+    linhas.push({ tipo: "recebimento", descricao: r.descricao, centavos: centavosDeLegado(r.valor), quando: r.recebidoEm });
+  }
+  return linhas.sort((a, b) => a.quando - b.quando);
+}
+
+/**
+ * Saldo confirmado agora = referência + entradas − saídas posteriores a
+ * ela (a soma do extrato), em centavos inteiros.
+ */
 export function saldoConfirmado(
   ref: ReferenciaSaldo | null,
   gastos: Gasto[],
-  pagamentos: MovimentoPagamento[] = []
+  pagamentos: MovimentoPagamento[] = [],
+  recebimentos: RecebimentoAvulso[] = []
 ): number | null {
   if (!ref) return null;
-  // tudo em centavos inteiros: nenhum resíduo de ponto flutuante acumula
-  const saidasGastos = gastos
-    .filter((g) => gastoContaNoSaldo(g, ref))
-    .reduce((acc, g) => acc + saidaDoGastoCentavos(g), 0);
-  const saidasPagamentos = pagamentos
-    .filter((p) => pagamentoContaNoSaldo(p, ref))
-    .reduce((acc, p) => acc + centavosDeLegado(p.valor), 0);
-  return deCentavos(centavosDeLegado(ref.valor) - saidasGastos - saidasPagamentos);
+  const movimento = extratoDoSaldo(ref, gastos, pagamentos, recebimentos).reduce((acc, l) => acc + l.centavos, 0);
+  return deCentavos(centavosDeLegado(ref.valor) + movimento);
 }
 
 /**
@@ -94,7 +181,7 @@ export function saidasDeHoje(
     )
     .reduce((acc, g) => acc + saidaDoGasto(g), 0);
   const dePagamentos = pagamentos
-    .filter((p) => pagamentoContaNoSaldo(p, ref) && diaISOde(p.pagoEm) === hojeISO)
+    .filter((p) => pagamentoContaNoSaldo(p, ref) && p.origem !== "ganho" && diaISOde(p.pagoEm) === hojeISO)
     .reduce((acc, p) => acc + p.valor, 0);
   return arredondarCentavos(deGastos + dePagamentos);
 }

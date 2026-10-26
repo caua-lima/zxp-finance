@@ -14,6 +14,14 @@ export interface Ganho {
   semImposto?: boolean; // true pra renda que já chega líquida (ex: bico, trabalho por fora) — não desconta o imposto padrão dela
   /** Mês ("AAAA-MM") das comissões que esse pagamento quita — vínculo explícito com a previsão. */
   origemComissao?: string;
+  /**
+   * Recebido E somado ao saldo (quando "recebido entra no saldo" está
+   * ligado). Ganho antigo marcado como recebido não tem isso: nunca é
+   * reaplicado ao saldo (auditoria 25/10 F01).
+   */
+  entrouNoSaldo?: boolean;
+  /** Quanto caiu na conta (líquido) quando entrou no saldo. */
+  valorRecebido?: number;
   criadoEm: number;
 }
 

@@ -36,3 +36,47 @@ describe("contrato do dinheiro em centavos", () => {
     assert.equal(formatarCentavos(123456).replace(/\s/g, " "), "R$ 1.234,56");
   });
 });
+
+describe("saldo explicável: entradas e saídas depois da referência (C18–C20)", async () => {
+  const { saldoConfirmado, extratoDoSaldo, recebimentosAvulsos } = await import("./finance/saldo");
+  const ref = { valor: 1000, atualizadoEm: 1_000 };
+  const gasto = (valor: number, criadoEm: number, extra: object = {}) =>
+    ({ id: String(criadoEm), descricao: "g", valor, categoria: "Outros", mes: "2026-10", criadoEm, data: "1970-01-01", ...extra }) as never;
+
+  test("recebimento marcado entra uma vez; pagamento sai; tudo depois da referência", () => {
+    const pagamentos = [
+      { valor: 2444, pagoEm: 2_000, origem: "ganho", afetaSaldo: true, nome: "Salário" },
+      { valor: 100, pagoEm: 3_000, origem: "conta", afetaSaldo: true, nome: "Internet" },
+    ];
+    assert.equal(saldoConfirmado(ref, [], pagamentos), 3344);
+    const extrato = extratoDoSaldo(ref, [], pagamentos);
+    assert.deepEqual(extrato.map((l) => [l.tipo, l.centavos]), [["recebimento", 244400], ["pagamento", -10000]]);
+  });
+
+  test("recebimento antigo (sem afetaSaldo) nunca é reaplicado — corte legado", () => {
+    const antigos = [{ valor: 2600, pagoEm: 2_000, origem: "ganho" }, { valor: 2600, pagoEm: 500, origem: "ganho", afetaSaldo: true }];
+    assert.equal(saldoConfirmado(ref, [], antigos), 1000);
+  });
+
+  test("desfazer o recebimento (documento apagado) tira a entrada", () => {
+    const com = [{ valor: 500, pagoEm: 2_000, origem: "ganho", afetaSaldo: true }];
+    assert.equal(saldoConfirmado(ref, [], com), 1500);
+    assert.equal(saldoConfirmado(ref, [], []), 1000);
+  });
+
+  test("ganho avulso recebido entra pelo líquido, uma vez", () => {
+    const ganhos = [
+      { id: "a", tipo: "pontual", descricao: "Freela", valor: 1000, recebido: true, recebidoEm: 2_000, entrouNoSaldo: true, valorRecebido: 940, criadoEm: 1 },
+      { id: "b", tipo: "pontual", descricao: "Antigo", valor: 500, recebido: true, recebidoEm: 2_000, criadoEm: 1 },
+    ] as never[];
+    assert.equal(saldoConfirmado(ref, [], [], recebimentosAvulsos(ganhos)), 1940);
+  });
+
+  test("extrato soma exatamente o saldo, com crédito e caixinha explicados", () => {
+    const gastos = [gasto(20, 2_000, { guardado: { c: 0.1 } }), gasto(260, 3_000, { pagoCom: "credito", guardado: { c: 0.1 } })];
+    const extrato = extratoDoSaldo(ref, gastos);
+    const soma = extrato.reduce((a, l) => a + l.centavos, 0);
+    assert.equal(1000 + soma / 100, saldoConfirmado(ref, gastos));
+    assert.match(extrato[1].detalhe ?? "", /crédito/);
+  });
+});
