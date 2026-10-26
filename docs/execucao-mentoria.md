@@ -38,5 +38,19 @@ Separação exigida pela auditoria: *implementado* ≠ *validado localmente* ≠
 **Gate A:** baseline preservado (todos os testes anteriores passando); CI na branch; audit 0; acesso
 isolado demonstrado no navegador (contas A/B). *Validado localmente; CI remoto: ver PR #1.*
 
+| B09 | Concessões de acesso | feito | c1837e0 | `acessos/{uid}` só do servidor; regras: ninguém lê a de outro nem se reativa (emulador) |
+| B10 | Concessão aplicada na API e nas regras | feito | 488d7b5, 7853c78 | chave `plataforma/config.exigirConcessao`; emulador: sem concessão/suspensa/vencida/futura negadas no SDK direto; script de legado (simulação em produção: 1 login, nada gravado) |
+| B11 | Convite de uso único com prazo | feito | d777667, 8c7b66a | token só no `#`, banco guarda sha256; emulador: 2º uso recusado, 2 aceites simultâneos → 1 |
+| B12 | Jornada de aceite | feito | ce1a898 | navegador: link → conta → registro com exigência ligada; reuso "já foi usado"; expirado/cortado |
+| B13 | Turmas sem expor finanças | feito | b528fbc | navegador: turma mostra "Ativo" e nenhum R$; API não lê coleção financeira |
+| B14 | Renovar e suspender | feito | e4664be, 18a4dad | emulador: suspender cancela entregas pendentes, ações concorrentes sem perda; navegador: aluno vê "Acesso indisponível" e volta ao reativar |
+| B15 | Lote com prévia | feito | a1e5e2b, aae907c | convite amarrado ao e-mail; navegador: prévia 2 novos/1 repetido/1 inválido → 2 links |
+| B16 | Recuperação e troca de conta | feito | a41e6ee | sair recarrega em /login; "voltar" não reabre dados de A |
+
+**Gate B:** aceite da mentoria com contas sintéticas (navegador); nenhuma concessão herdada por troca
+de UID; migração dos usuários atuais por concessão "legado" sem virar admin. *Validado localmente
+(emulador + navegador) e no CI do PR #1. Nada aplicado em produção: a chave `exigirConcessao` não
+existe lá ainda — só ligar depois do lote I (release) com `scripts/concessoes-legado.ts --exigir`.*
+
 Extra fora da lista: `.firebaserc` com o projeto padrão (c8e7551) — o deploy de regras falhava com
 "No currently active project".
