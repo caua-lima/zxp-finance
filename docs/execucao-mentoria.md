@@ -52,5 +52,19 @@ de UID; migração dos usuários atuais por concessão "legado" sem virar admin.
 (emulador + navegador) e no CI do PR #1. Nada aplicado em produção: a chave `exigirConcessao` não
 existe lá ainda — só ligar depois do lote I (release) com `scripts/concessoes-legado.ts --exigir`.*
 
+| C17 | Contrato do dinheiro em centavos | feito | f5c813b | somas em centavos inteiros; 1,005 → 101; mil × 0,10 = 100,00; legado inválido vira 0 (nunca NaN). *Armazenamento em centavos fica pro lote I.* |
+| C18 | Movimentos confirmados | feito (derivado) | 3c8739a | saldo = soma do `extratoDoSaldo` (registro/pagamento/recebimento/transferência). *Sem coleção-livro separada: o extrato é derivado dos documentos que já existem — trocar por livro gravado é migração do lote I* |
+| C19 | Recebido entra no caixa uma vez | feito | 4affaa1 | navegador: salário 2.600 → +2.444 uma vez, desmarcar volta; conta antiga mantém escolha (desligado), conta por convite nasce ligada |
+| C20 | Saldo de abertura sem reaplicar história | feito | ddcbfa2 | "Como chegamos nesse número": referência + cada movimento = saldo (navegador) |
+| C21 | Reservas: definição | feito | 6d88596 | caixinha = dinheiro fora da conta; guardar/resgatar são transferência; total conservado (teste) |
+| C22 | Guardar e resgatar | feito | 897936d | navegador: guardar 50 + resgatar 20 → caixinha +30, saldo −30; regras: transferência imutável |
+| C23 | Ajuste e exclusão serializados | feito | b19dda7 | emulador: depósito concorrente preservado no ajuste; mesma chave 1×; excluir com saldo recusado |
+| C24 | Confirmado × previsto | feito | f0c7e0e | Início sem "Sobra"; "Fim do mês (previsto)" com fórmula; navegador confere a conta |
+
+**Gate C:** cenários de recebimento, gasto, reserva, resgate e ajuste com trilha e invariantes
+(unitário + emulador + navegador). *Nenhum dinheiro real migrado.* Mudança de comportamento que o dono
+precisa saber: com "Recebido entra no saldo" ligado, marcar ganho recebido soma o líquido ao saldo —
+na conta dele fica desligado (como era) até ele ligar em Perfil.
+
 Extra fora da lista: `.firebaserc` com o projeto padrão (c8e7551) — o deploy de regras falhava com
 "No currently active project".
