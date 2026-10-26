@@ -14,6 +14,7 @@ import {
   DocumentReference,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { estornarGasto, comEstornoDerivado } from "./gastosOperacoes";
 import { Caixinha, Gasto } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
@@ -69,8 +70,9 @@ export function useGastos() {
     return unsubscribe;
   }, [user]);
 
+  // "estornado" derivado do lançamento de estorno (o original não é editado)
   const gastos = useMemo(
-    () => [...todos].sort((a, b) => b.criadoEm - a.criadoEm),
+    () => comEstornoDerivado(todos).sort((a, b) => b.criadoEm - a.criadoEm),
     [todos]
   );
 
@@ -217,47 +219,14 @@ export function useGastos() {
   }
 
   /**
-   * Estorno: o original fica (marcado `estornado`) e uma contrapartida
-   * negativa devolve o valor. Roda numa transação que relê o original e
-   * usa um id FIXO pro estorno (`estorno__<id>`): duas abas estornando ao
-   * mesmo tempo produzem um estorno só (auditoria F04). O depósito nas
-   * caixinhas volta junto, e o estorno carrega esse movimento negativo —
-   * assim original + estorno somam zero também no saldo.
+   * Estorno: contrapartida negativa no mês atual, ligada ao original, sem
+   * editar o original (funciona com mês fechado). Ver gastosOperacoes.ts.
    */
   async function estornar(id: string, motivo: string) {
     if (!user) return false;
     try {
       const caixinhas = new Set((await caixinhasAgora(user.uid)).map((c) => c.id));
-      const refOriginal = doc(db, "usuarios", user.uid, "gastos", id);
-      const refEstorno = doc(db, "usuarios", user.uid, "gastos", `estorno__${id}`);
-
-      const feito = await runTransaction(db, async (tx) => {
-        const snap = await tx.get(refOriginal);
-        const jaExiste = (await tx.get(refEstorno)).exists();
-        if (!snap.exists()) return "sumiu";
-        const original = { id, ...snap.data() } as Gasto;
-        if (original.estornado || original.estornoDeId || jaExiste) return "ja";
-
-        const hoje = hojeISO();
-        tx.update(refOriginal, { estornado: true, estornadoEm: Date.now() });
-        tx.set(refEstorno, {
-          descricao: `Estorno: ${original.descricao}`,
-          valor: -original.valor,
-          categoria: original.categoria,
-          data: hoje,
-          mes: hoje.slice(0, 7),
-          criadoEm: Date.now(),
-          registradoEm: serverTimestamp(),
-          estornoDeId: id,
-          ...(original.guardado ? { guardado: inverter(original.guardado) } : {}),
-          // estorno de compra no crédito também não mexe no saldo
-          ...(original.pagoCom === "credito"
-            ? { pagoCom: "credito", ...(original.cartao ? { cartao: original.cartao } : {}) }
-            : {}),
-        });
-        if (original.guardado) {
-          aplicarNasCaixinhas(tx, user.uid, inverter(original.guardado), caixinhas);
-        }
+      const feito = await estornarGasto(db, user.uid, id, hojeISO(), caixinhas, (tx, original) =>
         anexarAuditLog(tx, user.uid, user.email, {
           action: "reversed",
           entityType: "gasto",
@@ -265,9 +234,8 @@ export function useGastos() {
           summary: `Estorno de "${original.descricao}": ${motivo}`,
           before: { valor: original.valor, categoria: original.categoria },
           after: { motivo },
-        });
-        return "ok";
-      });
+        })
+      );
 
       if (feito === "ja") {
         setErro("Esse gasto já foi estornado.");

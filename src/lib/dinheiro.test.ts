@@ -122,3 +122,16 @@ describe("confirmado separado do previsto (C24)", async () => {
     assert.equal(p.resultadoPrevisto, -200);
   });
 });
+
+describe("estornado é derivado do lançamento de estorno (D25)", async () => {
+  const { comEstornoDerivado } = await import("./gastosOperacoes");
+  test("original sem marca vira estornado quando o estorno existe", () => {
+    const gastos = [
+      { id: "g1", descricao: "jantar", valor: 300, categoria: "x", mes: "2026-09", criadoEm: 1 },
+      { id: "estorno__g1", descricao: "Estorno: jantar", valor: -300, categoria: "x", mes: "2026-10", criadoEm: 2, estornoDeId: "g1" },
+      { id: "g2", descricao: "uber", valor: 10, categoria: "x", mes: "2026-10", criadoEm: 3 },
+    ] as never[];
+    const r = comEstornoDerivado(gastos) as { id: string; estornado?: boolean }[];
+    assert.deepEqual(r.map((g) => [g.id, !!g.estornado]), [["g1", true], ["estorno__g1", false], ["g2", false]]);
+  });
+});
