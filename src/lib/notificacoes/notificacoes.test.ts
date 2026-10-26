@@ -227,3 +227,31 @@ describe("resumo do dia usa o mesmo contrato da tela (F01)", () => {
     assert.doesNotMatch(`${resumo!.conteudo.titulo} ${resumo!.conteudo.corpo}`, /40,00/);
   });
 });
+
+describe("cron diário com checkpoint (E38)", async () => {
+  const { planejarLote, EXECUCAO_TRAVADA_MS } = await import("./lote");
+  const uids = ["a", "b", "c", "d"];
+  const agora = 1_800_000_000_000;
+
+  test("começa o dia só no agendado; o executor frequente não adianta o dia", () => {
+    assert.deepEqual(planejarLote(uids, null, "agendado", agora).pendentes, uids);
+    assert.equal(planejarLote(uids, null, "retomar", agora).rodar, false);
+  });
+
+  test("parcial continua depois do cursor, sem repetir o começo", () => {
+    const p = planejarLote(uids, { status: "parcial", cursor: "b", atualizadaEm: agora }, "retomar", agora);
+    assert.deepEqual(p.pendentes, ["c", "d"]);
+  });
+
+  test("execução que morreu no meio (rodando sem progresso) é retomada", () => {
+    const morta = { status: "rodando" as const, cursor: "a", atualizadaEm: agora - EXECUCAO_TRAVADA_MS - 1 };
+    assert.deepEqual(planejarLote(uids, morta, "retomar", agora).pendentes, ["b", "c", "d"]);
+    const viva = { status: "rodando" as const, cursor: "a", atualizadaEm: agora - 1000 };
+    assert.equal(planejarLote(uids, viva, "retomar", agora).rodar, false);
+  });
+
+  test("dia concluído não roda de novo; forçar refaz tudo", () => {
+    assert.equal(planejarLote(uids, { status: "ok" }, "agendado", agora).rodar, false);
+    assert.deepEqual(planejarLote(uids, { status: "ok" }, "forcar", agora).pendentes, uids);
+  });
+});
