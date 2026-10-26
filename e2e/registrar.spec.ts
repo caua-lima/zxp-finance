@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { CONTAS, entrar, saldoNaTela, unico } from "./ajuda";
+import { CONTAS, entrar, lerReais, saldoNaTela, unico } from "./ajuda";
 
 test.describe("registrar no dia a dia", () => {
   test("registro da conta sai do saldo uma vez (valor + cofrinho)", async ({ page }) => {
@@ -17,6 +17,13 @@ test.describe("registrar no dia a dia", () => {
     await expect(page.getByText(descricao)).toBeVisible();
     // o seed tem uma caixinha que guarda R$ 0,10 por registro
     await expect.poll(() => saldoNaTela(page)).toBeCloseTo(antes - 12.44, 2);
+
+    // o saldo é explicável: o registro aparece no extrato e a última linha bate com o número
+    await page.getByText("Como chegamos nesse número").click();
+    const extrato = page.getByRole("list", { name: "Movimentos desde o saldo informado" });
+    await expect(extrato).toContainText(descricao);
+    const final = lerReais(await extrato.getByRole("listitem").last().innerText());
+    expect(final).toBeCloseTo(await saldoNaTela(page), 2);
   });
 
   test("compra no crédito não sai do saldo (só o cofrinho)", async ({ page }) => {

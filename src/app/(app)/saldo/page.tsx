@@ -26,9 +26,11 @@ import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
 import { useCdi } from "@/lib/useCdi";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { Dialogo } from "@/components/Dialogo";
+import { ComoChegamos } from "@/components/ComoChegamos";
 import {
   saldoConfirmado,
   dataEfetivaDoGasto,
+  extratoDoSaldo,
   gastoContaNoSaldo,
 } from "@/lib/finance/saldo";
 import { estimarRendimentoMensal } from "@/lib/finance/rendimento";
@@ -406,6 +408,14 @@ export default function SaldoPage() {
               Reajustar
             </Botao>
           </div>
+
+          {saldoAtual !== null && (
+            <ComoChegamos
+              referencia={saldo}
+              extrato={extratoDoSaldo(saldo, gastos, pagamentos.movimentos, recebimentosNoSaldo)}
+              saldo={saldoAtual}
+            />
+          )}
 
           {/* sinal do dia + o que você já investiu em você no mês */}
           <div className="mt-4 border-t border-line-soft pt-4">
