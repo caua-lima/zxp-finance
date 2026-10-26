@@ -338,9 +338,31 @@ export function inicioUsoAtual(): string {
   return inicioUso;
 }
 
-/** `diaISO` (AAAA-MM-DD) já é do período contado? Sem início definido, tudo conta. */
-export function contaNoPeriodo(diaISO: string): boolean {
-  return !inicioUso || diaISO >= inicioUso;
+/**
+ * `diaISO` (AAAA-MM-DD) já é do período contado? Sem início definido, tudo
+ * conta. `inicio` explícito vence o global (servidor passa o do cliente).
+ */
+export function contaNoPeriodo(diaISO: string, inicio: string = inicioUso): boolean {
+  return !inicio || diaISO >= inicio;
+}
+
+/**
+ * Configuração financeira de UM usuário, passada explicitamente pros
+ * cálculos (auditoria 25/10 F07/D31). Tela e servidor (aviso diário,
+ * Consultor) leem a mesma `preferencias/app` e passam este objeto — os
+ * números batem, e A com imposto de 10% não herda os 6% de B.
+ */
+export interface ConfigFinanceira {
+  taxaImposto: number;
+  /** "AAAA-MM-DD" ou "": dia em que a contagem começou. */
+  inicioUso: string;
+}
+
+/** Lê `preferencias/app` com os mesmos padrões e limites do app. */
+export function configFinanceiraDe(prefs: { taxaImposto?: unknown; inicioUso?: unknown } | null | undefined): ConfigFinanceira {
+  const taxa = typeof prefs?.taxaImposto === "number" && prefs.taxaImposto >= 0 && prefs.taxaImposto <= 0.5 ? prefs.taxaImposto : TAXA_IMPOSTO;
+  const inicio = typeof prefs?.inicioUso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(prefs.inicioUso) ? prefs.inicioUso : "";
+  return { taxaImposto: taxa, inicioUso: inicio };
 }
 
 export function mesPadrao(): string {

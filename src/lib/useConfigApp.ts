@@ -63,7 +63,14 @@ export function useConfigApp() {
         configurarInicioUso(uso);
         setConfig({ taxaImposto: taxa, inicioHistorico: inicio, inicioUso: uso, entradasNoSaldo });
       },
-      () => setConfig({ taxaImposto: TAXA_IMPOSTO, inicioHistorico: inicioPadrao, inicioUso: "", entradasNoSaldo: false })
+      () => {
+        // erro de leitura: volta TUDO ao padrão — nunca herda a configuração
+        // de quem usou o app antes neste navegador (auditoria 25/10 F07)
+        configurarTaxaImposto(TAXA_IMPOSTO);
+        configurarInicioHistorico(inicioPadrao);
+        configurarInicioUso("");
+        setConfig({ taxaImposto: TAXA_IMPOSTO, inicioHistorico: inicioPadrao, inicioUso: "", entradasNoSaldo: false });
+      }
     );
   }, [user]);
 

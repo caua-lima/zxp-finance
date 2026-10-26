@@ -144,7 +144,7 @@ export function eventosDoDia(dados: DadosDoUsuario, hojeISO: string): Evento[] {
           notificacaoDoDia({
             hojeISO,
             saldoAtual,
-            investidoNoMes: resumoGastosDiarios(gastos, mes, hojeISO).total,
+            investidoNoMes: resumoGastosDiarios(gastos, mes, hojeISO, dados.config?.inicioUso).total,
           })
         )
       );

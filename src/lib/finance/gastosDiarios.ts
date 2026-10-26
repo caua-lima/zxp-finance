@@ -22,14 +22,14 @@ export interface ResumoGastosDiarios {
   maiorDia: { dia: string; total: number } | null;
 }
 
-export function resumoGastosDiarios(gastos: Gasto[], mes: string, hojeISO: string): ResumoGastosDiarios {
+export function resumoGastosDiarios(gastos: Gasto[], mes: string, hojeISO: string, inicioUso?: string): ResumoGastosDiarios {
   const doMes = gastos.filter(
     (g) =>
       g.mes === mes &&
       !g.ajusteConciliacaoId &&
       !g.estornado &&
       !g.estornoDeId &&
-      contaNoPeriodo(dataEfetivaDoGasto(g))
+      contaNoPeriodo(dataEfetivaDoGasto(g), inicioUso)
   );
   const categorias = new Map<string, { total: number; quantidade: number }>();
   const dias = new Map<string, { total: number; quantidade: number }>();

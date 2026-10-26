@@ -265,3 +265,35 @@ describe("fechamento versionado (D30)", async () => {
     assert.equal(divergenciaDoFechamento(fechado, fechado), null);
   });
 });
+
+describe("configuração explícita por usuário (D31)", async () => {
+  const { construirFinancialEntries } = await import("./finance/adapters");
+  const { configFinanceiraDe } = await import("./types");
+  const comissoes = [{ id: "d", data: "2026-09-10", mes: "2026-09", reunioes: 1, vendasPerformance: 0, vendasAcelera: 0, valorTotal: 1000, criadoEm: 1, atualizadoEm: 1 }] as never[];
+  const gastos = [
+    { id: "antes", descricao: "a", valor: 50, categoria: "x", mes: "2026-10", data: "2026-10-05", criadoEm: 1 },
+    { id: "depois", descricao: "b", valor: 20, categoria: "x", mes: "2026-10", data: "2026-10-09", criadoEm: 2 },
+  ] as never[];
+  const entradas = (config: ReturnType<typeof configFinanceiraDe>) =>
+    construirFinancialEntries({
+      ganhos: [], contas: [], assinaturas: [], parcelas: [], faturas: [], gastos, comissoes,
+      estaPago: () => false, mes: "2026-10", hojeISO: "2026-10-25", config,
+    });
+
+  test("A com 10% e B com 6%: cada um com o seu imposto, sem global", () => {
+    const a = entradas(configFinanceiraDe({ taxaImposto: 0.1 }));
+    const b = entradas(configFinanceiraDe({}));
+    assert.equal(a.find((e) => e.id.startsWith("comissao-prevista"))?.amount, 900);
+    assert.equal(b.find((e) => e.id.startsWith("comissao-prevista"))?.amount, 940);
+  });
+
+  test("início da contagem do usuário vale no servidor igual na tela", () => {
+    const comInicio = entradas(configFinanceiraDe({ inicioUso: "2026-10-08" }));
+    assert.deepEqual(comInicio.filter((e) => e.source === "manual").map((e) => e.amount), [20]);
+  });
+
+  test("preferência inválida cai no padrão, não em valor absurdo", () => {
+    assert.deepEqual(configFinanceiraDe({ taxaImposto: 9, inicioUso: "ontem" }), { taxaImposto: 0.06, inicioUso: "" });
+    assert.deepEqual(configFinanceiraDe(null), { taxaImposto: 0.06, inicioUso: "" });
+  });
+});

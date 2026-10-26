@@ -43,14 +43,15 @@ export function pagamentosDaComissao(mesOrigem: string, ganhos: Ganho[]): Ganho[
  */
 export function comissaoPrevistaPara(
   mes: string,
-  comissoes: Comissao[]
+  comissoes: Comissao[],
+  taxa?: number
 ): ComissaoPrevista | null {
   const mesOrigem = mesAnteriorDe(mes);
   const doMes = comissoes.filter((c) => c.mes === mesOrigem);
   if (doMes.length === 0) return null;
   const bruto = arredondarCentavos(doMes.reduce((acc, c) => acc + c.valorTotal, 0));
   if (bruto <= 0) return null;
-  const imposto = arredondarCentavos(calcularImposto(bruto));
+  const imposto = arredondarCentavos(calcularImposto(bruto, taxa));
   return {
     mesOrigem,
     mesRecebimento: mes,
@@ -78,16 +79,17 @@ export interface ComissaoAReceber extends ComissaoPrevista {
 export function comissaoAReceber(
   mes: string,
   comissoes: Comissao[],
-  ganhos: Ganho[]
+  ganhos: Ganho[],
+  taxa?: number
 ): ComissaoAReceber | null {
-  const prevista = comissaoPrevistaPara(mes, comissoes);
+  const prevista = comissaoPrevistaPara(mes, comissoes, taxa);
   if (!prevista) return null;
   const recebidoBruto = arredondarCentavos(
     pagamentosDaComissao(prevista.mesOrigem, ganhos).reduce((acc, g) => acc + g.valor, 0)
   );
   const restanteBruto = arredondarCentavos(prevista.bruto - recebidoBruto);
   if (restanteBruto <= 0) return null;
-  const restanteImposto = arredondarCentavos(calcularImposto(restanteBruto));
+  const restanteImposto = arredondarCentavos(calcularImposto(restanteBruto, taxa));
   return {
     ...prevista,
     recebidoBruto,
@@ -126,9 +128,10 @@ export function comissaoBrutaParaEntry(c: ComissaoAReceber, mes: string): Financ
 export function comissaoPrevistaParaEntries(
   comissoes: Comissao[],
   ganhos: Ganho[],
-  mes: string
+  mes: string,
+  taxa?: number
 ): FinancialEntry[] {
-  const prevista = comissaoPrevistaPara(mes, comissoes);
+  const prevista = comissaoPrevistaPara(mes, comissoes, taxa);
   if (!prevista) return [];
   const recebidoBruto = pagamentosDaComissao(prevista.mesOrigem, ganhos).reduce(
     (acc, g) => acc + g.valor,
@@ -136,7 +139,7 @@ export function comissaoPrevistaParaEntries(
   );
   const restanteBruto = arredondarCentavos(prevista.bruto - recebidoBruto);
   if (restanteBruto <= 0) return [];
-  const restanteLiquido = arredondarCentavos(restanteBruto - calcularImposto(restanteBruto));
+  const restanteLiquido = arredondarCentavos(restanteBruto - calcularImposto(restanteBruto, taxa));
   return [
     {
       id: `comissao-prevista__${prevista.mesOrigem}`,

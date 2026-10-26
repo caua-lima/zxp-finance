@@ -11,6 +11,7 @@ import {
   valorMinhaParte,
   diaVencimentoNoMes,
   contaNoPeriodo,
+  ConfigFinanceira,
 } from "@/lib/types";
 import { dataEfetivaDoGasto } from "./saldo";
 import { ultimoDiaMes, diaISOde, hojeISO as hojeNoBrasil } from "./calculations";
@@ -298,11 +299,11 @@ export function faturasPrevistasParaEntries(
   return entries;
 }
 
-export function gastosParaEntries(gastos: Gasto[], mes: string): FinancialEntry[] {
+export function gastosParaEntries(gastos: Gasto[], mes: string, inicioUso?: string): FinancialEntry[] {
   return gastos
     // compra no crédito já está dentro da fatura do cartão: contar aqui
     // também seria a mesma despesa duas vezes no resultado do mês
-    .filter((g) => g.mes === mes && g.pagoCom !== "credito" && contaNoPeriodo(dataEfetivaDoGasto(g)))
+    .filter((g) => g.mes === mes && g.pagoCom !== "credito" && contaNoPeriodo(dataEfetivaDoGasto(g), inicioUso))
     .map((g) => ({
       id: `gasto__${g.id}`,
       type: "expense" as const,
@@ -338,6 +339,8 @@ export interface DadosFinanceiros {
   dataPagamento?: DataPagamento;
   /** Dia de fechamento por cartão — põe a compra no crédito na fatura certa. */
   diaFechamentoPorCartao?: Record<string, number>;
+  /** Imposto e início da contagem DESTE usuário (servidor sempre passa). */
+  config?: ConfigFinanceira;
 }
 
 /** Compras registradas no crédito (com cartão), com o mês da fatura de cada uma. */
@@ -384,8 +387,8 @@ export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEnt
       comprasNoCredito(dados.gastos, dados.diaFechamentoPorCartao, dados.diaVencimentoPorCartao)
     ),
     ...(dados.comissoes
-      ? comissaoPrevistaParaEntries(dados.comissoes, dados.ganhos, dados.mes)
+      ? comissaoPrevistaParaEntries(dados.comissoes, dados.ganhos, dados.mes, dados.config?.taxaImposto)
       : []),
-    ...gastosParaEntries(dados.gastos, dados.mes),
+    ...gastosParaEntries(dados.gastos, dados.mes, dados.config?.inicioUso),
   ];
 }

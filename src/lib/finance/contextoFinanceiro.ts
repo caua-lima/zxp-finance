@@ -1,7 +1,7 @@
 import { listarDocumentos, obterDocumento } from "@/lib/firestoreRest";
 import {
   calcularImposto,
-  TAXA_IMPOSTO,
+  configFinanceiraDe,
   arredondarCentavos,
   mesPadrao,
   Ganho,
@@ -45,15 +45,13 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
       listarDocumentos<Gasto>(`${base}/gastos`),
       listarDocumentos<MovimentoPagamento>(`${base}/pagamentos`),
       listarDocumentos<{ nome: string; diaVencimento?: number | null; diaFechamento?: number | null }>(`${base}/cartoesConfig`),
-      obterDocumento<{ taxaImposto?: number }>(`${base}/preferencias/app`),
+      obterDocumento<{ taxaImposto?: number; inicioUso?: string }>(`${base}/preferencias/app`),
       listarDocumentos<Transferencia>(`${base}/transferencias`),
     ]);
   // taxa do CLIENTE, passada explicitamente — no servidor não existe
   // configuração global por usuário
-  const taxa =
-    typeof prefsApp?.taxaImposto === "number" && prefsApp.taxaImposto >= 0 && prefsApp.taxaImposto <= 0.5
-      ? prefsApp.taxaImposto
-      : TAXA_IMPOSTO;
+  const config = configFinanceiraDe(prefsApp);
+  const taxa = config.taxaImposto;
 
   if (!saldoDoc || typeof saldoDoc.valor !== "number") return null;
 
@@ -83,6 +81,7 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
       gastos: [],
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
+      config,
       hojeISO: hojeISO(),
     },
     mesPadrao(),

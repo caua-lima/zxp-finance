@@ -10,6 +10,7 @@ import { useFaturasCartao } from "@/lib/useFaturasCartao";
 import { useCartoesConfig } from "@/lib/useCartoesConfig";
 import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
+import { useConfigApp } from "@/lib/useConfigApp";
 import { construirFinancialEntries } from "./adapters";
 import { calculateDreBreakdown, DreBreakdown } from "./calculations";
 import { comissaoBrutaParaEntry } from "./comissaoPrevista";
@@ -65,6 +66,13 @@ export function useDreComparativo(mes: string) {
   const comissaoAtual = ganhosAtual.comissaoDoMes;
   const comissaoAnterior = ganhosAnterior.comissaoDoMes;
 
+  // configuração DESTE usuário, explícita (a mesma que o servidor usa)
+  const { config: configApp } = useConfigApp();
+  const config = useMemo(
+    () => (configApp ? { taxaImposto: configApp.taxaImposto, inicioUso: configApp.inicioUso } : undefined),
+    [configApp]
+  );
+
   const diaVencimentoPorCartao = useMemo(() => {
     const mapa: Record<string, number> = {};
     for (const c of cartoesConfig.configs) {
@@ -95,6 +103,7 @@ export function useDreComparativo(mes: string) {
       mes,
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
+      config,
     }).concat(comissaoAtual ? [comissaoBrutaParaEntry(comissaoAtual, mes)] : []);
   }, [
     comissaoAtual,
@@ -110,6 +119,7 @@ export function useDreComparativo(mes: string) {
     mes,
     diaVencimentoPorCartao,
     diaFechamentoPorCartao,
+    config,
   ]);
 
   const entriesAnterior: FinancialEntry[] = useMemo(() => {
@@ -125,6 +135,7 @@ export function useDreComparativo(mes: string) {
       mes: mesAnterior,
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
+      config,
     }).concat(comissaoAnterior ? [comissaoBrutaParaEntry(comissaoAnterior, mesAnterior)] : []);
   }, [
     comissaoAnterior,
@@ -140,6 +151,7 @@ export function useDreComparativo(mes: string) {
     mesAnterior,
     diaVencimentoPorCartao,
     diaFechamentoPorCartao,
+    config,
   ]);
 
   const atual: DreBreakdown = useMemo(() => calculateDreBreakdown(entriesAtual), [entriesAtual]);

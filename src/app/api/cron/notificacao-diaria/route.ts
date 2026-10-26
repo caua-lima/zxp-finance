@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listarUsuarios } from "@/lib/usuariosFirebase";
 import { listarDocumentos, obterDocumento, atualizarCampos } from "@/lib/firestoreRest";
 import { hojeISO } from "@/lib/finance/calculations";
+import { configFinanceiraDe } from "@/lib/types";
 import { decisaoDeAcesso } from "@/lib/acesso/servidor";
 import type {
   Gasto,
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
     const ler = async <T,>(col: string) =>
       (await listarDocumentos<T>(`${base}/${col}`)).map((d) => ({ ...d.dados, id: d.id }) as T & { id: string });
 
-    const [saldo, gastos, pagamentos, contas, assinaturas, parcelas, faturas, ganhos, comissoes, transferencias, cartoes, prefsDoc] =
+    const [saldo, gastos, pagamentos, contas, assinaturas, parcelas, faturas, ganhos, comissoes, transferencias, cartoes, prefsDoc, prefsApp] =
       await Promise.all([
         obterDocumento<{ valor: number; atualizadoEm: number; reservaMeta?: number }>(`${base}/saldo/atual`),
         ler<Gasto>("gastos"),
@@ -90,6 +91,8 @@ export async function GET(req: NextRequest) {
         ler<Transferencia>("transferencias"),
         ler<{ nome: string; diaVencimento?: number | null; diaFechamento?: number | null }>("cartoesConfig"),
         obterDocumento<Partial<PreferenciasNotificacao>>(`${base}/preferencias/notificacoes`),
+        // a MESMA configuração financeira da tela (imposto, início da contagem)
+        obterDocumento<{ taxaImposto?: number; inicioUso?: string }>(`${base}/preferencias/app`),
       ]);
 
     // preferência salva vence o padrão; comissão é opt-in (liga sozinha só
@@ -117,6 +120,7 @@ export async function GET(req: NextRequest) {
       transferencias,
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
+      config: configFinanceiraDe(prefsApp),
       diasComComissao: new Set(comissoes.map((x) => x.data)),
     };
 

@@ -13,6 +13,7 @@ import { usePagamentos } from "@/lib/usePagamentos";
 import { useSaldo } from "@/lib/useSaldo";
 import { useComissoes } from "@/lib/useComissoes";
 import { useCaixinhas } from "@/lib/useCaixinhas";
+import { useConfigApp } from "@/lib/useConfigApp";
 import { construirFinancialEntries } from "./adapters";
 import { saldoConfirmado } from "./saldo";
 import {
@@ -72,6 +73,13 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     saldoHook.erro ||
     comissoes.erro;
 
+  // configuração DESTE usuário, explícita (a mesma que o servidor usa)
+  const { config: configApp } = useConfigApp();
+  const config = useMemo(
+    () => (configApp ? { taxaImposto: configApp.taxaImposto, inicioUso: configApp.inicioUso } : undefined),
+    [configApp]
+  );
+
   const diaVencimentoPorCartao = useMemo(() => {
     const mapa: Record<string, number> = {};
     for (const c of cartoesConfig.configs) {
@@ -103,6 +111,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       mes,
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
+      config,
       comissoes: comissoes.todas,
     });
   }, [
@@ -119,6 +128,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     mes,
     diaVencimentoPorCartao,
     diaFechamentoPorCartao,
+    config,
     comissoes.todas,
   ]);
 
