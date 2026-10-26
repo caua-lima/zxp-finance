@@ -23,43 +23,49 @@ describe("convite de uso único (B11)", () => {
 
   test("aceito cria a concessão da turma; segundo uso por outra pessoa é recusado", async () => {
     const { token } = await criarConvite({ criadoPor: "admin", turmaId: "turma-1", validadeLinkDias: 7, fimAcessoEm: Date.now() + 90 * DIA });
-    const a = await aceitarConvite(token, "alunoA");
+    const a = await aceitarConvite(token, "alunoA", null);
     assert.ok(a.ok);
     const c = await obterDocumento<Concessao>("acessos/alunoA");
     assert.equal(c?.estado, "ativo");
     assert.equal(c?.turmaId, "turma-1");
-    const b = await aceitarConvite(token, "alunoB");
+    const b = await aceitarConvite(token, "alunoB", null);
     assert.deepEqual(b, { ok: false, problema: "usado" });
     assert.equal(await obterDocumento("acessos/alunoB"), null);
   });
 
   test("a mesma pessoa repetindo o aceite (retry) é sucesso, sem duplicar", async () => {
     const { token } = await criarConvite({ criadoPor: "admin", turmaId: null, validadeLinkDias: 7, fimAcessoEm: null });
-    assert.ok((await aceitarConvite(token, "alunoA")).ok);
-    const de_novo = await aceitarConvite(token, "alunoA");
+    assert.ok((await aceitarConvite(token, "alunoA", null)).ok);
+    const de_novo = await aceitarConvite(token, "alunoA", null);
     assert.ok(de_novo.ok);
     assert.equal((await obterDocumento<Concessao>("acessos/alunoA"))?.versao, 1);
   });
 
   test("dois aceites ao mesmo tempo: só um leva", async () => {
     const { token } = await criarConvite({ criadoPor: "admin", turmaId: null, validadeLinkDias: 7, fimAcessoEm: null });
-    const [x, y] = await Promise.all([aceitarConvite(token, "alunoX"), aceitarConvite(token, "alunoY")]);
+    const [x, y] = await Promise.all([aceitarConvite(token, "alunoX", null), aceitarConvite(token, "alunoY", null)]);
     assert.equal([x, y].filter((r) => r.ok).length, 1);
     const concessoes = [await obterDocumento("acessos/alunoX"), await obterDocumento("acessos/alunoY")].filter(Boolean);
     assert.equal(concessoes.length, 1);
   });
 
+  test("convite amarrado a um e-mail: outro e-mail não aceita, o certo sim", async () => {
+    const { token } = await criarConvite({ criadoPor: "admin", turmaId: null, validadeLinkDias: 7, fimAcessoEm: null, paraEmail: "Ana@Exemplo.com" });
+    assert.deepEqual(await aceitarConvite(token, "intruso", "outro@exemplo.com"), { ok: false, problema: "outro_email" });
+    assert.ok((await aceitarConvite(token, "ana", "ana@exemplo.com")).ok);
+  });
+
   test("expirado e inexistente", async () => {
     const agora = Date.now();
     const { token } = await criarConvite({ criadoPor: "admin", turmaId: null, validadeLinkDias: 1, fimAcessoEm: null, agora: agora - 2 * DIA });
-    assert.deepEqual(await aceitarConvite(token, "alunoA", agora), { ok: false, problema: "expirado" });
-    assert.deepEqual(await aceitarConvite(gerarToken(), "alunoA"), { ok: false, problema: "inexistente" });
+    assert.deepEqual(await aceitarConvite(token, "alunoA", null, agora), { ok: false, problema: "expirado" });
+    assert.deepEqual(await aceitarConvite(gerarToken(), "alunoA", null), { ok: false, problema: "inexistente" });
   });
 
   test("quem tinha concessão legado passa pra da turma, com versão nova", async () => {
     await criarSeNaoExiste("acessos/alunoA", { ...novaConcessao("legado", Date.now()) });
     const { token } = await criarConvite({ criadoPor: "admin", turmaId: "turma-2", validadeLinkDias: 7, fimAcessoEm: null });
-    assert.ok((await aceitarConvite(token, "alunoA")).ok);
+    assert.ok((await aceitarConvite(token, "alunoA", null)).ok);
     const c = await obterDocumento<Concessao>("acessos/alunoA");
     assert.equal(c?.origem, "convite");
     assert.equal(c?.turmaId, "turma-2");

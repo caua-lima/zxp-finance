@@ -12,6 +12,7 @@ export async function criarConvite(opcoes: {
   turmaId: string | null;
   validadeLinkDias: number;
   fimAcessoEm: number | null;
+  paraEmail?: string | null;
   agora?: number;
 }): Promise<{ token: string; expiraEm: number }> {
   const agora = opcoes.agora ?? Date.now();
@@ -25,6 +26,7 @@ export async function criarConvite(opcoes: {
     usadoEm: null,
     usadoPor: null,
     revogadoEm: null,
+    paraEmail: opcoes.paraEmail ? opcoes.paraEmail.trim().toLowerCase() : null,
   };
   const criado = await criarSeNaoExiste(`convites/${hashDoToken(token)}`, limpo(convite));
   if (!criado) throw new Error("Colisão de token (não deveria acontecer).");
@@ -40,6 +42,7 @@ export async function criarConvite(opcoes: {
 export async function aceitarConvite(
   token: string,
   uid: string,
+  email: string | null,
   agora = Date.now()
 ): Promise<{ ok: true; concessao: Concessao } | { ok: false; problema: ProblemaConvite }> {
   const caminho = `convites/${hashDoToken(token)}`;
@@ -50,7 +53,7 @@ export async function aceitarConvite(
       const atual = await obterComVersao<Concessao>(`acessos/${uid}`);
       if (atual) return { ok: true, concessao: atual.dados };
     }
-    const problema = avaliarConvite(lido?.dados ?? null, agora);
+    const problema = avaliarConvite(lido?.dados ?? null, agora, email);
     if (problema || !lido) return { ok: false, problema: problema ?? "inexistente" };
 
     const anterior = await obterComVersao<Concessao>(`acessos/${uid}`);

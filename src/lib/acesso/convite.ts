@@ -19,9 +19,11 @@ export interface Convite {
   usadoEm?: number | null;
   usadoPor?: string | null;
   revogadoEm?: number | null;
+  /** Se informado, só esse e-mail aceita (link encaminhado não funciona). Minúsculo. */
+  paraEmail?: string | null;
 }
 
-export type ProblemaConvite = "inexistente" | "usado" | "expirado" | "revogado";
+export type ProblemaConvite = "inexistente" | "usado" | "expirado" | "revogado" | "outro_email";
 
 export function gerarToken(): string {
   return randomBytes(32).toString("base64url");
@@ -36,11 +38,17 @@ export function tokenBemFormado(token: unknown): token is string {
   return typeof token === "string" && /^[A-Za-z0-9_-]{43}$/.test(token);
 }
 
-export function avaliarConvite(convite: Convite | null, agora: number): ProblemaConvite | null {
+export function avaliarConvite(
+  convite: Convite | null,
+  agora: number,
+  /** E-mail de quem está aceitando (pra convite amarrado a um e-mail). */
+  email?: string | null
+): ProblemaConvite | null {
   if (!convite) return "inexistente";
   if (convite.revogadoEm) return "revogado";
   if (convite.usadoEm) return "usado";
   if (convite.expiraEm <= agora) return "expirado";
+  if (convite.paraEmail && convite.paraEmail !== (email ?? "").trim().toLowerCase()) return "outro_email";
   return null;
 }
 
@@ -53,4 +61,5 @@ export const MENSAGEM_CONVITE: Record<ProblemaConvite, string> = {
   revogado: "Esse link de convite não é válido. Peça um novo a quem cuida da sua turma.",
   usado: "Esse convite já foi usado. Se foi você, é só entrar com seu e-mail e senha.",
   expirado: "Esse convite expirou. Peça um novo a quem cuida da sua turma.",
+  outro_email: "Esse convite foi feito pra outro e-mail. Use o e-mail em que você recebeu o convite.",
 };

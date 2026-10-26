@@ -30,20 +30,24 @@ export async function POST(req: NextRequest) {
 
   const comLogin = req.headers.get("authorization");
   let uid: string;
+  let emailDeQuemAceita: string | null;
   if (comLogin) {
     const ativo = await verificarChamadorAtivo(req, { exigirConcessao: false });
     if (!ativo.ok) return ativo.resposta;
     uid = ativo.identidade.uid;
+    emailDeQuemAceita = ativo.identidade.email ?? null;
   } else {
     const email = texto(corpo?.email, 3, 254);
     const senha = texto(corpo?.senha, 8, 128);
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !senha) {
       return NextResponse.json({ erro: "Informe um e-mail válido e uma senha de 8+ caracteres." }, { status: 400 });
     }
-    const problema = avaliarConvite(await obterDocumento<Convite>(`convites/${hashDoToken(token)}`), Date.now());
+    // confere o convite (inclusive o e-mail, se ele for amarrado) ANTES de criar o login
+    const problema = avaliarConvite(await obterDocumento<Convite>(`convites/${hashDoToken(token)}`), Date.now(), email);
     if (problema) return NextResponse.json({ erro: MENSAGEM_CONVITE[problema] }, { status: 400 });
     try {
       uid = await criarUsuario(email, senha);
+      emailDeQuemAceita = email;
     } catch {
       return NextResponse.json(
         { erro: "Não deu pra criar a conta com esse e-mail. Se você já tem conta, use “Já tenho conta”." },
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const resultado = await aceitarConvite(token, uid);
+  const resultado = await aceitarConvite(token, uid, emailDeQuemAceita);
   if (!resultado.ok) return NextResponse.json({ erro: MENSAGEM_CONVITE[resultado.problema] }, { status: 400 });
   return NextResponse.json({ ok: true, criouConta: !comLogin });
 }
