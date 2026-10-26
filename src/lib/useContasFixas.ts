@@ -13,7 +13,7 @@ import { ContaFixa } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
-import { historicoAoMudarValor } from "./finance/recorrencia";
+import { historicoAoMudarValor, mudancaDeAtivo } from "./finance/recorrencia";
 import { mesPadrao } from "./types";
 
 export function useContasFixas() {
@@ -151,7 +151,7 @@ export function useContasFixas() {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "contasFixas", id);
       // arquivar grava o mês: meses anteriores continuam com ela
-      batch.update(ref, { ativa, desativadaEm: ativa ? null : mesPadrao() });
+      batch.update(ref, { ativa, ...mudancaDeAtivo(conta ?? {}, ativa, mesPadrao()) });
       if (conta) {
         anexarAuditLog(batch, user.uid, user.email, {
           action: ativa ? "updated" : "archived",

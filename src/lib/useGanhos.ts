@@ -16,7 +16,7 @@ import { anexarAuditLog } from "./auditoria";
 import { useComissoes } from "./useComissoes";
 import { comissaoAReceber } from "./finance/comissaoPrevista";
 import { recebimentosAvulsos } from "./finance/saldo";
-import { historicoAoMudarValor, recorrenciaDoGanho, recorrenciaNoMes, valorNoMes } from "./finance/recorrencia";
+import { historicoAoMudarValor, mudancaDeAtivo, recorrenciaDoGanho, recorrenciaNoMes, valorNoMes } from "./finance/recorrencia";
 
 export function useGanhos(mes: string) {
   const { user } = useAuth();
@@ -241,7 +241,7 @@ export function useGanhos(mes: string) {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "ganhos", id);
       // arquivar guarda o mês: os meses anteriores continuam com o ganho
-      batch.update(ref, { ativo, desativadaEm: ativo ? null : mesPadrao() });
+      batch.update(ref, { ativo, ...mudancaDeAtivo(ganho ?? {}, ativo, mesPadrao()) });
       if (ganho) {
         anexarAuditLog(batch, user.uid, user.email, {
           action: ativo ? "updated" : "archived",

@@ -146,7 +146,7 @@ service cloud.firestore {
           && criaOuAltera(['tipo', 'mes', 'ativo', 'arquivado', 'recebido', 'recebidoEm',
                            'categoriaReceita', 'descricao', 'valor', 'semImposto',
                            'origemComissao', 'entrouNoSaldo', 'valorRecebido', 'inicioEm',
-                           'desativadaEm', 'historicoValores', 'criadoEm'])
+                           'desativadaEm', 'historicoValores', 'pausas', 'criadoEm'])
           && numeroEntre(request.resource.data.valor, 0, 10000000)
           && texto(request.resource.data.descricao, 200);
         allow delete: if dono(uid) && mesLivre(uid);
@@ -157,7 +157,7 @@ service cloud.firestore {
         allow read: if dono(uid);
         allow create, update: if dono(uid)
           && criaOuAltera(['nome', 'valor', 'categoria', 'ativa', 'diaVencimento', 'criadoEm',
-                           'inicioEm', 'desativadaEm', 'historicoValores'])
+                           'inicioEm', 'desativadaEm', 'historicoValores', 'pausas'])
           && texto(request.resource.data.nome, 200)
           && numeroEntre(request.resource.data.valor, 0, 1000000);
         allow delete: if dono(uid);
@@ -168,7 +168,7 @@ service cloud.firestore {
         allow create, update: if dono(uid)
           && criaOuAltera(['nome', 'valor', 'ativa', 'cartao', 'naFatura', 'diaRenovacao',
                            'usoPercebido', 'criadoEm', 'inicioEm', 'desativadaEm',
-                           'historicoValores'])
+                           'historicoValores', 'pausas'])
           && texto(request.resource.data.nome, 200)
           && numeroEntre(request.resource.data.valor, 0, 1000000);
         allow delete: if dono(uid);

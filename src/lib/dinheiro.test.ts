@@ -163,3 +163,35 @@ describe("ganho recorrente com vigência (D27)", async () => {
     assert.equal(ganhosParaEntries([salario], "2026-07", () => false).length, 0);
   });
 });
+
+describe("pausa de recorrente: arquivar e reativar (D28)", async () => {
+  const { mudancaDeAtivo, recorrenciaNoMes } = await import("./finance/recorrencia");
+  type Rec = Parameters<typeof recorrenciaNoMes>[0];
+  const base: Rec = { ativa: true, valor: 30, criadoEm: Date.parse("2026-08-10T12:00:00-03:00"), desativadaEm: null };
+
+  test("arquivada em novembro e reativada em janeiro: dezembro não conta", () => {
+    const arquivada = { ...base, ativa: false, ...mudancaDeAtivo(base, false, "2026-11") };
+    const reativada = { ...arquivada, ativa: true, ...mudancaDeAtivo(arquivada, true, "2027-01") };
+    assert.deepEqual(reativada.pausas, [{ de: "2026-11", ate: "2027-01" }]);
+    assert.equal(recorrenciaNoMes(reativada, "2026-10"), true);
+    assert.equal(recorrenciaNoMes(reativada, "2026-11"), false);
+    assert.equal(recorrenciaNoMes(reativada, "2026-12"), false);
+    assert.equal(recorrenciaNoMes(reativada, "2027-01"), true);
+  });
+
+  test("arquivar e reativar no mesmo mês não cria pausa", () => {
+    const arquivada = { ...base, ativa: false, ...mudancaDeAtivo(base, false, "2026-11") };
+    assert.deepEqual(mudancaDeAtivo(arquivada, true, "2026-11"), { desativadaEm: null });
+  });
+
+  test("duas pausas se acumulam", () => {
+    let r: Rec = { ...base };
+    r = { ...r, ativa: false, ...mudancaDeAtivo(r, false, "2026-09") };
+    r = { ...r, ativa: true, ...mudancaDeAtivo(r, true, "2026-10") };
+    r = { ...r, ativa: false, ...mudancaDeAtivo(r, false, "2026-12") };
+    r = { ...r, ativa: true, ...mudancaDeAtivo(r, true, "2027-02") };
+    assert.equal(r.pausas?.length, 2);
+    assert.equal(recorrenciaNoMes(r, "2026-11"), true);
+    assert.equal(recorrenciaNoMes(r, "2027-01"), false);
+  });
+});

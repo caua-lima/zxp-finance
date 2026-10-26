@@ -26,9 +26,17 @@ export interface Ganho {
   inicioEm?: string;
   /** Recorrente: arquivado a partir deste mês (vale até o anterior). */
   desativadaEm?: string | null;
+  /** Pausas já encerradas (arquivou e depois reativou). */
+  pausas?: PeriodoPausa[];
   /** Recorrente: mudanças de valor, cada uma valendo dali pra frente. */
   historicoValores?: VigenciaValor[];
   criadoEm: number;
+}
+
+/** Pausa de um recorrente: não cobra/recebe de `de` até o mês anterior a `ate`. */
+export interface PeriodoPausa {
+  de: string; // "AAAA-MM", primeiro mês pausado
+  ate: string; // "AAAA-MM", mês em que voltou
 }
 
 export interface VigenciaValor {
@@ -48,6 +56,8 @@ export interface ContaFixa {
   inicioEm?: string;
   /** Mês em que foi arquivada — meses anteriores continuam com ela. */
   desativadaEm?: string | null;
+  /** Pausas já encerradas (arquivou e depois reativou). */
+  pausas?: PeriodoPausa[];
   /** Mudanças de valor com vigência — mês antigo mantém o valor antigo. */
   historicoValores?: VigenciaValor[];
 }
@@ -109,6 +119,8 @@ export interface Assinatura {
   inicioEm?: string;
   /** Mês em que foi arquivada — meses anteriores continuam com ela. */
   desativadaEm?: string | null;
+  /** Pausas já encerradas (arquivou e depois reativou). */
+  pausas?: PeriodoPausa[];
   /** Mudanças de valor com vigência — mês antigo mantém o valor antigo. */
   historicoValores?: VigenciaValor[];
 }

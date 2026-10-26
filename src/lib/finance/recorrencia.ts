@@ -1,4 +1,4 @@
-import { VigenciaValor } from "@/lib/types";
+import { PeriodoPausa, VigenciaValor } from "@/lib/types";
 import { diaISOde } from "./calculations";
 
 /**
@@ -16,6 +16,7 @@ interface Recorrencia {
   inicioEm?: string;
   desativadaEm?: string | null;
   historicoValores?: VigenciaValor[];
+  pausas?: PeriodoPausa[];
 }
 
 export function mesDeInicio(r: Pick<Recorrencia, "inicioEm" | "criadoEm">): string {
@@ -25,6 +26,8 @@ export function mesDeInicio(r: Pick<Recorrencia, "inicioEm" | "criadoEm">): stri
 /** A recorrência existe (e cobra) nesse mês? */
 export function recorrenciaNoMes(r: Recorrencia, mes: string): boolean {
   if (mes < mesDeInicio(r)) return false;
+  // arquivou e reativou depois: os meses do meio não contam
+  if ((r.pausas ?? []).some((p) => mes >= p.de && mes < p.ate)) return false;
   if (r.ativa) return true;
   // arquivada: vale até o mês anterior ao arquivamento. Sem a data
   // (arquivada antes desta versão), não há como saber — fica de fora,
@@ -40,6 +43,25 @@ export function valorNoMes(r: Pick<Recorrencia, "valor" | "historicoValores">, m
   return vigentes.length > 0 ? vigentes[vigentes.length - 1].valor : r.valor;
 }
 
+/**
+ * Arquivar e reativar (auditoria 25/10 D28). Arquivar grava o mês;
+ * reativar fecha esse intervalo como PAUSA em vez de apagar a data — senão
+ * algo arquivado em novembro e reativado em janeiro voltaria a contar em
+ * dezembro.
+ */
+export function mudancaDeAtivo(
+  r: Pick<Recorrencia, "desativadaEm" | "pausas">,
+  ativar: boolean,
+  mesAtual: string
+): { desativadaEm: string | null; pausas?: PeriodoPausa[] } {
+  if (!ativar) return { desativadaEm: mesAtual };
+  if (r.desativadaEm && r.desativadaEm < mesAtual) {
+    return { desativadaEm: null, pausas: [...(r.pausas ?? []), { de: r.desativadaEm, ate: mesAtual }] };
+  }
+  // reativou no mesmo mês em que arquivou: não houve mês pausado
+  return { desativadaEm: null };
+}
+
 /** Ganho recorrente no formato de recorrência (ganho usa `ativo`, conta usa `ativa`). */
 export function recorrenciaDoGanho(g: {
   ativo?: boolean;
@@ -48,6 +70,7 @@ export function recorrenciaDoGanho(g: {
   inicioEm?: string;
   desativadaEm?: string | null;
   historicoValores?: VigenciaValor[];
+  pausas?: PeriodoPausa[];
 }): Recorrencia {
   return {
     ativa: g.ativo !== false,
@@ -56,6 +79,7 @@ export function recorrenciaDoGanho(g: {
     inicioEm: g.inicioEm,
     desativadaEm: g.desativadaEm,
     historicoValores: g.historicoValores,
+    pausas: g.pausas,
   };
 }
 
