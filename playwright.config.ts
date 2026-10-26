@@ -24,7 +24,8 @@ if (process.platform === "win32" && !process.env.CI) {
 export default defineConfig({
   testDir: "e2e",
   timeout: 60_000,
-  expect: { timeout: 15_000 },
+  // next dev compila cada rota na primeira chamada: a 1ª vez pode passar de 15 s
+  expect: { timeout: 30_000 },
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
