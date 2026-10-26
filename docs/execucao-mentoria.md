@@ -66,5 +66,20 @@ existe lá ainda — só ligar depois do lote I (release) com `scripts/concessoe
 precisa saber: com "Recebido entra no saldo" ligado, marcar ganho recebido soma o líquido ao saldo —
 na conta dele fica desligado (como era) até ele ligar em Perfil.
 
+| D25 | Estorno de mês fechado | feito | 79061bc | emulador com regras: estorno de setembro fechado gravado em outubro sem editar o original; duas abas → um estorno |
+| D26 | Mutação segura sob concorrência | feito | f9a8703 | exclusão lê a referência de saldo na transação; saldo informado entre gasto e estorno → recusa (emulador) |
+| D27 | Vigência do ganho recorrente | feito | e2ca60c | aumento em novembro não muda set/out; arquivado em nov segue em out |
+| D28 | Pausa de contas/assinaturas/ganhos | feito | ba4e5b2 | pausa nov–jan exclui nov/dez; mesmo mês não cria pausa |
+| D29 | Cartão: compra × fatura × pagamento | feito | 851c855 | compra no crédito na fatura do ciclo (fechamento/vencimento); prevista sai com a real; saldo só no pagamento |
+| D30 | Fechamento versionado | feito | 0a178d1 | versão imutável com hash; reabertura só-acréscimo; navegador: fechar→reabrir→fechar = versão 2 |
+| D31 | Configuração explícita por usuário | feito | e94dea5 | A 10% × B 6% → 900 × 940; servidor lê a mesma preferência da tela |
+| D32 | Esquema validado nas regras | feito | 599b652 | calendário real, parcelas inteiras, mapa limitado (emulador) |
+
+**Gate D:** competência/caixa, fatura, recorrência e fechamento com testes unitários, de regras
+(57 no emulador) e de navegador (13). Operações críticas não dependem só do formulário.
+
+Extras de infraestrutura de teste: teardown do emulador no Windows (a7c79ae); bloco do AGENTS.md
+regenerado pelo Next 16.4 (4e8b614).
+
 Extra fora da lista: `.firebaserc` com o projeto padrão (c8e7551) — o deploy de regras falhava com
 "No currently active project".
