@@ -36,6 +36,24 @@ export interface Evento {
   validoAte: number;
   /** Valor estimado (fatura prevista), não confirmado. */
   estimado?: boolean;
+  /**
+   * Documento de pagamento que, se existir, torna o aviso obsoleto
+   * ("AAAA-MM__origem__item"): conta paga antes do envio não é lembrada
+   * (auditoria 25/10 E40).
+   */
+  pagamentoId?: string;
+}
+
+/**
+ * Id do pagamento que quita um lançamento (o mesmo que o checklist grava).
+ * `conta__x__2026-10` → `2026-10__conta__x`; fatura prevista usa o id do
+ * cartão no mês.
+ */
+export function pagamentoDoLancamento(entryId: string, mes: string): string | null {
+  const prevista = entryId.match(/^fatura-prevista__(.+)$/);
+  if (prevista) return `${mes}__fatura__${prevista[1]}`;
+  const m = entryId.match(/^(conta|assinatura|parcela|fatura)__(.+)__(\d{4}-\d{2})$/);
+  return m ? `${m[3]}__${m[1]}__${m[2]}` : null;
 }
 
 export interface DadosDoUsuario extends Omit<DadosFinanceiros, "mes" | "estaPago"> {
@@ -53,7 +71,9 @@ function diasEntre(deISO: string, ateISO: string): number {
 }
 
 function textoVencimento(e: FinancialEntry, dias: number): ConteudoNotificacao {
-  const quando = dias === 0 ? "vence hoje" : dias === 1 ? "vence amanhã" : `vence em ${dias} dias`;
+  // data absoluta junto: na central o aviso continua certo nos dias seguintes
+  const data = e.dueDate.split("-").reverse().slice(0, 2).join("/");
+  const quando = dias === 0 ? `vence hoje (${data})` : dias === 1 ? `vence amanhã (${data})` : `vence dia ${data}`;
   const nome = e.description.replace(/ \((prevista|valor a confirmar)\)$/, "");
   return {
     titulo: `${nome} ${quando}`,
@@ -93,8 +113,11 @@ export function eventosDeVencimento(dados: DadosDoUsuario, hojeISO: string): Eve
         tipo: "vencimento",
         conteudo: textoVencimento(e, dias),
         diaLocal: hojeISO,
-        validoAte: fimDoDia(e.dueDate),
+        // push só no dia em que o aviso foi gerado: lembrete de "faltam 5
+        // dias" não pode chegar no dia 3 (auditoria 25/10 N10)
+        validoAte: fimDoDia(hojeISO),
         estimado: e.estimado,
+        pagamentoId: pagamentoDoLancamento(e.id, mes) ?? undefined,
       });
     }
   }

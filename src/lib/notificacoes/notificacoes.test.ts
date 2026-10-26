@@ -81,8 +81,12 @@ describe("vencimentos por data efetiva e virada de mês (N05, matriz 14)", () =>
       "2026-09-30"
     );
     assert.equal(eventos.length, 1);
-    assert.match(eventos[0].conteudo.titulo, /vence em 5 dias/);
+    // data absoluta: na central o aviso continua certo nos dias seguintes (N10)
+    assert.match(eventos[0].conteudo.titulo, /vence dia 05\/10/);
     assert.equal(eventos[0].estimado, true);
+    // push só no dia em que foi gerado; e sabe qual pagamento o torna obsoleto (E40)
+    assert.equal(eventos[0].validoAte, fimDoDia("2026-09-30"));
+    assert.equal(eventos[0].pagamentoId, "2026-10__fatura__2026-10__Nubank CNPJ");
   });
 
   test("execução perdida é recuperada: no dia 4 antes ainda sai o aviso 'em breve', com o mesmo id do dia 5", () => {
