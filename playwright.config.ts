@@ -1,4 +1,17 @@
 import { defineConfig } from "@playwright/test";
+import { execSync } from "node:child_process";
+
+// Só limpa no fim se FOI este teste que subiu o servidor (porta 3100 livre
+// agora). Servidor que você já tinha rodando não é encerrado.
+if (process.platform === "win32" && !process.env.CI) {
+  let ocupada = false;
+  try {
+    ocupada = /127\.0\.0\.1:3100\s+\S+\s+LISTENING/.test(execSync("netstat -ano -p tcp", { encoding: "utf8" }));
+  } catch {
+    ocupada = true;
+  }
+  if (!ocupada) process.env.PW_EMULADOR_PROPRIO = "1";
+}
 
 /**
  * Testes de navegador contra os EMULADORES (auditoria 25/10 A04): o
@@ -35,6 +48,8 @@ export default defineConfig({
       },
     },
   ],
+  // Windows: fecha o emulador que sobra quando o webServer cai (ver encerrar.ts)
+  globalTeardown: "./e2e/encerrar.ts",
   webServer: {
     command: "npm run dev:emulador",
     url: "http://localhost:3100/login",
