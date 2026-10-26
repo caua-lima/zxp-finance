@@ -5,7 +5,6 @@ import {
   collection,
   onSnapshot,
   doc,
-  getDoc,
   getDocs,
   increment,
   runTransaction,
@@ -14,14 +13,14 @@ import {
   DocumentReference,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { estornarGasto, comEstornoDerivado } from "./gastosOperacoes";
+import { estornarGasto, removerGasto, comEstornoDerivado } from "./gastosOperacoes";
 import { Caixinha, Gasto } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
 import { depositoDoGasto } from "./finance/caixinhas";
 import { hojeISO } from "./finance/calculations";
-import { exclusaoDoParMudaSaldo, gastoContaNoSaldo } from "./finance/saldo";
+import { gastoContaNoSaldo } from "./finance/saldo";
 
 export interface OpcoesNovoGasto {
   /** Dia em que aconteceu ("AAAA-MM-DD"). Padrão: hoje. */
@@ -105,10 +104,6 @@ export function useGastos() {
         atualizadoEm: Date.now(),
       });
     }
-  }
-
-  function inverter(deposito: Record<string, number>): Record<string, number> {
-    return Object.fromEntries(Object.entries(deposito).map(([k, v]) => [k, -v]));
   }
 
   /**
@@ -264,42 +259,31 @@ export function useGastos() {
     if (!user) return false;
     const gasto = todos.find((g) => g.id === id);
     if (!gasto) return false;
-
     const idOriginal = gasto.estornoDeId ?? gasto.id;
-    const original = todos.find((g) => g.id === idOriginal);
-    const estorno = todos.find((g) => g.estornoDeId === idOriginal);
-    if (!original) return false;
-
+    const estornoConhecido = todos.find((g) => g.estornoDeId === idOriginal)?.id ?? null;
     try {
-      const snapSaldo = await getDoc(doc(db, "usuarios", user.uid, "saldo", "atual"));
-      const ref = snapSaldo.exists()
-        ? (snapSaldo.data() as { valor: number; atualizadoEm: number })
-        : null;
-      if (estorno && exclusaoDoParMudaSaldo(original, estorno, ref)) {
+      const caixinhas = new Set((await caixinhasAgora(user.uid)).map((c) => c.id));
+      const r = await removerGasto(db, user.uid, id, estornoConhecido, caixinhas, (tx, original, estorno) =>
+        anexarAuditLog(tx, user.uid, user.email, {
+          action: "archived",
+          entityType: "gasto",
+          entityId: original.id,
+          summary: estorno
+            ? `Exclusão definitiva do par estorno/original de "${original.descricao}": ${motivo}`
+            : `Exclusão definitiva de "${original.descricao}": ${motivo}`,
+          before: estorno ? { original, estorno } : { ...original },
+        })
+      );
+      if (r === "lados_diferentes") {
         setErro(
           "Esse gasto e o estorno dele ficam em lados diferentes da última atualização de saldo — apagar mudaria o saldo. Eles ficam no histórico."
         );
         return false;
       }
-
-      const caixinhas = new Set((await caixinhasAgora(user.uid)).map((c) => c.id));
-      const batch = writeBatch(db);
-      anexarAuditLog(batch, user.uid, user.email, {
-        action: "archived",
-        entityType: "gasto",
-        entityId: original.id,
-        summary: estorno
-          ? `Exclusão definitiva do par estorno/original de "${original.descricao}": ${motivo}`
-          : `Exclusão definitiva de "${original.descricao}": ${motivo}`,
-        before: estorno ? { original, estorno } : { ...original },
-      });
-      // sem estorno, o gasto some agora e o que ele guardou volta junto
-      if (!estorno && original.guardado) {
-        aplicarNasCaixinhas(batch, user.uid, inverter(original.guardado), caixinhas);
+      if (r === "sumiu") {
+        setErro("Esse lançamento não existe mais.");
+        return false;
       }
-      batch.delete(doc(db, "usuarios", user.uid, "gastos", original.id));
-      if (estorno) batch.delete(doc(db, "usuarios", user.uid, "gastos", estorno.id));
-      await batch.commit();
       setErro(null);
       return true;
     } catch (e) {

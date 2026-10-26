@@ -1,5 +1,6 @@
 import { Firestore, Transaction, doc, increment, runTransaction, serverTimestamp } from "firebase/firestore";
 import type { Gasto } from "./types";
+import { exclusaoDoParMudaSaldo } from "./finance/saldo";
 
 /**
  * Operações de gasto que precisam ser seguras sob concorrência e respeitar
@@ -74,4 +75,58 @@ export async function estornarGasto(
 export function comEstornoDerivado(gastos: Gasto[]): Gasto[] {
   const estornados = new Set(gastos.filter((g) => g.estornoDeId).map((g) => g.estornoDeId as string));
   return gastos.map((g) => (!g.estornado && estornados.has(g.id) ? { ...g, estornado: true } : g));
+}
+
+export type ResultadoExclusao = "ok" | "sumiu" | "lados_diferentes";
+
+/**
+ * Exclusão definitiva (lançamento feito por engano), em transação: lê o
+ * original, o estorno e a REFERÊNCIA DE SALDO dentro da transação — se o
+ * saldo for atualizado no meio, a transação refaz a decisão com o valor
+ * novo (antes a referência era lida fora do batch; auditoria F05). Par
+ * gasto/estorno em lados diferentes da referência não sai: mudaria o saldo
+ * sem explicação. O que o gasto guardou volta pras caixinhas.
+ */
+export async function removerGasto(
+  db: Firestore,
+  uid: string,
+  gastoId: string,
+  /** id do estorno conhecido pela tela (dados antigos podem ter id próprio). */
+  estornoIdConhecido: string | null,
+  caixinhasExistentes: Set<string>,
+  aoGravar?: (tx: Transaction, original: Gasto, estorno: Gasto | null) => void
+): Promise<ResultadoExclusao> {
+  return runTransaction(db, async (tx) => {
+    const refAlvo = doc(db, "usuarios", uid, "gastos", gastoId);
+    const alvo = await tx.get(refAlvo);
+    if (!alvo.exists()) return "sumiu";
+    const idOriginal = (alvo.data().estornoDeId as string | undefined) ?? gastoId;
+    const refOriginal = doc(db, "usuarios", uid, "gastos", idOriginal);
+    const refEstorno = doc(db, "usuarios", uid, "gastos", estornoIdConhecido ?? idDoEstorno(idOriginal));
+    const [snapOriginal, snapEstorno, snapSaldo] = await Promise.all([
+      tx.get(refOriginal),
+      tx.get(refEstorno),
+      tx.get(doc(db, "usuarios", uid, "saldo", "atual")),
+    ]);
+    if (!snapOriginal.exists()) return "sumiu";
+    const original = { id: idOriginal, ...snapOriginal.data() } as Gasto;
+    const estorno = snapEstorno.exists() ? ({ id: refEstorno.id, ...snapEstorno.data() } as Gasto) : null;
+    const ref = snapSaldo.exists() ? (snapSaldo.data() as { valor: number; atualizadoEm: number }) : null;
+    if (estorno && exclusaoDoParMudaSaldo(original, estorno, ref)) return "lados_diferentes";
+
+    if (!estorno) {
+      for (const [caixinhaId, valor] of Object.entries(inverter(original.guardado ?? {}))) {
+        if (!caixinhasExistentes.has(caixinhaId)) continue;
+        tx.update(doc(db, "usuarios", uid, "caixinhas", caixinhaId), {
+          saldo: increment(valor),
+          depositos: increment(-1),
+          atualizadoEm: Date.now(),
+        });
+      }
+    }
+    aoGravar?.(tx, original, estorno);
+    tx.delete(refOriginal);
+    if (estorno) tx.delete(refEstorno);
+    return "ok";
+  });
 }

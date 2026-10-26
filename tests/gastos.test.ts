@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { initializeTestEnvironment, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { readFileSync } from "node:fs";
 import { doc, getDoc, setDoc, Firestore } from "firebase/firestore";
-import { estornarGasto, idDoEstorno } from "../src/lib/gastosOperacoes";
+import { estornarGasto, removerGasto, idDoEstorno } from "../src/lib/gastosOperacoes";
 
 let env: RulesTestEnvironment;
 let db: Firestore;
@@ -55,5 +55,36 @@ describe("estorno de gasto de mês fechado (D25)", () => {
     assert.deepEqual([a, b].sort(), ["ja", "ok"]);
     assert.equal(await estornarGasto(db, UID, "g1", "2026-10-25", new Set(["c1"])), "ja");
     assert.equal((await getDoc(doc(db, `usuarios/${UID}/caixinhas/c1`))).data()?.saldo, 9.9);
+  });
+});
+
+describe("exclusão com a referência lida dentro da transação (D26)", () => {
+  const ref = (atualizadoEm: number) =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `usuarios/${UID}/saldo/atual`), { valor: 1000, atualizadoEm });
+    });
+
+  test("par gasto/estorno do mesmo lado sai junto; caixinha só volta sem estorno", async () => {
+    await ref(0); // referência antiga: original e estorno depois dela
+    assert.equal(await estornarGasto(db, UID, "g1", "2026-10-25", new Set(["c1"])), "ok");
+    // mês de setembro precisa estar aberto pra apagar o original
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `usuarios/${UID}/monthCloses/2026-09`), { month: "2026-09", status: "open" });
+    });
+    assert.equal(await removerGasto(db, UID, "g1", null, new Set(["c1"])), "ok");
+    assert.equal((await getDoc(doc(db, `usuarios/${UID}/gastos/g1`))).exists(), false);
+    assert.equal((await getDoc(doc(db, `usuarios/${UID}/gastos/${idDoEstorno("g1")}`))).exists(), false);
+  });
+
+  test("saldo atualizado ENTRE o gasto e o estorno: a exclusão do par é recusada", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `usuarios/${UID}/monthCloses/2026-09`), { month: "2026-09", status: "open" });
+    });
+    await ref(0);
+    assert.equal(await estornarGasto(db, UID, "g1", "2026-10-25", new Set(["c1"])), "ok");
+    // saldo informado em 01/10: o gasto (20/09) fica antes, o estorno (25/10) depois
+    await ref(Date.parse("2026-10-01T12:00:00-03:00"));
+    assert.equal(await removerGasto(db, UID, "g1", null, new Set(["c1"])), "lados_diferentes");
+    assert.equal((await getDoc(doc(db, `usuarios/${UID}/gastos/g1`))).exists(), true);
   });
 });
