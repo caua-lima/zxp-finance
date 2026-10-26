@@ -195,3 +195,51 @@ describe("pausa de recorrente: arquivar e reativar (D28)", async () => {
     assert.equal(recorrenciaNoMes(r, "2027-01"), false);
   });
 });
+
+describe("compra no crédito na fatura certa, sem contar duas vezes (D29)", async () => {
+  const { mesDaFaturaDaCompra } = await import("./finance/faturaPrevista");
+  const { construirFinancialEntries } = await import("./finance/adapters");
+  const { saldoConfirmado } = await import("./finance/saldo");
+
+  test("ciclo do cartão: fechamento e vencimento decidem o mês", () => {
+    // Nubank: fecha dia 29, vence dia 5
+    assert.equal(mesDaFaturaDaCompra("2026-10-10", 29, 5), "2026-11");
+    assert.equal(mesDaFaturaDaCompra("2026-10-30", 29, 5), "2026-12");
+    // Mercado Pago: fecha dia 5, vence dia 13
+    assert.equal(mesDaFaturaDaCompra("2026-10-03", 5, 13), "2026-10");
+    assert.equal(mesDaFaturaDaCompra("2026-10-06", 5, 13), "2026-11");
+    // sem fechamento cadastrado: mês seguinte
+    assert.equal(mesDaFaturaDaCompra("2026-10-06"), "2026-11");
+  });
+
+  const perfume = {
+    id: "p", descricao: "perfume", valor: 260, categoria: "Beleza", mes: "2026-10", data: "2026-10-10",
+    criadoEm: Date.parse("2026-10-10T12:00:00-03:00"), pagoCom: "credito", cartao: "Nubank CNPJ",
+  } as never;
+  const dados = (faturas: unknown[], mes: string) =>
+    construirFinancialEntries({
+      ganhos: [], contas: [], assinaturas: [], parcelas: [], faturas: faturas as never[], gastos: [perfume],
+      estaPago: () => false, mes, diaVencimentoPorCartao: { "Nubank CNPJ": 5 },
+      diaFechamentoPorCartao: { "Nubank CNPJ": 29 }, hojeISO: "2026-10-25",
+    });
+
+  test("entra na fatura prevista de novembro, não como gasto do dia", () => {
+    const nov = dados([], "2026-11");
+    const fatura = nov.find((e) => e.id.startsWith("fatura-prevista__2026-11__Nubank CNPJ"));
+    assert.equal(fatura?.amount, 260);
+    assert.equal(nov.filter((e) => e.source === "manual").length, 0);
+  });
+
+  test("com a fatura real lançada, a prevista sai: a compra conta uma vez só", () => {
+    const nov = dados([{ id: "f", nome: "Nubank CNPJ", valor: 900, mes: "2026-11", criadoEm: 1 }], "2026-11");
+    const doCartao = nov.filter((e) => e.description.includes("Nubank CNPJ") || e.id.includes("Nubank CNPJ"));
+    assert.deepEqual(doCartao.map((e) => e.amount), [900]);
+  });
+
+  test("e o saldo só sente quando a fatura é paga", () => {
+    const ref = { valor: 1000, atualizadoEm: Date.parse("2026-10-01T12:00:00-03:00") };
+    assert.equal(saldoConfirmado(ref, [perfume]), 1000);
+    const pagouFatura = [{ valor: 900, pagoEm: Date.parse("2026-11-05T12:00:00-03:00"), origem: "fatura", afetaSaldo: true }];
+    assert.equal(saldoConfirmado(ref, [perfume], pagouFatura), 100);
+  });
+});

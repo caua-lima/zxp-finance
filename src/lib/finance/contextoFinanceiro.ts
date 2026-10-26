@@ -44,7 +44,7 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
       listarDocumentos<FaturaCartao>(`${base}/faturasCartao`),
       listarDocumentos<Gasto>(`${base}/gastos`),
       listarDocumentos<MovimentoPagamento>(`${base}/pagamentos`),
-      listarDocumentos<{ nome: string; diaVencimento?: number | null }>(`${base}/cartoesConfig`),
+      listarDocumentos<{ nome: string; diaVencimento?: number | null; diaFechamento?: number | null }>(`${base}/cartoesConfig`),
       obterDocumento<{ taxaImposto?: number }>(`${base}/preferencias/app`),
       listarDocumentos<Transferencia>(`${base}/transferencias`),
     ]);
@@ -66,8 +66,10 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
   );
 
   const diaVencimentoPorCartao: Record<string, number> = {};
+  const diaFechamentoPorCartao: Record<string, number> = {};
   for (const c of cartoes) {
     if (c.dados.diaVencimento) diaVencimentoPorCartao[c.dados.nome] = c.dados.diaVencimento;
+    if (c.dados.diaFechamento) diaFechamentoPorCartao[c.dados.nome] = c.dados.diaFechamento;
   }
 
   const listaGanhos = comId(ganhos);
@@ -80,6 +82,7 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
       faturas: comId(faturas),
       gastos: [],
       diaVencimentoPorCartao,
+      diaFechamentoPorCartao,
       hojeISO: hojeISO(),
     },
     mesPadrao(),

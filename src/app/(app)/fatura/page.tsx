@@ -26,6 +26,8 @@ import {
   devePreverFatura,
   FaturaPrevista,
 } from "@/lib/finance/faturaPrevista";
+import { comprasNoCredito } from "@/lib/finance/adapters";
+import { useGastos } from "@/lib/useGastos";
 
 export default function FaturaPage() {
   const [mes, setMes] = useState(mesPadrao());
@@ -41,14 +43,21 @@ export default function FaturaPage() {
   const parcelas = useParcelas();
   const assinaturas = useAssinaturas();
   const pagamentos = usePagamentos(mes);
+  const { gastos } = useGastos();
   const hoje = hojeISO();
+  // compras registradas no crédito entram na prevista do ciclo delas (D29)
+  const compras = comprasNoCredito(
+    gastos,
+    Object.fromEntries(cartoesConfig.configs.filter((c) => c.diaFechamento).map((c) => [c.nome, c.diaFechamento as number])),
+    Object.fromEntries(cartoesConfig.configs.filter((c) => c.diaVencimento).map((c) => [c.nome, c.diaVencimento as number]))
+  );
 
   const cartoes = faturas.map((f) => {
     const config = cartoesConfig.configs.find((c) => c.nome === f.nome) ?? { nome: f.nome };
     const prevista =
       f.valor > 0 || !devePreverFatura(mes, hoje)
         ? null
-        : composicaoFaturaPrevista(f.nome, mes, parcelas.parcelas, assinaturas.assinaturas);
+        : composicaoFaturaPrevista(f.nome, mes, parcelas.parcelas, assinaturas.assinaturas, compras);
     return {
       fatura: f,
       config,

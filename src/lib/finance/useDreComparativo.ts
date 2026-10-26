@@ -73,6 +73,15 @@ export function useDreComparativo(mes: string) {
     return mapa;
   }, [cartoesConfig.configs]);
 
+  // fechamento põe a compra no crédito na fatura certa (D29)
+  const diaFechamentoPorCartao = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    for (const c of cartoesConfig.configs) {
+      if (c.diaFechamento) mapa[c.nome] = c.diaFechamento;
+    }
+    return mapa;
+  }, [cartoesConfig.configs]);
+
   const entriesAtual: FinancialEntry[] = useMemo(() => {
     if (loading) return [];
     return construirFinancialEntries({
@@ -85,6 +94,7 @@ export function useDreComparativo(mes: string) {
       estaPago: pagamentosAtual.estaPago,
       mes,
       diaVencimentoPorCartao,
+      diaFechamentoPorCartao,
     }).concat(comissaoAtual ? [comissaoBrutaParaEntry(comissaoAtual, mes)] : []);
   }, [
     comissaoAtual,
@@ -99,6 +109,7 @@ export function useDreComparativo(mes: string) {
     pagamentosAtual.estaPago,
     mes,
     diaVencimentoPorCartao,
+    diaFechamentoPorCartao,
   ]);
 
   const entriesAnterior: FinancialEntry[] = useMemo(() => {
@@ -113,6 +124,7 @@ export function useDreComparativo(mes: string) {
       estaPago: pagamentosAnterior.estaPago,
       mes: mesAnterior,
       diaVencimentoPorCartao,
+      diaFechamentoPorCartao,
     }).concat(comissaoAnterior ? [comissaoBrutaParaEntry(comissaoAnterior, mesAnterior)] : []);
   }, [
     comissaoAnterior,
@@ -127,6 +139,7 @@ export function useDreComparativo(mes: string) {
     pagamentosAnterior.estaPago,
     mesAnterior,
     diaVencimentoPorCartao,
+    diaFechamentoPorCartao,
   ]);
 
   const atual: DreBreakdown = useMemo(() => calculateDreBreakdown(entriesAtual), [entriesAtual]);

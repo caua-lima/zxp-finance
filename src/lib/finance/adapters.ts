@@ -19,6 +19,8 @@ import {
   composicaoFaturaPrevista,
   devePreverFatura,
   previsaoAConfirmar,
+  mesDaFaturaDaCompra,
+  CompraNoCredito,
   CARTAO_NAO_INFORMADO,
 } from "./faturaPrevista";
 import { comissaoPrevistaParaEntries } from "./comissaoPrevista";
@@ -246,7 +248,8 @@ export function faturasPrevistasParaEntries(
   mes: string,
   estaPago: EstaPago,
   diaVencimentoPorCartao: Record<string, number> = {},
-  hojeISO: string = hojeNoBrasil()
+  hojeISO: string = hojeNoBrasil(),
+  compras: CompraNoCredito[] = []
 ): FinancialEntry[] {
   const lancadas = new Set(
     faturas.filter((f) => f.mes === mes && f.valor > 0).map((f) => f.nome)
@@ -257,6 +260,7 @@ export function faturasPrevistasParaEntries(
   const cartoes = new Set<string>(CARTOES_PREDEFINIDOS);
   for (const p of parcelas) if (p.naFatura && p.cartao) cartoes.add(p.cartao);
   for (const a of assinaturas) if (a.naFatura && a.cartao) cartoes.add(a.cartao);
+  for (const c of compras) if (c.mesFatura === mes) cartoes.add(c.cartao);
   // parcela "na fatura" sem cartão informado: não some só porque alguma
   // fatura real foi lançada — fica pendente até você dizer qual cartão
   cartoes.add(CARTAO_NAO_INFORMADO);
@@ -265,7 +269,7 @@ export function faturasPrevistasParaEntries(
   for (const cartao of cartoes) {
     if (lancadas.has(cartao)) continue;
     const dia = diaVencimentoPorCartao[cartao];
-    const prevista = composicaoFaturaPrevista(cartao, mes, parcelas, assinaturas);
+    const prevista = composicaoFaturaPrevista(cartao, mes, parcelas, assinaturas, compras);
     if (prevista.total <= 0) continue;
 
     const semCartao = cartao === CARTAO_NAO_INFORMADO;
@@ -332,6 +336,28 @@ export interface DadosFinanceiros {
   hojeISO?: string;
   /** Data real de cada pagamento marcado no checklist (auditoria F12). */
   dataPagamento?: DataPagamento;
+  /** Dia de fechamento por cartão — põe a compra no crédito na fatura certa. */
+  diaFechamentoPorCartao?: Record<string, number>;
+}
+
+/** Compras registradas no crédito (com cartão), com o mês da fatura de cada uma. */
+export function comprasNoCredito(
+  gastos: Gasto[],
+  diaFechamentoPorCartao: Record<string, number> = {},
+  diaVencimentoPorCartao: Record<string, number> = {}
+): CompraNoCredito[] {
+  return gastos
+    .filter((g) => g.pagoCom === "credito" && g.cartao)
+    .map((g) => ({
+      nome: g.descricao,
+      valor: g.valor,
+      cartao: g.cartao as string,
+      mesFatura: mesDaFaturaDaCompra(
+        dataEfetivaDoGasto(g),
+        diaFechamentoPorCartao[g.cartao as string],
+        diaVencimentoPorCartao[g.cartao as string]
+      ),
+    }));
 }
 
 export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEntry[] {
@@ -354,7 +380,8 @@ export function construirFinancialEntries(dados: DadosFinanceiros): FinancialEnt
       dados.mes,
       dados.estaPago,
       dados.diaVencimentoPorCartao,
-      dados.hojeISO
+      dados.hojeISO,
+      comprasNoCredito(dados.gastos, dados.diaFechamentoPorCartao, dados.diaVencimentoPorCartao)
     ),
     ...(dados.comissoes
       ? comissaoPrevistaParaEntries(dados.comissoes, dados.ganhos, dados.mes)

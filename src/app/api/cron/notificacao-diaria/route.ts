@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
         ler<Ganho>("ganhos"),
         ler<Comissao>("comissoes"),
         ler<Transferencia>("transferencias"),
-        ler<{ nome: string; diaVencimento?: number | null }>("cartoesConfig"),
+        ler<{ nome: string; diaVencimento?: number | null; diaFechamento?: number | null }>("cartoesConfig"),
         obterDocumento<Partial<PreferenciasNotificacao>>(`${base}/preferencias/notificacoes`),
       ]);
 
@@ -101,6 +101,8 @@ export async function GET(req: NextRequest) {
 
     const diaVencimentoPorCartao: Record<string, number> = {};
     for (const cfg of cartoes) if (cfg.diaVencimento) diaVencimentoPorCartao[cfg.nome] = cfg.diaVencimento;
+    const diaFechamentoPorCartao: Record<string, number> = {};
+    for (const cfg of cartoes) if (cfg.diaFechamento) diaFechamentoPorCartao[cfg.nome] = cfg.diaFechamento;
 
     const dados: DadosDoUsuario = {
       saldo,
@@ -114,6 +116,7 @@ export async function GET(req: NextRequest) {
       comissoes,
       transferencias,
       diaVencimentoPorCartao,
+      diaFechamentoPorCartao,
       diasComComissao: new Set(comissoes.map((x) => x.data)),
     };
 

@@ -28,7 +28,36 @@ export const CARTAO_NAO_INFORMADO = "Cartão não informado";
 export interface ItemFaturaPrevista {
   nome: string;
   valor: number;
-  origem: "parcela" | "assinatura";
+  origem: "parcela" | "assinatura" | "compra";
+}
+
+/** Compra registrada no crédito, já com o mês da fatura em que cai. */
+export interface CompraNoCredito {
+  nome: string;
+  valor: number;
+  cartao: string;
+  mesFatura: string;
+}
+
+function somarMes(mes: string, n: number): string {
+  const [a, m] = mes.split("-").map(Number);
+  const d = new Date(a, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Em que fatura (mês de vencimento) cai uma compra no crédito (auditoria
+ * 25/10 D29). Compra até o dia de fechamento entra na fatura que fecha
+ * naquele mês; depois, na do mês seguinte. Vencimento depois do
+ * fechamento = mesmo mês do fechamento; antes = mês seguinte. Sem dia de
+ * fechamento cadastrado, supõe o mais comum: vence no mês seguinte.
+ */
+export function mesDaFaturaDaCompra(dataISO: string, diaFechamento?: number, diaVencimento?: number): string {
+  const mes = dataISO.slice(0, 7);
+  if (!diaFechamento || !diaVencimento) return somarMes(mes, 1);
+  const dia = Number(dataISO.slice(8, 10));
+  const mesFechamento = dia <= diaFechamento ? mes : somarMes(mes, 1);
+  return diaVencimento > diaFechamento ? mesFechamento : somarMes(mesFechamento, 1);
 }
 
 export interface FaturaPrevista {
@@ -42,9 +71,16 @@ export function composicaoFaturaPrevista(
   cartao: string,
   mes: string,
   parcelas: Parcela[],
-  assinaturas: Assinatura[]
+  assinaturas: Assinatura[],
+  compras: CompraNoCredito[] = []
 ): FaturaPrevista {
   const itens: ItemFaturaPrevista[] = [];
+
+  // compras registradas no crédito: entram na fatura do ciclo delas, e
+  // estorno (valor negativo) desconta — nunca saem do saldo na hora
+  for (const c of compras) {
+    if (c.cartao === cartao && c.mesFatura === mes) itens.push({ nome: c.nome, valor: c.valor, origem: "compra" });
+  }
 
   for (const p of parcelas) {
     if (!p.naFatura) continue;

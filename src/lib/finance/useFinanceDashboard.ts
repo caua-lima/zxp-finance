@@ -80,6 +80,15 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     return mapa;
   }, [cartoesConfig.configs]);
 
+  // fechamento põe a compra no crédito na fatura certa (D29)
+  const diaFechamentoPorCartao = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    for (const c of cartoesConfig.configs) {
+      if (c.diaFechamento) mapa[c.nome] = c.diaFechamento;
+    }
+    return mapa;
+  }, [cartoesConfig.configs]);
+
   const entries: FinancialEntry[] = useMemo(() => {
     if (loading) return [];
     return construirFinancialEntries({
@@ -93,6 +102,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       dataPagamento: pagamentos.dataPagamento,
       mes,
       diaVencimentoPorCartao,
+      diaFechamentoPorCartao,
       comissoes: comissoes.todas,
     });
   }, [
@@ -108,6 +118,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     pagamentos.dataPagamento,
     mes,
     diaVencimentoPorCartao,
+    diaFechamentoPorCartao,
     comissoes.todas,
   ]);
 
