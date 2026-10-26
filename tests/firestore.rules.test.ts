@@ -331,3 +331,28 @@ describe("fechamento versionado é só acréscimo (D30)", () => {
     await assertFails(updateDoc(doc(db, "usuarios/userA/monthCloses/2026-09/reaberturas/1"), { motivo: "outro" }));
   });
 });
+
+describe("validação de esquema nas regras (D32)", () => {
+  test("data e mês do calendário de verdade", async () => {
+    const db = dbDe("userA");
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/gastos/b1"), { ...gastoValido, mes: "2028-02", data: "2028-02-29" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/b2"), { ...gastoValido, mes: "2026-02", data: "2026-02-29" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/b3"), { ...gastoValido, data: "2026-02-31" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/b4"), { ...gastoValido, data: "2026-04-31" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/b5"), { ...gastoValido, mes: "2026-13" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/gastos/b6"), { ...gastoValido, mes: "2026-00" }));
+  });
+
+  test("parcelas: inteiros e restantes não passam do total", async () => {
+    const db = dbDe("userA");
+    const p = { tipo: "cartao", nome: "Celular", valorParcela: 100, totalParcelas: 10, parcelasRestantes: 10, criadoEm: 1 };
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/parcelas/ok"), p));
+    await assertFails(setDoc(doc(db, "usuarios/userA/parcelas/x1"), { ...p, parcelasRestantes: 11 }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/parcelas/x2"), { ...p, totalParcelas: 10.5 }));
+  });
+
+  test("mapa do que foi pras caixinhas tem tamanho limitado", async () => {
+    const grande = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`c${i}`, 0.1]));
+    await assertFails(setDoc(doc(dbDe("userA"), "usuarios/userA/gastos/g9"), { ...gastoValido, guardado: grande }));
+  });
+});

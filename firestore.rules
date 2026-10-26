@@ -52,11 +52,22 @@ service cloud.firestore {
     function texto(v, max) {
       return v is string && v.size() <= max;
     }
+    // calendário de verdade (auditoria 25/10 D32): "2026-13" e "2026-02-31"
+    // passavam pela expressão regular
     function mes(v) {
-      return v is string && v.matches('^[0-9]{4}-[0-9]{2}$');
+      return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
+    }
+    function diasNoMes(ano, m) {
+      return m == 2
+        ? ((ano % 4 == 0 && (ano % 100 != 0 || ano % 400 == 0)) ? 29 : 28)
+        : (m in [4, 6, 9, 11] ? 30 : 31);
     }
     function dia(v) {
-      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && int(v.split('-')[2]) <= diasNoMes(int(v.split('-')[0]), int(v.split('-')[1]));
+    }
+    function inteiroEntre(v, min, max) {
+      return v is int && v >= min && v <= max;
     }
     function opcional(d, campo) {
       return !(campo in d);
@@ -98,7 +109,8 @@ service cloud.firestore {
           && texto(request.resource.data.categoria, 60)
           && mes(request.resource.data.mes)
           && (opcional(request.resource.data, 'data') || dia(request.resource.data.data))
-          && (opcional(request.resource.data, 'guardado') || request.resource.data.guardado is map)
+          && (opcional(request.resource.data, 'guardado')
+              || request.resource.data.guardado is map && request.resource.data.guardado.size() <= 20)
           && (opcional(request.resource.data, 'pagoCom')
               || request.resource.data.pagoCom in ['conta', 'credito'])
           && (opcional(request.resource.data, 'cartao') || texto(request.resource.data.cartao, 60));
@@ -182,8 +194,9 @@ service cloud.firestore {
                            'criadoEm'])
           && texto(request.resource.data.nome, 200)
           && numeroEntre(request.resource.data.valorParcela, 0, 1000000)
-          && numeroEntre(request.resource.data.totalParcelas, 1, 600)
-          && numeroEntre(request.resource.data.parcelasRestantes, 0, 600);
+          && inteiroEntre(request.resource.data.totalParcelas, 1, 600)
+          && inteiroEntre(request.resource.data.parcelasRestantes, 0, 600)
+          && request.resource.data.parcelasRestantes <= request.resource.data.totalParcelas;
         allow delete: if dono(uid);
       }
 
