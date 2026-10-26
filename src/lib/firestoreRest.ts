@@ -413,6 +413,18 @@ export type Escrita =
  * (alguém mexeu antes) — quem chamou decide se relê e tenta de novo.
  */
 export async function gravarJuntas(escritas: Escrita[]): Promise<"ok" | "conflito"> {
+  const r = await gravarJuntasComVersao(escritas);
+  return r.ok ? "ok" : "conflito";
+}
+
+/**
+ * Igual a gravarJuntas, mas devolve a versão (updateTime) de cada escrita:
+ * quem PEGOU uma entrega guarda a versão e só consegue finalizar se ninguém
+ * mexeu depois (fencing; auditoria 25/10 N02).
+ */
+export async function gravarJuntasComVersao(
+  escritas: Escrita[]
+): Promise<{ ok: true; versoes: string[] } | { ok: false }> {
   const headers = await cabecalhos();
   const base = urlBase();
   const nome = (caminho: string) => `${base.replace(/^https?:\/\/[^/]+\/v1\//, "")}/${caminho}`;
@@ -432,10 +444,13 @@ export async function gravarJuntas(escritas: Escrita[]): Promise<"ok" | "conflit
     headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({ writes }),
   });
-  if (resposta.ok) return "ok";
+  if (resposta.ok) {
+    const json = (await resposta.json()) as { writeResults?: { updateTime?: string }[]; commitTime?: string };
+    return { ok: true, versoes: (json.writeResults ?? []).map((w) => w.updateTime ?? json.commitTime ?? "") };
+  }
   const corpo = await resposta.text();
   if ([400, 409, 412].includes(resposta.status) && /precondition|FAILED_PRECONDITION|ALREADY_EXISTS|NOT_FOUND|ABORTED/i.test(corpo)) {
-    return "conflito";
+    return { ok: false };
   }
   throw new Error(`Erro ao gravar em lote: ${resposta.status}`);
 }

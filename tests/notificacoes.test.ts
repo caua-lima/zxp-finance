@@ -192,3 +192,109 @@ describe("consulta com filtro em vez de ler a coleção inteira (N08)", () => {
     assert.deepEqual(r.map((d) => d.id), ["b"]);
   });
 });
+
+describe("núcleo das notificações sob falha e concorrência (lote E)", { skip: !HOST && "sem emulador" }, () => {
+  beforeEach(async () => {
+    mock.restoreAll();
+    await limparBanco();
+  });
+
+  test("queda entre aviso e entrega: a próxima execução repara a entrega (E33)", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("a1"), chaves);
+    assert.ok(r.ok);
+    // simula a versão antiga/queda: o aviso existe, a entrega não
+    await atualizarCampos("usuarios/userA/notificacoes/n1", {
+      tipo: "vencimento", titulo: "x", corpo: "y", url: "/fatura", validoAte: Date.now() + 3_600_000,
+      aparelhosAlvo: [r.aparelho], criadaEm: Date.now(),
+    });
+    const c = contadoresZerados();
+    await materializar("userA", [evento("n1")], [{ id: r.aparelho, geracao: r.geracao }], prefs, c);
+    assert.equal(c.entregasReparadas, 1);
+    assert.equal((await listarDocumentos("usuarios/userA/entregas")).length, 1);
+  });
+
+  test("dois processos ao mesmo tempo: a entrega é enviada uma vez só (E34)", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("a1"), chaves);
+    assert.ok(r.ok);
+    await materializar("userA", [evento("n1")], [r.aparelho], prefs, contadoresZerados());
+    const envio = simularPush(async () => {
+      await new Promise((ok) => setTimeout(ok, 50));
+      return { statusCode: 201 };
+    });
+    const c1 = contadoresZerados();
+    const c2 = contadoresZerados();
+    const agora = Date.now();
+    await Promise.all([
+      processarEntregas("userA", prefs, agora, c1, "worker-1"),
+      processarEntregas("userA", prefs, agora, c2, "worker-2"),
+    ]);
+    assert.equal(envio.mock.callCount(), 1);
+    assert.equal(c1.aceitas + c2.aceitas, 1);
+  });
+
+  test("lease abandonado (processo morreu) é retomado depois do prazo (E34)", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("a1"), chaves);
+    assert.ok(r.ok);
+    await materializar("userA", [evento("n1")], [r.aparelho], prefs, contadoresZerados());
+    const [e] = await listarDocumentos("usuarios/userA/entregas");
+    await atualizarCampos(`usuarios/userA/entregas/${e.id}`, { status: "processando", leaseAte: Date.now() - 1 });
+    const envio = simularPush(async () => ({ statusCode: 201 }));
+    const c = contadoresZerados();
+    await processarEntregas("userA", prefs, Date.now(), c);
+    assert.equal(envio.mock.callCount(), 1);
+    assert.equal(c.aceitas, 1);
+  });
+
+  test("duas contas cadastrando o mesmo aparelho ao mesmo tempo: um dono, uma inscrição (E35)", async () => {
+    const [a, b] = await Promise.all([
+      cadastrarAparelho("userA", endpoint("disputado"), chaves),
+      cadastrarAparelho("userB", endpoint("disputado"), chaves),
+    ]);
+    assert.ok(a.ok || b.ok);
+    const id = idAparelho(endpoint("disputado"));
+    const dono = (await obterDocumento<{ uid: string }>(`pushAparelhos/${id}`))?.uid;
+    const inscricoes = [
+      await obterDocumento(`usuarios/userA/pushInscricoes/${id}`),
+      await obterDocumento(`usuarios/userB/pushInscricoes/${id}`),
+    ].filter(Boolean);
+    assert.equal(inscricoes.length, 1);
+    assert.notEqual(await obterDocumento(`usuarios/${dono}/pushInscricoes/${id}`), null);
+  });
+
+  test("aparelho passou pra outra conta entre a geração e o envio: não envia (E36)", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("trocado"), chaves);
+    assert.ok(r.ok);
+    await materializar("userA", [evento("n1")], [r.aparelho], prefs, contadoresZerados());
+    await cadastrarAparelho("userB", endpoint("trocado"), chaves); // B entrou no mesmo navegador
+    const envio = simularPush(async () => ({ statusCode: 201 }));
+    const c = contadoresZerados();
+    await processarEntregas("userA", prefs, Date.now(), c);
+    assert.equal(envio.mock.callCount(), 0);
+    assert.equal(c.descartadas, 1);
+  });
+
+  test("preferência desligada DEPOIS de gerar: a entrega pendente não sai (E36)", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("a1"), chaves);
+    assert.ok(r.ok);
+    await materializar("userA", [evento("n1")], [r.aparelho], prefs, contadoresZerados());
+    await atualizarCampos("usuarios/userA/preferencias/notificacoes", { vencimentos: false });
+    const envio = simularPush(async () => ({ statusCode: 201 }));
+    const c = contadoresZerados();
+    await processarEntregas("userA", prefs, Date.now(), c);
+    assert.equal(envio.mock.callCount(), 0);
+    assert.equal(c.descartadas, 1);
+  });
+
+  test("conta paga antes do envio: o lembrete é cancelado (E40)", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("a1"), chaves);
+    assert.ok(r.ok);
+    await materializar("userA", [{ ...evento("n1"), pagamentoId: "2026-10__conta__internet" }], [r.aparelho], prefs, contadoresZerados());
+    await atualizarCampos("usuarios/userA/pagamentos/2026-10__conta__internet", { valor: 100, pagoEm: Date.now() });
+    const envio = simularPush(async () => ({ statusCode: 201 }));
+    const c = contadoresZerados();
+    await processarEntregas("userA", prefs, Date.now(), c);
+    assert.equal(envio.mock.callCount(), 0);
+    const [e] = await listarDocumentos<{ status: string; motivo: string }>("usuarios/userA/entregas");
+    assert.deepEqual([e.dados.status, e.dados.motivo], ["descartada", "conta já paga"]);
+  });
+});

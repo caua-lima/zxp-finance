@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   try {
     const r = await cadastrarAparelho(uid, corpo?.endpoint, corpo?.keys);
     if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
-    return NextResponse.json({ aparelho: r.aparelho });
+    return NextResponse.json({ aparelho: r.aparelho, geracao: r.geracao });
   } catch {
     return NextResponse.json({ erro: "Não consegui cadastrar o aparelho agora." }, { status: 500 });
   }

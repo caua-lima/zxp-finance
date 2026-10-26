@@ -20,6 +20,7 @@ import {
   configurarVapid,
   materializar,
   processarEntregas,
+  aparelhosDoUsuario,
   contadoresZerados,
   Contadores,
 } from "@/lib/notificacoes/servidor";
@@ -124,10 +125,11 @@ export async function GET(req: NextRequest) {
       diasComComissao: new Set(comissoes.map((x) => x.data)),
     };
 
-    const aparelhos = (await listarDocumentos(`${base}/pushInscricoes`)).map((a) => a.id);
+    // aparelhos com a geração de cada cadastro: a entrega fica presa a ela
+    const aparelhos = await aparelhosDoUsuario(uid);
     await materializar(uid, eventosDoDia(dados, hoje), aparelhos, prefs, c);
     if (pushConfigurado && !incidenteConfig) {
-      const r = await processarEntregas(uid, prefs, Date.now(), c);
+      const r = await processarEntregas(uid, prefs, Date.now(), c, execucao);
       if (r.incidenteConfig) incidenteConfig = true;
     }
   }
