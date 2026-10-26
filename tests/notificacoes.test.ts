@@ -17,6 +17,7 @@ import {
   processarEntregas,
   contadoresZerados,
   idAparelho,
+  usuariosComEntregaNaVez,
 } from "../src/lib/notificacoes/servidor";
 import { preferenciasPadrao } from "../src/lib/notificacoes/regras";
 import { listarDocumentos, obterDocumento, atualizarCampos, consultar } from "../src/lib/firestoreRest";
@@ -296,5 +297,42 @@ describe("núcleo das notificações sob falha e concorrência (lote E)", { skip
     assert.equal(envio.mock.callCount(), 0);
     const [e] = await listarDocumentos<{ status: string; motivo: string }>("usuarios/userA/entregas");
     assert.deepEqual([e.dados.status, e.dados.motivo], ["descartada", "conta já paga"]);
+  });
+});
+
+describe("executor frequente de entregas (E37)", { skip: !HOST && "sem emulador" }, () => {
+  beforeEach(async () => {
+    mock.restoreAll();
+    await limparBanco();
+  });
+
+  test("acha só quem tem entrega na vez, em todos os usuários", async () => {
+    const agora = Date.now();
+    await atualizarCampos("usuarios/A/entregas/e1", { status: "pendente", proximaTentativaEm: agora - 1000 });
+    await atualizarCampos("usuarios/B/entregas/e2", { status: "pendente", proximaTentativaEm: agora + 600_000 });
+    await atualizarCampos("usuarios/C/entregas/e3", { status: "processando", leaseAte: agora - 1 });
+    await atualizarCampos("usuarios/D/entregas/e4", { status: "aceita" });
+    assert.deepEqual((await usuariosComEntregaNaVez(agora)).sort(), ["A", "C"]);
+  });
+
+  test("retentativa de 5xx sai no próximo ciclo do executor, sem esperar o dia seguinte", async () => {
+    const r = await cadastrarAparelho("userA", endpoint("a1"), chaves);
+    assert.ok(r.ok);
+    await materializar("userA", [evento("n1")], [r.aparelho], prefs, contadoresZerados());
+    let falhar = true;
+    const envio = simularPush(async () => {
+      if (falhar) throw Object.assign(new Error("indisponível"), { statusCode: 503, headers: { "retry-after": "60" } });
+      return { statusCode: 201 };
+    });
+    const agora = Date.now();
+    await processarEntregas("userA", prefs, agora, contadoresZerados());
+    falhar = false;
+    // 10 minutos depois (próximo ciclo do executor)
+    const depois = agora + 10 * 60_000;
+    assert.deepEqual(await usuariosComEntregaNaVez(depois), ["userA"]);
+    const c = contadoresZerados();
+    await processarEntregas("userA", prefs, depois, c);
+    assert.equal(envio.mock.callCount(), 2);
+    assert.equal(c.aceitas, 1);
   });
 });

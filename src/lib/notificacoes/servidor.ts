@@ -476,3 +476,25 @@ export async function processarEntregas(
   }
   return { incidenteConfig: false };
 }
+
+/**
+ * Usuários com entrega na vez, em TODO o app (collection group, indexado):
+ * pendente com tentativa vencida ou lease abandonado. É o que o executor
+ * frequente processa — retentativa de minutos não espera o cron do dia
+ * seguinte (auditoria 25/10 E37/N03).
+ */
+export async function usuariosComEntregaNaVez(agora: number, limite = 500): Promise<string[]> {
+  const docs = await consultar<{ status: string; proximaTentativaEm?: number; leaseAte?: number }>({
+    colecao: "entregas",
+    todas: true,
+    onde: [["status", "in", ["pendente", "processando"]]],
+    limite,
+  });
+  const uids = new Set<string>();
+  for (const d of docs) {
+    const naVez = d.dados.status === "pendente" ? (d.dados.proximaTentativaEm ?? 0) <= agora : (d.dados.leaseAte ?? 0) <= agora;
+    const uid = d.caminho.match(/^usuarios\/([^/]+)\/entregas\//)?.[1];
+    if (naVez && uid) uids.add(uid);
+  }
+  return [...uids];
+}

@@ -1,0 +1,38 @@
+name: Entregas de notificação
+
+# Executor frequente das entregas de push (auditoria 25/10 E37): o cron da
+# Vercel roda uma vez por dia, e uma retentativa marcada pra daqui a minutos
+# ficaria pro dia seguinte. Repositório público: Actions sem custo.
+# Precisa dos segredos do repositório ZXP_URL e CRON_SECRET; sem eles, o job
+# só avisa e sai (não falha).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: entregas
+  cancel-in-progress: false
+
+jobs:
+  executar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Chamar o executor
+        env:
+          ZXP_URL: ${{ secrets.ZXP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$ZXP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::Segredos ZXP_URL/CRON_SECRET ainda não cadastrados — nada a fazer."
+            exit 0
+          fi
+          codigo=$(curl -s -o resposta.json -w "%{http_code}" --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" "$ZXP_URL/api/cron/entregas")
+          # só contadores, sem dado pessoal
+          cat resposta.json; echo
+          if [ "$codigo" != "200" ]; then
+            echo "::error::Executor respondeu $codigo"
+            exit 1
+          fi
