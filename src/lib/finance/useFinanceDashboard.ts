@@ -111,7 +111,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
 
   // mesma conta da tela de Saldo: valor informado menos o que foi gasto
   // depois — antes o Resumo mostrava só o valor informado
-  const saldoReal = saldoConfirmado(saldoHook.saldo, gastosHook.gastos, pagamentos.movimentos);
+  const saldoReal = saldoConfirmado(saldoHook.saldo, gastosHook.gastos, pagamentos.movimentos, ganhos.recebimentosNoSaldo);
   const saldoDisponivel = calculateAvailableBalance(saldoReal);
   const fluxoDoMes = useMemo(
     () => calculateMonthlyCashFlow(entries, mes),

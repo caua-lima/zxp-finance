@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { mesPadrao, formatarMes, formatarMoeda, taxaImpostoAtual, Ganho } from "@/lib/types";
+import { mesPadrao, formatarMes, formatarMoeda, taxaImpostoAtual, calcularImposto, arredondarCentavos, Ganho } from "@/lib/types";
+import { useConfigApp } from "@/lib/useConfigApp";
 import { CATEGORIAS_RECEITA, iconeCategoriaReceita } from "@/lib/categoriasFinanceiras";
 import { useGanhos } from "@/lib/useGanhos";
 import { sugerirCategoriaReceita } from "@/lib/categorizacao";
@@ -41,6 +42,7 @@ export default function GanhosPage() {
     alternarArquivadoPontual,
     marcarRecebidoPontual,
   } = useGanhos(mes);
+  const { config } = useConfigApp();
   const pagamentos = usePagamentos(mes);
 
   const [descricao, setDescricao] = useState("");
@@ -56,12 +58,22 @@ export default function GanhosPage() {
     return g.tipo === "recorrente" ? pagamentos.estaPago("ganho", g.id) : !!g.recebido;
   }
 
+  // o que cai na conta: valor menos o imposto, salvo "sem imposto"
+  const liquido = (g: Ganho) => arredondarCentavos(g.semImposto ? g.valor : g.valor - calcularImposto(g.valor));
+
   function alternarRecebido(g: Ganho, recebido: boolean) {
+    const entraNoSaldo = !!config?.entradasNoSaldo;
     // recorrente e pontual guardam "recebido" em lugares diferentes, mas os
     // dois caminhos precisam devolver se a gravação deu certo
     return g.tipo === "recorrente"
-      ? pagamentos.marcar("ganho", g.id, recebido, { nome: g.descricao, valor: g.valor })
-      : marcarRecebidoPontual(g.id, recebido);
+      ? pagamentos.marcar(
+          "ganho",
+          g.id,
+          recebido,
+          { nome: g.descricao, valor: entraNoSaldo ? liquido(g) : g.valor },
+          { entraNoSaldo }
+        )
+      : marcarRecebidoPontual(g.id, recebido, { entraNoSaldo, valorLiquido: liquido(g) });
   }
 
   function handleSubmit(e: FormEvent) {

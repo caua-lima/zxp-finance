@@ -3,7 +3,7 @@ import { verificarChamadorAtivo } from "@/lib/verificarChamador";
 import { lerJson, texto } from "@/lib/validacao";
 import { aceitarConvite } from "@/lib/acesso/convitesServidor";
 import { MENSAGEM_CONVITE, avaliarConvite, hashDoToken, tokenBemFormado, Convite } from "@/lib/acesso/convite";
-import { obterDocumento } from "@/lib/firestoreRest";
+import { obterDocumento, criarSeNaoExiste } from "@/lib/firestoreRest";
 import { criarUsuario } from "@/lib/usuariosFirebase";
 import { consumirCota } from "@/lib/cota";
 
@@ -58,5 +58,10 @@ export async function POST(req: NextRequest) {
 
   const resultado = await aceitarConvite(token, uid, emailDeQuemAceita);
   if (!resultado.ok) return NextResponse.json({ erro: MENSAGEM_CONVITE[resultado.problema] }, { status: 400 });
+  // conta nova da mentoria nasce com o contrato completo: recebido entra no
+  // saldo. Conta que já existia mantém a escolha dela (não reinterpreta).
+  if (!comLogin) {
+    await criarSeNaoExiste(`usuarios/${uid}/preferencias/app`, { entradasNoSaldo: true }).catch(() => false);
+  }
   return NextResponse.json({ ok: true, criouConta: !comLogin });
 }

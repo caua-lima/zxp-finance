@@ -12,7 +12,7 @@ import {
   Gasto,
 } from "@/lib/types";
 import { hojeISO } from "./calculations";
-import { saldoConfirmado, MovimentoPagamento } from "./saldo";
+import { recebimentosAvulsos, saldoConfirmado, MovimentoPagamento } from "./saldo";
 import { compromissosPorMes } from "./compromissosFuturos";
 import { ContextoSimulacao, MESES_MAXIMOS } from "./simulador";
 
@@ -58,7 +58,8 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
   const saldoAtual = saldoConfirmado(
     { valor: saldoDoc.valor, atualizadoEm: saldoDoc.atualizadoEm ?? 0 },
     comId(gastos),
-    pagamentos.map((p) => p.dados)
+    pagamentos.map((p) => p.dados),
+    recebimentosAvulsos(comId(ganhos))
   );
 
   const diaVencimentoPorCartao: Record<string, number> = {};

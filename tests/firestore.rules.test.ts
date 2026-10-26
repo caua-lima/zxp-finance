@@ -286,3 +286,20 @@ describe("concessão aplicada nos dados (mentoria B10)", () => {
     await assertSucceeds(getDoc(doc(dbDe("suspensa"), "acessos/suspensa")));
   });
 });
+
+describe("recebido que entra no saldo (C19)", () => {
+  test("ganho avulso grava entrouNoSaldo e valorRecebido; pagamento de ganho com afetaSaldo", async () => {
+    const db = dbDe("userA");
+    await assertSucceeds(
+      setDoc(doc(db, "usuarios/userA/ganhos/g1"), {
+        tipo: "pontual", mes: "2026-10", descricao: "Freela", valor: 1000, criadoEm: 1,
+        recebido: true, recebidoEm: Date.now(), entrouNoSaldo: true, valorRecebido: 940,
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, "usuarios/userA/pagamentos/2026-10__ganho__s1"), {
+        mes: "2026-10", origem: "ganho", itemId: "s1", nome: "Salário", valor: 2444, pagoEm: Date.now(), afetaSaldo: true,
+      })
+    );
+  });
+});

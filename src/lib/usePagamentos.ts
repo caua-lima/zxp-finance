@@ -79,7 +79,9 @@ export function usePagamentos(mes: string) {
     origem: OrigemItem,
     itemId: string,
     pago: boolean,
-    dados: { nome: string; valor: number }
+    dados: { nome: string; valor: number },
+    /** Ganho recebido entra no saldo (valor já líquido em `dados.valor`). */
+    opcoes: { entraNoSaldo?: boolean } = {}
   ) {
     if (!user) return false;
     const id = chave(mes, origem, itemId);
@@ -98,7 +100,8 @@ export function usePagamentos(mes: string) {
             valor: dados.valor,
             pagoEm: Date.now(),
             registradoEm: serverTimestamp(),
-            afetaSaldo: origem !== "ganho",
+            // conta/fatura/parcela: saída; ganho: entrada, só com a preferência ligada
+            afetaSaldo: origem !== "ganho" || !!opcoes.entraNoSaldo,
           });
         });
       } else {

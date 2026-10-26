@@ -15,6 +15,7 @@ import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
 import { useComissoes } from "./useComissoes";
 import { comissaoAReceber } from "./finance/comissaoPrevista";
+import { recebimentosAvulsos } from "./finance/saldo";
 
 export function useGanhos(mes: string) {
   const { user } = useAuth();
@@ -252,13 +253,24 @@ export function useGanhos(mes: string) {
     }
   }
 
-  async function marcarRecebidoPontual(id: string, recebido: boolean) {
+  async function marcarRecebidoPontual(
+    id: string,
+    recebido: boolean,
+    /** Com entraNoSaldo, o líquido recebido soma ao saldo (uma vez; desmarcar tira). */
+    opcoes: { entraNoSaldo?: boolean; valorLiquido?: number } = {}
+  ) {
     if (!user) return false;
     const ganho = todos.find((g) => g.id === id);
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "ganhos", id);
-      batch.update(ref, { recebido, recebidoEm: recebido ? Date.now() : null });
+      const entra = recebido && !!opcoes.entraNoSaldo && opcoes.valorLiquido !== undefined;
+      batch.update(ref, {
+        recebido,
+        recebidoEm: recebido ? Date.now() : null,
+        entrouNoSaldo: entra,
+        valorRecebido: entra ? opcoes.valorLiquido : null,
+      });
       if (ganho) {
         anexarAuditLog(batch, user.uid, user.email, {
           action: recebido ? "received" : "updated",
@@ -326,7 +338,11 @@ export function useGanhos(mes: string) {
   const imposto = calcularImposto(totalTributavel);
   const totalLiquido = total - imposto;
 
+  // ganhos avulsos que entraram no saldo (todos os meses) — o saldo confirmado precisa deles
+  const recebimentosNoSaldo = useMemo(() => recebimentosAvulsos(todos), [todos]);
+
   return {
+    recebimentosNoSaldo,
     recorrentes,
     pontuais,
     orfaos,

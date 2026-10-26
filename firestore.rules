@@ -145,7 +145,7 @@ service cloud.firestore {
         allow create, update: if dono(uid) && mesLivre(uid)
           && criaOuAltera(['tipo', 'mes', 'ativo', 'arquivado', 'recebido', 'recebidoEm',
                            'categoriaReceita', 'descricao', 'valor', 'semImposto',
-                           'origemComissao', 'criadoEm'])
+                           'origemComissao', 'entrouNoSaldo', 'valorRecebido', 'criadoEm'])
           && numeroEntre(request.resource.data.valor, 0, 10000000)
           && texto(request.resource.data.descricao, 200);
         allow delete: if dono(uid) && mesLivre(uid);

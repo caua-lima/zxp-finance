@@ -1,6 +1,6 @@
 import { formatarMoeda, mesSeguinte, mesAnteriorDe, Gasto, FinancialEntry } from "@/lib/types";
 import { construirFinancialEntries, DadosFinanceiros } from "@/lib/finance/adapters";
-import { saldoConfirmado, MovimentoPagamento } from "@/lib/finance/saldo";
+import { saldoConfirmado, recebimentosAvulsos, MovimentoPagamento } from "@/lib/finance/saldo";
 import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
 import { notificacaoDoDia } from "@/lib/abundancia";
 import { saldoEstaVelho } from "@/lib/finance/alerts";
@@ -127,7 +127,7 @@ export function eventosDoDia(dados: DadosDoUsuario, hojeISO: string): Evento[] {
     // Linguagem de abundância (lib/abundancia.ts): sem limite diário e sem
     // alerta de ritmo — a pedido do dono.
     const gastos: Gasto[] = dados.gastos;
-    const saldoAtual = saldoConfirmado(dados.saldo, gastos, dados.pagamentos);
+    const saldoAtual = saldoConfirmado(dados.saldo, gastos, dados.pagamentos, recebimentosAvulsos(dados.ganhos));
     if (saldoAtual !== null) {
       eventos.push(
         doTexto(

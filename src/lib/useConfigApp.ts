@@ -19,6 +19,12 @@ export interface ConfigApp {
   inicioHistorico: string;
   /** "AAAA-MM-DD" ou "" — dia em que o cliente começou a valer no app. */
   inicioUso: string;
+  /**
+   * Marcar ganho como recebido soma o líquido ao saldo. Ausente = false:
+   * conta antiga continua como era (saldo isolado dos ganhos); conta nova
+   * por convite já nasce com true.
+   */
+  entradasNoSaldo: boolean;
 }
 
 /**
@@ -51,12 +57,13 @@ export function useConfigApp() {
         const inicio =
           typeof dados.inicioHistorico === "string" ? dados.inicioHistorico : inicioPadrao;
         const uso = typeof dados.inicioUso === "string" ? dados.inicioUso : "";
+        const entradasNoSaldo = dados.entradasNoSaldo === true;
         configurarTaxaImposto(taxa);
         configurarInicioHistorico(inicio);
         configurarInicioUso(uso);
-        setConfig({ taxaImposto: taxa, inicioHistorico: inicio, inicioUso: uso });
+        setConfig({ taxaImposto: taxa, inicioHistorico: inicio, inicioUso: uso, entradasNoSaldo });
       },
-      () => setConfig({ taxaImposto: TAXA_IMPOSTO, inicioHistorico: inicioPadrao, inicioUso: "" })
+      () => setConfig({ taxaImposto: TAXA_IMPOSTO, inicioHistorico: inicioPadrao, inicioUso: "", entradasNoSaldo: false })
     );
   }, [user]);
 

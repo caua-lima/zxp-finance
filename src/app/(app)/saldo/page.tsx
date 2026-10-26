@@ -19,6 +19,7 @@ import { useNomesCartoes } from "@/lib/useCartoesConfig";
 import { sugerirCategoria, sugerirPagamento, OrigemPalpite, Sugestao } from "@/lib/categorizacao";
 import { useSaldo } from "@/lib/useSaldo";
 import { useGastos } from "@/lib/useGastos";
+import { useGanhos } from "@/lib/useGanhos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { totalGuardado, totalPorGasto } from "@/lib/finance/caixinhas";
 import { useReconhecimentoVoz } from "@/lib/useReconhecimentoVoz";
@@ -233,6 +234,7 @@ export default function SaldoPage() {
   const { caixinhas } = useCaixinhas();
   const cdi = useCdi();
   const pagamentos = usePagamentos(mesPadrao());
+  const { recebimentosNoSaldo } = useGanhos(mesPadrao());
   const toast = useToast();
   const monthClose = useMonthClose(mesPadrao());
 
@@ -253,7 +255,7 @@ export default function SaldoPage() {
   // Contrato único (docs/modelo-financeiro.md): saldo confirmado. O
   // "pode gastar hoje" saiu a pedido do dono (linguagem de abundância,
   // ver lib/abundancia.ts) — o cálculo continua em finance/saldo.ts.
-  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos);
+  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos, recebimentosNoSaldo);
   const reservaMeta = saldo?.reservaMeta ?? 0;
   // rendimento é só estimativa — nunca entra no saldo (auditoria F07)
   const percentualCdiSaldo = saldo?.percentualCdi ?? 0;

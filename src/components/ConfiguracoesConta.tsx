@@ -72,6 +72,28 @@ export function ConfiguracoesConta() {
         />
       </label>
 
+      <label className="flex min-h-[52px] cursor-pointer items-center justify-between gap-3">
+        <span>
+          <span className="block text-sm">Recebido entra no saldo</span>
+          <span className="block text-xs text-text-muted">
+            Ao marcar um ganho como recebido, o valor líquido soma ao seu saldo (uma vez; desmarcar
+            desfaz). Desligado, você atualiza o saldo à mão quando o dinheiro cai.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={!!config?.entradasNoSaldo}
+          disabled={!config}
+          onChange={async (e) => {
+            const ligado = e.target.checked;
+            if (await salvar({ entradasNoSaldo: ligado })) {
+              toast.sucesso(ligado ? "Recebimentos passam a entrar no saldo." : "Recebimentos não mexem mais no saldo.");
+            }
+          }}
+          className="h-5 w-5 shrink-0 accent-brand"
+        />
+      </label>
+
       <div>
         <label htmlFor="config-imposto" className="rotulo">
           Imposto sobre a renda (%)
