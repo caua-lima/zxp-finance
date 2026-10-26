@@ -7,7 +7,7 @@ import { formatarCentavos, paraCentavos } from "@/lib/dinheiro";
 const quando = (ms: number) =>
   new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-const ROTULO = { registro: "Registro", pagamento: "Pago", recebimento: "Recebido" } as const;
+const ROTULO = { registro: "Registro", pagamento: "Pago", recebimento: "Recebido", transferencia: "Caixinha" } as const;
 
 /**
  * "Como chegamos nesse número" (auditoria 25/10 F01/C20): o saldo de

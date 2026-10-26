@@ -80,6 +80,21 @@ export function recebimentosAvulsos(ganhos: Ganho[]): RecebimentoAvulso[] {
     }));
 }
 
+/**
+ * Transferência entre o saldo e uma caixinha (auditoria 25/10 F02/C21).
+ * Caixinha = dinheiro separado FORA da conta (cofrinho, outra conta):
+ * "guardar" tira do saldo, "resgatar" devolve. Não é receita nem despesa —
+ * não entra em relatório, só no caixa.
+ */
+export interface Transferencia {
+  id: string;
+  caixinhaId: string;
+  nome: string;
+  direcao: "guardar" | "resgatar";
+  valor: number;
+  criadoEm: number;
+}
+
 /** Ganho avulso marcado como recebido, já líquido, que entrou no saldo. */
 export interface RecebimentoAvulso {
   id: string;
@@ -89,7 +104,7 @@ export interface RecebimentoAvulso {
   recebidoEm: number;
 }
 
-export type TipoLinhaExtrato = "registro" | "pagamento" | "recebimento";
+export type TipoLinhaExtrato = "registro" | "pagamento" | "recebimento" | "transferencia";
 
 export interface LinhaExtrato {
   tipo: TipoLinhaExtrato;
@@ -110,7 +125,8 @@ export function extratoDoSaldo(
   ref: ReferenciaSaldo,
   gastos: Gasto[],
   pagamentos: MovimentoPagamento[] = [],
-  recebimentos: RecebimentoAvulso[] = []
+  recebimentos: RecebimentoAvulso[] = [],
+  transferencias: Transferencia[] = []
 ): LinhaExtrato[] {
   const linhas: LinhaExtrato[] = [];
   for (const g of gastos) {
@@ -143,6 +159,16 @@ export function extratoDoSaldo(
     if (r.recebidoEm <= ref.atualizadoEm) continue;
     linhas.push({ tipo: "recebimento", descricao: r.descricao, centavos: centavosDeLegado(r.valor), quando: r.recebidoEm });
   }
+  for (const t of transferencias) {
+    if (t.criadoEm <= ref.atualizadoEm) continue;
+    const c = centavosDeLegado(t.valor);
+    linhas.push({
+      tipo: "transferencia",
+      descricao: t.direcao === "guardar" ? `Guardado em ${t.nome}` : `Resgatado de ${t.nome}`,
+      centavos: t.direcao === "guardar" ? -c : c,
+      quando: t.criadoEm,
+    });
+  }
   return linhas.sort((a, b) => a.quando - b.quando);
 }
 
@@ -154,10 +180,14 @@ export function saldoConfirmado(
   ref: ReferenciaSaldo | null,
   gastos: Gasto[],
   pagamentos: MovimentoPagamento[] = [],
-  recebimentos: RecebimentoAvulso[] = []
+  recebimentos: RecebimentoAvulso[] = [],
+  transferencias: Transferencia[] = []
 ): number | null {
   if (!ref) return null;
-  const movimento = extratoDoSaldo(ref, gastos, pagamentos, recebimentos).reduce((acc, l) => acc + l.centavos, 0);
+  const movimento = extratoDoSaldo(ref, gastos, pagamentos, recebimentos, transferencias).reduce(
+    (acc, l) => acc + l.centavos,
+    0
+  );
   return deCentavos(centavosDeLegado(ref.valor) + movimento);
 }
 

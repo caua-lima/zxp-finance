@@ -80,3 +80,27 @@ describe("saldo explicável: entradas e saídas depois da referência (C18–C20
     assert.match(extrato[1].detalhe ?? "", /crédito/);
   });
 });
+
+describe("caixinha é transferência, não receita nem despesa (C21–C22)", async () => {
+  const { saldoConfirmado, extratoDoSaldo } = await import("./finance/saldo");
+  const ref = { valor: 1000, atualizadoEm: 1_000 };
+  const t = (direcao: "guardar" | "resgatar", valor: number, criadoEm: number) =>
+    ({ id: String(criadoEm), caixinhaId: "c1", nome: "Viagem", direcao, valor, criadoEm });
+
+  test("guardar R$ 10 e resgatar R$ 5: saldo −5, total (saldo + caixinha) conservado", () => {
+    const transferencias = [t("guardar", 10, 2_000), t("resgatar", 5, 3_000)];
+    const saldo = saldoConfirmado(ref, [], [], [], transferencias)!;
+    assert.equal(saldo, 995);
+    const caixinhaDepois = 100 + 10 - 5; // começou com 100 separados
+    assert.equal(saldo + caixinhaDepois, 1000 + 100);
+  });
+
+  test("transferência antes da referência já estava dentro dela", () => {
+    assert.equal(saldoConfirmado(ref, [], [], [], [t("guardar", 50, 500)]), 1000);
+  });
+
+  test("aparece no extrato como caixinha, com o nome", () => {
+    const e = extratoDoSaldo(ref, [], [], [], [t("guardar", 10, 2_000)]);
+    assert.deepEqual(e.map((l) => [l.tipo, l.descricao, l.centavos]), [["transferencia", "Guardado em Viagem", -1000]]);
+  });
+});

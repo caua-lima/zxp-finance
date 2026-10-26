@@ -76,6 +76,19 @@ orçamento 100, **restante 70** — e não 40.
 - Migrar o banco pra centavos é do lote I (backup, ensaio, migração reexecutável que nunca
   multiplica por 100 duas vezes).
 
+## Caixinhas (reservas)
+
+- **Definição:** caixinha é dinheiro separado FORA da conta (cofrinho, outra conta). O saldo
+  confirmado é o que está na conta; o que está nas caixinhas não conta de novo nele.
+- **Guardar** tira do saldo e põe na caixinha; **resgatar** faz o caminho inverso. Os dois são
+  transferências (`transferencias/`): não são receita nem despesa e não entram no relatório.
+  Total = saldo + caixinhas é conservado.
+- **Depósito automático por registro** é uma transferência pequena feita junto com o registro
+  (campo `guardado` do gasto) — já era assim.
+- **Saldo antigo da caixinha** (de antes desta versão) é o valor de abertura: já estava separado,
+  não é reinterpretado como saída nem entrada.
+- **Rendimento estimado** (CDI) nunca vira dinheiro: nem no saldo nem na caixinha.
+
 ## O que nunca pode acontecer
 
 - Previsão (fatura prevista, comissão prevista, entrada a receber) somada ao saldo.
