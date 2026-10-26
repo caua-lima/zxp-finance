@@ -8,9 +8,8 @@ import {
   updateDoc,
   doc,
   writeBatch,
-  runTransaction,
-  serverTimestamp,
 } from "firebase/firestore";
+import { ajustarCaixinha, transferirCaixinha, ErroCaixinha } from "./caixinhasOperacoes";
 import { Transferencia } from "./finance/saldo";
 import { db } from "./firebase";
 import { Caixinha, arredondarCentavos, formatarMoeda } from "./types";
@@ -125,42 +124,38 @@ export function useCaixinhas() {
    * saldo sem ser um depósito — sem registro não daria pra explicar
    * depois por que o número pulou.
    */
+  /**
+   * Corrige o valor (rendeu, o banco mostra outro número) como diferença
+   * sobre o que a pessoa viu — depósito concorrente preservado (F03/C23).
+   * Vai pro audit log com base e diferença.
+   */
   async function ajustarSaldo(id: string, novoSaldo: number) {
     if (!user) return false;
-    const ref = doc(db, "usuarios", user.uid, "caixinhas", id);
+    const caixinha = todas.find((c) => c.id === id);
+    if (!caixinha) return false;
     try {
-      // transação: lê o saldo ATUAL no servidor (um depósito automático pode
-      // ter chegado depois da tela abrir) e registra a base e a diferença
-      // reais — antes um ajuste podia apagar um depósito concorrente (F03).
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(ref);
-        if (!snap.exists()) throw new Error("Essa caixinha não existe mais.");
-        const base = snap.data().saldo as number;
-        const novo = arredondarCentavos(novoSaldo);
-        tx.update(ref, { saldo: novo, atualizadoEm: Date.now() });
-        anexarAuditLog(tx, user.uid, user.email, {
+      const { base, diferenca } = await ajustarCaixinha(db, user.uid, id, caixinha.saldo, novoSaldo);
+      if (diferenca !== 0) {
+        const batch = writeBatch(db);
+        anexarAuditLog(batch, user.uid, user.email, {
           action: "updated",
           entityType: "caixinha",
           entityId: id,
-          summary: `Caixinha "${snap.data().nome}" corrigida à mão: ${formatarMoeda(base)} → ${formatarMoeda(novo)} (${novo - base >= 0 ? "+" : ""}${formatarMoeda(novo - base)})`,
+          summary: `Caixinha "${caixinha.nome}" corrigida à mão: ${formatarMoeda(base)} ${diferenca > 0 ? "+" : "−"} ${formatarMoeda(Math.abs(diferenca))}`,
           before: { saldo: base },
-          after: { saldo: novo },
+          after: { diferenca },
         });
-      });
+        await batch.commit();
+      }
       setErro(null);
       return true;
     } catch (e) {
-      setErro(e instanceof Error && !("code" in e) ? e.message : mensagemErro(e));
+      setErro(e instanceof ErroCaixinha ? e.message : mensagemErro(e));
       return false;
     }
   }
 
-  /**
-   * Guardar (saldo → caixinha) ou resgatar (caixinha → saldo). Uma
-   * transação grava a transferência (imutável, id = chave: clicar duas
-   * vezes grava uma só) e muda o saldo da caixinha, juntos. Resgatar mais
-   * do que tem é recusado.
-   */
+  /** Guardar (saldo → caixinha) ou resgatar (caixinha → saldo). Ver caixinhasOperacoes.ts. */
   async function transferir(
     caixinhaId: string,
     direcao: "guardar" | "resgatar",
@@ -168,37 +163,12 @@ export function useCaixinhas() {
     chave: string
   ): Promise<boolean> {
     if (!user) return false;
-    const centavos = Math.round(valor * 100);
-    if (!Number.isFinite(valor) || centavos <= 0) {
-      setErro("Informe um valor maior que zero.");
-      return false;
-    }
-    const refCaixinha = doc(db, "usuarios", user.uid, "caixinhas", caixinhaId);
-    const refTransf = doc(db, "usuarios", user.uid, "transferencias", `t_${chave}`);
     try {
-      await runTransaction(db, async (tx) => {
-        const [caixa, ja] = await Promise.all([tx.get(refCaixinha), tx.get(refTransf)]);
-        if (ja.exists()) return; // repetição: já gravado
-        if (!caixa.exists()) throw new Error("Essa caixinha não existe mais.");
-        const saldoAtual = caixa.data().saldo as number;
-        const delta = (direcao === "guardar" ? 1 : -1) * (centavos / 100);
-        if (direcao === "resgatar" && Math.round(saldoAtual * 100) < centavos) {
-          throw new Error(`A caixinha tem ${formatarMoeda(saldoAtual)}: não dá pra resgatar mais do que isso.`);
-        }
-        tx.set(refTransf, {
-          caixinhaId,
-          nome: caixa.data().nome,
-          direcao,
-          valor: centavos / 100,
-          criadoEm: Date.now(),
-          registradoEm: serverTimestamp(),
-        });
-        tx.update(refCaixinha, { saldo: arredondarCentavos(saldoAtual + delta), atualizadoEm: Date.now() });
-      });
+      await transferirCaixinha(db, user.uid, caixinhaId, direcao, valor, chave);
       setErro(null);
       return true;
     } catch (e) {
-      setErro(e instanceof Error && !("code" in e) ? e.message : mensagemErro(e));
+      setErro(e instanceof ErroCaixinha ? e.message : mensagemErro(e));
       return false;
     }
   }
