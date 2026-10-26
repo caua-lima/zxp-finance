@@ -12,6 +12,7 @@ import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { useSaldo } from "@/lib/useSaldo";
 import { useComissoes } from "@/lib/useComissoes";
+import { useCaixinhas } from "@/lib/useCaixinhas";
 import { construirFinancialEntries } from "./adapters";
 import { saldoConfirmado } from "./saldo";
 import {
@@ -45,6 +46,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
   const pagamentos = usePagamentos(mes);
   const saldoHook = useSaldo();
   const comissoes = useComissoes(mes);
+  const { transferencias } = useCaixinhas();
 
   const loading =
     ganhos.loading ||
@@ -111,7 +113,13 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
 
   // mesma conta da tela de Saldo: valor informado menos o que foi gasto
   // depois — antes o Resumo mostrava só o valor informado
-  const saldoReal = saldoConfirmado(saldoHook.saldo, gastosHook.gastos, pagamentos.movimentos, ganhos.recebimentosNoSaldo);
+  const saldoReal = saldoConfirmado(
+    saldoHook.saldo,
+    gastosHook.gastos,
+    pagamentos.movimentos,
+    ganhos.recebimentosNoSaldo,
+    transferencias
+  );
   const saldoDisponivel = calculateAvailableBalance(saldoReal);
   const fluxoDoMes = useMemo(
     () => calculateMonthlyCashFlow(entries, mes),

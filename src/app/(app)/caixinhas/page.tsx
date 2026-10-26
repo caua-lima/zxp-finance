@@ -13,6 +13,7 @@ import {
   gastosAteAMeta,
 } from "@/lib/finance/caixinhas";
 import { MoneyInput } from "@/components/MoneyInput";
+import { Dialogo } from "@/components/Dialogo";
 import { ErroBanner } from "@/components/ErroBanner";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { SkeletonLista } from "@/components/Skeleton";
@@ -32,6 +33,7 @@ export default function CaixinhasPage() {
     ajustarSaldo,
     alternarAtiva,
     remover,
+    transferir,
   } = useCaixinhas();
   const toast = useToast();
   const cdi = useCdi();
@@ -194,6 +196,7 @@ export default function CaixinhasPage() {
               onAjustarSaldo={ajustarSaldo}
               onAlternarAtiva={alternarAtiva}
               onRemover={remover}
+              onTransferir={transferir}
               cdi={cdi.info}
             />
           ))}
@@ -211,10 +214,14 @@ export default function CaixinhasPage() {
             banco mostra.
           </p>
           <p>
-            <strong className="text-text">Saldo e caixinhas são separados:</strong> quando for
-            atualizar o saldo, digite o disponível da conta, sem o que está nos cofrinhos. Os
-            centavos que vão pra caixinha a cada gasto não são descontados do saldo aqui — a
-            diferença some na próxima vez que você atualizar.
+            <strong className="text-text">Caixinha é dinheiro separado da conta:</strong>{" "}
+            <em>Guardar</em> tira do seu saldo e põe na caixinha; <em>Resgatar</em> devolve. Os
+            centavos guardados a cada registro também saem do saldo na hora. Nada disso é gasto
+            nem ganho — saldo + caixinhas continua o mesmo total.
+          </p>
+          <p>
+            <strong className="text-text">Corrigir o valor</strong> (em editar) é pra quando a
+            caixinha rendeu ou o banco mostra outro número: muda só a caixinha, não o saldo.
           </p>
         </div>
       </details>
@@ -228,9 +235,11 @@ function ItemCaixinha({
   onAjustarSaldo,
   onAlternarAtiva,
   onRemover,
+  onTransferir,
   cdi,
 }: {
   caixinha: Caixinha;
+  onTransferir: (id: string, direcao: "guardar" | "resgatar", valor: number, chave: string) => Promise<boolean>;
   cdi: InfoCdi | null;
   onEditar: (
     id: string,
@@ -242,6 +251,9 @@ function ItemCaixinha({
 }) {
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
+  const [movendo, setMovendo] = useState<"guardar" | "resgatar" | null>(null);
+  const [valorMov, setValorMov] = useState(0);
+  const [chaveMov, setChaveMov] = useState("");
   const [nome, setNome] = useState(caixinha.nome);
   const [porGasto, setPorGasto] = useState(caixinha.porGasto);
   const [meta, setMeta] = useState(caixinha.meta ?? 0);
@@ -286,7 +298,7 @@ function ItemCaixinha({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="rotulo">Quanto tem guardado</label>
+            <label className="rotulo">Corrigir valor (não mexe no saldo)</label>
             <MoneyInput value={saldo} onChange={setSaldo} className="campo" />
           </div>
           <div>
@@ -411,6 +423,75 @@ function ItemCaixinha({
         </div>
       )}
 
+      <div className="mt-2.5 flex gap-2">
+        <Botao
+          tamanho="pequeno"
+          variante="secundario"
+          onClick={() => {
+            setValorMov(0);
+            setChaveMov(crypto.randomUUID());
+            setMovendo("guardar");
+          }}
+        >
+          Guardar
+        </Botao>
+        <Botao
+          tamanho="pequeno"
+          variante="secundario"
+          disabled={caixinha.saldo <= 0}
+          onClick={() => {
+            setValorMov(0);
+            setChaveMov(crypto.randomUUID());
+            setMovendo("resgatar");
+          }}
+        >
+          Resgatar
+        </Botao>
+      </div>
+
+      {movendo && (
+        <Dialogo
+          aberto
+          titulo={movendo === "guardar" ? `Guardar em "${caixinha.nome}"` : `Resgatar de "${caixinha.nome}"`}
+          descricao={
+            movendo === "guardar"
+              ? "Sai do seu saldo e vai pra caixinha. Não é gasto."
+              : `Volta pro seu saldo. Não é ganho. Disponível na caixinha: ${formatarMoeda(caixinha.saldo)}.`
+          }
+          onFechar={() => setMovendo(null)}
+        >
+          <label htmlFor={`mov-${caixinha.id}`} className="rotulo">
+            Valor
+          </label>
+          <MoneyInput id={`mov-${caixinha.id}`} value={valorMov} onChange={setValorMov} className="campo" />
+          {valorMov > 0 && (
+            <p className="mt-2 text-xs text-text-muted">
+              A caixinha fica com{" "}
+              {formatarMoeda(movendo === "guardar" ? caixinha.saldo + valorMov : caixinha.saldo - valorMov)}.
+            </p>
+          )}
+          <div className="mt-3 flex gap-2">
+            <Botao
+              larguraTotal
+              disabled={valorMov <= 0}
+              onClick={async () => {
+                // mesma chave enquanto a janela está aberta: confirmar duas vezes grava uma
+                const ok = await onTransferir(caixinha.id, movendo, valorMov, chaveMov);
+                if (ok) {
+                  toast.sucesso(movendo === "guardar" ? "Guardado." : "Resgatado: voltou pro saldo.");
+                  setMovendo(null);
+                }
+              }}
+            >
+              {movendo === "guardar" ? "Guardar" : "Resgatar"}
+            </Botao>
+            <Botao larguraTotal variante="secundario" onClick={() => setMovendo(null)}>
+              Cancelar
+            </Botao>
+          </div>
+        </Dialogo>
+      )}
+
       <button
         onClick={() =>
           toast.sucessoSe(
@@ -428,13 +509,16 @@ function ItemCaixinha({
       <ConfirmModal
         aberto={confirmando}
         titulo={`Excluir "${caixinha.nome}"?`}
-        descricao={`Os ${formatarMoeda(
-          caixinha.saldo
-        )} guardados somem do controle. O dinheiro em si não muda — ele nunca saiu da sua conta.`}
+        descricao={
+          caixinha.saldo > 0
+            ? `"${caixinha.nome}" ainda tem ${formatarMoeda(caixinha.saldo)}. Resgate antes (o valor volta pro seu saldo) — excluir com dinheiro dentro faria ele sumir do controle.`
+            : `"${caixinha.nome}" está vazia e sai da lista. O histórico de transferências continua.`
+        }
         textoConfirmar="Excluir"
         perigo
         onConfirmar={() => {
           setConfirmando(false);
+          if (caixinha.saldo > 0) return;
           toast.sucessoSe(onRemover(caixinha.id), "Caixinha excluída.");
         }}
         onCancelar={() => setConfirmando(false)}

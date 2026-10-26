@@ -12,7 +12,7 @@ import type {
   FaturaCartao,
   Comissao,
 } from "@/lib/types";
-import type { MovimentoPagamento } from "@/lib/finance/saldo";
+import type { MovimentoPagamento, Transferencia } from "@/lib/finance/saldo";
 import { eventosDoDia, DadosDoUsuario } from "@/lib/notificacoes/eventos";
 import { preferenciasPadrao, PreferenciasNotificacao } from "@/lib/notificacoes/regras";
 import {
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     const ler = async <T,>(col: string) =>
       (await listarDocumentos<T>(`${base}/${col}`)).map((d) => ({ ...d.dados, id: d.id }) as T & { id: string });
 
-    const [saldo, gastos, pagamentos, contas, assinaturas, parcelas, faturas, ganhos, comissoes, cartoes, prefsDoc] =
+    const [saldo, gastos, pagamentos, contas, assinaturas, parcelas, faturas, ganhos, comissoes, transferencias, cartoes, prefsDoc] =
       await Promise.all([
         obterDocumento<{ valor: number; atualizadoEm: number; reservaMeta?: number }>(`${base}/saldo/atual`),
         ler<Gasto>("gastos"),
@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
         ler<FaturaCartao>("faturasCartao"),
         ler<Ganho>("ganhos"),
         ler<Comissao>("comissoes"),
+        ler<Transferencia>("transferencias"),
         ler<{ nome: string; diaVencimento?: number | null }>("cartoesConfig"),
         obterDocumento<Partial<PreferenciasNotificacao>>(`${base}/preferencias/notificacoes`),
       ]);
@@ -111,6 +112,7 @@ export async function GET(req: NextRequest) {
       faturas,
       ganhos,
       comissoes,
+      transferencias,
       diaVencimentoPorCartao,
       diasComComissao: new Set(comissoes.map((x) => x.data)),
     };

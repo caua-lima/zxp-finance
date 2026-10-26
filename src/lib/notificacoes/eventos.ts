@@ -1,6 +1,6 @@
 import { formatarMoeda, mesSeguinte, mesAnteriorDe, Gasto, FinancialEntry } from "@/lib/types";
 import { construirFinancialEntries, DadosFinanceiros } from "@/lib/finance/adapters";
-import { saldoConfirmado, recebimentosAvulsos, MovimentoPagamento } from "@/lib/finance/saldo";
+import { saldoConfirmado, recebimentosAvulsos, MovimentoPagamento, Transferencia } from "@/lib/finance/saldo";
 import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
 import { notificacaoDoDia } from "@/lib/abundancia";
 import { saldoEstaVelho } from "@/lib/finance/alerts";
@@ -41,6 +41,8 @@ export interface Evento {
 export interface DadosDoUsuario extends Omit<DadosFinanceiros, "mes" | "estaPago"> {
   saldo: { valor: number; atualizadoEm: number; reservaMeta?: number } | null;
   pagamentos: Array<MovimentoPagamento & { id: string }>;
+  /** Guardar/resgatar caixinha (podem faltar em dados antigos de teste). */
+  transferencias?: Transferencia[];
   diasComComissao: Set<string>;
 }
 
@@ -127,7 +129,13 @@ export function eventosDoDia(dados: DadosDoUsuario, hojeISO: string): Evento[] {
     // Linguagem de abundância (lib/abundancia.ts): sem limite diário e sem
     // alerta de ritmo — a pedido do dono.
     const gastos: Gasto[] = dados.gastos;
-    const saldoAtual = saldoConfirmado(dados.saldo, gastos, dados.pagamentos, recebimentosAvulsos(dados.ganhos));
+    const saldoAtual = saldoConfirmado(
+      dados.saldo,
+      gastos,
+      dados.pagamentos,
+      recebimentosAvulsos(dados.ganhos),
+      dados.transferencias ?? []
+    );
     if (saldoAtual !== null) {
       eventos.push(
         doTexto(

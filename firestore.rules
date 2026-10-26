@@ -196,6 +196,19 @@ service cloud.firestore {
         allow delete: if dono(uid);
       }
 
+      // guardar/resgatar caixinha: imutável (desfazer = transferência contrária)
+      match /transferencias/{id} {
+        allow read: if dono(uid);
+        allow create: if dono(uid)
+          && campos(['caixinhaId', 'nome', 'direcao', 'valor', 'criadoEm', 'registradoEm'])
+          && texto(request.resource.data.caixinhaId, 128)
+          && texto(request.resource.data.nome, 200)
+          && request.resource.data.direcao in ['guardar', 'resgatar']
+          && numeroEntre(request.resource.data.valor, 0.01, 100000000)
+          && momento(request.resource.data.criadoEm);
+        allow update, delete: if false;
+      }
+
       match /saldo/{id} {
         allow read: if dono(uid);
         allow create, update: if dono(uid) && id == 'atual'

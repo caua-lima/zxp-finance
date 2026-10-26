@@ -233,7 +233,7 @@ export default function SaldoPage() {
     estornar,
     remover,
   } = useGastos();
-  const { caixinhas } = useCaixinhas();
+  const { caixinhas, transferencias } = useCaixinhas();
   const cdi = useCdi();
   const pagamentos = usePagamentos(mesPadrao());
   const { recebimentosNoSaldo } = useGanhos(mesPadrao());
@@ -257,7 +257,7 @@ export default function SaldoPage() {
   // Contrato único (docs/modelo-financeiro.md): saldo confirmado. O
   // "pode gastar hoje" saiu a pedido do dono (linguagem de abundância,
   // ver lib/abundancia.ts) — o cálculo continua em finance/saldo.ts.
-  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos, recebimentosNoSaldo);
+  const saldoAtual = saldoConfirmado(saldo, gastos, pagamentos.movimentos, recebimentosNoSaldo, transferencias);
   const reservaMeta = saldo?.reservaMeta ?? 0;
   // rendimento é só estimativa — nunca entra no saldo (auditoria F07)
   const percentualCdiSaldo = saldo?.percentualCdi ?? 0;
@@ -412,7 +412,7 @@ export default function SaldoPage() {
           {saldoAtual !== null && (
             <ComoChegamos
               referencia={saldo}
-              extrato={extratoDoSaldo(saldo, gastos, pagamentos.movimentos, recebimentosNoSaldo)}
+              extrato={extratoDoSaldo(saldo, gastos, pagamentos.movimentos, recebimentosNoSaldo, transferencias)}
               saldo={saldoAtual}
             />
           )}

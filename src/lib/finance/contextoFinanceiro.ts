@@ -12,7 +12,7 @@ import {
   Gasto,
 } from "@/lib/types";
 import { hojeISO } from "./calculations";
-import { recebimentosAvulsos, saldoConfirmado, MovimentoPagamento } from "./saldo";
+import { recebimentosAvulsos, saldoConfirmado, MovimentoPagamento, Transferencia } from "./saldo";
 import { compromissosPorMes } from "./compromissosFuturos";
 import { ContextoSimulacao, MESES_MAXIMOS } from "./simulador";
 
@@ -33,7 +33,7 @@ const comId = <T,>(docs: Doc<T>[]) => docs.map((d) => ({ ...d.dados, id: d.id })
 
 export async function montarContextoSimulacao(uid: string): Promise<ContextoSimulacao | null> {
   const base = `usuarios/${uid}`;
-  const [saldoDoc, contas, assinaturas, parcelas, ganhos, faturas, gastos, pagamentos, cartoes, prefsApp] =
+  const [saldoDoc, contas, assinaturas, parcelas, ganhos, faturas, gastos, pagamentos, cartoes, prefsApp, transferencias] =
     await Promise.all([
       obterDocumento<{ valor: number; atualizadoEm: number; reservaMeta?: number }>(`${base}/saldo/atual`),
       listarDocumentos<ContaFixa>(`${base}/contasFixas`),
@@ -45,6 +45,7 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
       listarDocumentos<MovimentoPagamento>(`${base}/pagamentos`),
       listarDocumentos<{ nome: string; diaVencimento?: number | null }>(`${base}/cartoesConfig`),
       obterDocumento<{ taxaImposto?: number }>(`${base}/preferencias/app`),
+      listarDocumentos<Transferencia>(`${base}/transferencias`),
     ]);
   // taxa do CLIENTE, passada explicitamente — no servidor não existe
   // configuração global por usuário
@@ -59,7 +60,8 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
     { valor: saldoDoc.valor, atualizadoEm: saldoDoc.atualizadoEm ?? 0 },
     comId(gastos),
     pagamentos.map((p) => p.dados),
-    recebimentosAvulsos(comId(ganhos))
+    recebimentosAvulsos(comId(ganhos)),
+    comId(transferencias)
   );
 
   const diaVencimentoPorCartao: Record<string, number> = {};

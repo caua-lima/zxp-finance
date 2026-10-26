@@ -303,3 +303,15 @@ describe("recebido que entra no saldo (C19)", () => {
     );
   });
 });
+
+describe("transferência de caixinha é imutável (C22)", () => {
+  test("cria guardar/resgatar válidos; não edita, não apaga, não inventa direção", async () => {
+    const db = dbDe("userA");
+    const t = { caixinhaId: "c1", nome: "Viagem", direcao: "guardar", valor: 50, criadoEm: Date.now() };
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/transferencias/t1"), t));
+    await assertFails(updateDoc(doc(db, "usuarios/userA/transferencias/t1"), { valor: 5 }));
+    await assertFails(deleteDoc(doc(db, "usuarios/userA/transferencias/t1")));
+    await assertFails(setDoc(doc(db, "usuarios/userA/transferencias/t2"), { ...t, direcao: "sumir" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/transferencias/t3"), { ...t, valor: 0 }));
+  });
+});
