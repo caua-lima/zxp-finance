@@ -115,3 +115,26 @@ describe("turma: acesso sem finanças", async () => {
     assert.deepEqual(resumoDaTurma([p]), { ativo: 1, suspenso: 0, encerrado: 0, vencendo: 1 });
   });
 });
+
+describe("convite em lote: prévia", async () => {
+  const { prepararLote } = await import("./lote");
+  const { avaliarConvite } = await import("./convite");
+
+  test("válido, inválido, repetido e quem já tem acesso", () => {
+    const linhas = prepararLote("Ana@Ex.com\nbeto@ex.com; ana@ex.com, nao-e-email\ncarla@ex.com", new Set(["carla@ex.com"]));
+    assert.deepEqual(linhas.map((l) => [l.email, l.situacao]), [
+      ["ana@ex.com", "novo"],
+      ["beto@ex.com", "novo"],
+      ["ana@ex.com", "repetido"],
+      ["nao-e-email", "invalido"],
+      ["carla@ex.com", "ja_tem_acesso"],
+    ]);
+  });
+
+  test("convite amarrado confere o e-mail sem ligar pra maiúscula", () => {
+    const c = { turmaId: null, criadoPor: "a", criadoEm: agora, expiraEm: agora + DIA, fimAcessoEm: null, paraEmail: "ana@ex.com" };
+    assert.equal(avaliarConvite(c, agora, "ANA@ex.com"), null);
+    assert.equal(avaliarConvite(c, agora, "beto@ex.com"), "outro_email");
+    assert.equal(avaliarConvite(c, agora, null), "outro_email");
+  });
+});

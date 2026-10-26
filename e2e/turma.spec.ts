@@ -57,3 +57,24 @@ test("turma: convite, aceite, suspensão e reativação — sem expor finanças"
   await aluno.reload();
   await expect(aluno.getByRole("heading", { name: "Início" })).toBeVisible();
 });
+
+test("convite em lote: prévia separa novo, repetido e inválido antes de gerar", async ({ page }) => {
+  await entrar(page, CONTAS.admin);
+  await page.goto("/acesso");
+  const nomeTurma = unico("Lote e2e");
+  await page.getByLabel("Nome da turma").fill(nomeTurma);
+  await page.getByRole("button", { name: "Criar turma" }).click();
+  const mentoria = page.getByRole("region", { name: "Mentoria" });
+  const linha = mentoria.getByRole("listitem").filter({ hasText: nomeTurma }).first();
+  await linha.getByRole("button", { name: new RegExp(nomeTurma) }).click();
+
+  await linha.getByLabel(/Convidar várias pessoas/).fill("ana@lote.local\nbeto@lote.local\nANA@lote.local\nnao-e-email");
+  await linha.getByRole("button", { name: "Ver prévia" }).click();
+  const previa = linha.getByRole("list", { name: "Prévia do lote" });
+  await expect(previa.getByText("vai receber convite")).toHaveCount(2);
+  await expect(previa.getByText("repetido")).toHaveCount(1);
+  await expect(previa.getByText("e-mail inválido")).toHaveCount(1);
+
+  await linha.getByRole("button", { name: "Gerar links" }).click();
+  await expect(linha.getByText(/2 link\(s\) gerado\(s\)/)).toBeVisible();
+});

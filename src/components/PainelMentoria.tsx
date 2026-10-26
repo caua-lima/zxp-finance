@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { Botao } from "@/components/Botao";
+import type { LinhaLote } from "@/lib/acesso/lote";
 
 interface TurmaApi {
   id: string;
@@ -29,6 +30,13 @@ const ROTULO_ESTADO: Record<PessoaApi["estado"], string> = {
 
 const dataCurta = (ms: number) => new Date(ms).toLocaleDateString("pt-BR");
 
+const SITUACAO_LOTE: Record<LinhaLote["situacao"], string> = {
+  novo: "vai receber convite",
+  invalido: "e-mail inválido",
+  repetido: "repetido",
+  ja_tem_acesso: "já tem acesso",
+};
+
 /**
  * Painel da mentoria pra administração (auditoria 25/10 B13): turmas,
  * convite com link pra copiar e quem está em cada turma — estado do
@@ -47,6 +55,7 @@ export function PainelMentoria({
   const [nome, setNome] = useState("");
   const [link, setLink] = useState<{ turmaId: string; url: string; expiraEm: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [lote, setLote] = useState<{ turmaId: string; texto: string; linhas: LinhaLote[]; links: { email: string; caminho: string }[] } | null>(null);
 
   const chamar = useCallback(
     async (url: string, init: RequestInit = {}) => {
@@ -104,6 +113,15 @@ export function PainelMentoria({
       setLink({ turmaId, url: `${window.location.origin}${r.caminho}`, expiraEm: r.expiraEm });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao gerar convite.");
+    }
+  }
+
+  async function loteChamar(turmaId: string, texto: string, gerar: boolean) {
+    try {
+      const r = await chamar("/api/admin/convites/lote", { method: "POST", body: JSON.stringify({ turmaId, emails: texto, gerar }) });
+      setLote({ turmaId, texto, linhas: r.linhas, links: r.links ?? [] });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro no convite em lote.");
     }
   }
 
@@ -181,6 +199,61 @@ export function PainelMentoria({
                     Copiar
                   </Botao>
                 </div>
+              </div>
+            )}
+
+            {turmaAberta === t.id && (
+              <div className="mt-2 rounded-xl bg-surface-2/40 p-3">
+                <label htmlFor={`lote-${t.id}`} className="rotulo">
+                  Convidar várias pessoas (um e-mail por linha)
+                </label>
+                <textarea
+                  id={`lote-${t.id}`}
+                  rows={3}
+                  value={lote?.turmaId === t.id ? lote.texto : ""}
+                  onChange={(e) => setLote({ turmaId: t.id, texto: e.target.value, linhas: [], links: [] })}
+                  className="campo resize-y text-xs"
+                />
+                <div className="mt-2 flex gap-2">
+                  <Botao tamanho="pequeno" variante="secundario" disabled={!lote?.texto.trim() || lote.turmaId !== t.id} onClick={() => lote && loteChamar(t.id, lote.texto, false)}>
+                    Ver prévia
+                  </Botao>
+                  <Botao
+                    tamanho="pequeno"
+                    disabled={lote?.turmaId !== t.id || !lote.linhas.some((l) => l.situacao === "novo") || lote.links.length > 0}
+                    onClick={() => lote && loteChamar(t.id, lote.texto, true)}
+                  >
+                    Gerar links
+                  </Botao>
+                </div>
+                {lote?.turmaId === t.id && lote.linhas.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 text-xs" aria-label="Prévia do lote">
+                    {lote.linhas.map((l, i) => (
+                      <li key={`${l.email}-${i}`} className="flex justify-between gap-2">
+                        <span className="truncate">{l.email}</span>
+                        <span className={l.situacao === "novo" ? "text-positive" : "text-text-muted"}>{SITUACAO_LOTE[l.situacao]}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {lote?.turmaId === t.id && lote.links.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-text-muted">
+                      {lote.links.length} link(s) gerado(s), cada um só funciona pro e-mail dele. Copie e envie você mesmo.
+                    </p>
+                    <Botao
+                      tamanho="pequeno"
+                      className="mt-1"
+                      onClick={() =>
+                        navigator.clipboard?.writeText(
+                          lote.links.map((l) => `${l.email};${window.location.origin}${l.caminho}`).join("\n")
+                        )
+                      }
+                    >
+                      Copiar todos (e-mail;link)
+                    </Botao>
+                  </div>
+                )}
               </div>
             )}
 
