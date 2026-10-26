@@ -67,6 +67,15 @@ O gasto de hoje é descontado **uma vez**. Exemplo da auditoria (último dia do
 mês, referência 100, gasto 30 hoje): saldo confirmado 70, início do dia 100,
 orçamento 100, **restante 70** — e não 40.
 
+## Dinheiro em centavos (versão 2 do modelo)
+
+- Todo **cálculo agregado** (saldo, totais, relatório) é feito em centavos inteiros, em BRL, por
+  `src/lib/dinheiro.ts` (`paraCentavos`, `somarReais`). Faixa segura: ±R$ 100 bilhões.
+- O **armazenamento** ainda é em reais com até 2 casas. A conversão acontece uma vez, na leitura;
+  valor legado inválido vira 0 e é reportado — nunca `NaN` no saldo.
+- Migrar o banco pra centavos é do lote I (backup, ensaio, migração reexecutável que nunca
+  multiplica por 100 duas vezes).
+
 ## O que nunca pode acontecer
 
 - Previsão (fatura prevista, comissão prevista, entrada a receber) somada ao saldo.

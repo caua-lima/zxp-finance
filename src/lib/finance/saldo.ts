@@ -1,4 +1,5 @@
 import { Gasto, arredondarCentavos } from "@/lib/types";
+import { Centavos, centavosDeLegado, deCentavos } from "@/lib/dinheiro";
 import { diaISOde } from "./calculations";
 
 /**
@@ -40,11 +41,16 @@ export function gastoContaNoSaldo(g: Gasto, ref: ReferenciaSaldo): boolean {
  * junto (depósito automático é transferência — sai do disponível).
  */
 export function saidaDoGasto(g: Gasto): number {
-  const guardado = Object.values(g.guardado ?? {}).reduce((acc, v) => acc + v, 0);
+  return deCentavos(saidaDoGastoCentavos(g));
+}
+
+/** Mesma conta, em centavos inteiros (contrato do dinheiro, lib/dinheiro.ts). */
+export function saidaDoGastoCentavos(g: Gasto): Centavos {
+  const guardado = Object.values(g.guardado ?? {}).reduce((acc, v) => acc + centavosDeLegado(v), 0);
   // compra no crédito: o valor sai da conta quando a fatura for paga, não
   // agora. O que foi pros cofrinhos é transferência e sai na hora.
   if (g.pagoCom === "credito") return guardado;
-  return g.valor + guardado;
+  return centavosDeLegado(g.valor) + guardado;
 }
 
 export function pagamentoContaNoSaldo(p: MovimentoPagamento, ref: ReferenciaSaldo): boolean {
@@ -58,13 +64,14 @@ export function saldoConfirmado(
   pagamentos: MovimentoPagamento[] = []
 ): number | null {
   if (!ref) return null;
+  // tudo em centavos inteiros: nenhum resíduo de ponto flutuante acumula
   const saidasGastos = gastos
     .filter((g) => gastoContaNoSaldo(g, ref))
-    .reduce((acc, g) => acc + saidaDoGasto(g), 0);
+    .reduce((acc, g) => acc + saidaDoGastoCentavos(g), 0);
   const saidasPagamentos = pagamentos
     .filter((p) => pagamentoContaNoSaldo(p, ref))
-    .reduce((acc, p) => acc + p.valor, 0);
-  return arredondarCentavos(ref.valor - saidasGastos - saidasPagamentos);
+    .reduce((acc, p) => acc + centavosDeLegado(p.valor), 0);
+  return deCentavos(centavosDeLegado(ref.valor) - saidasGastos - saidasPagamentos);
 }
 
 /**
