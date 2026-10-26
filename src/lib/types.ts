@@ -281,6 +281,12 @@ export interface MonthClose {
     expenses: number;
     result: number;
   };
+  /** Versão do fechamento atual (sobe a cada fechar). */
+  versao?: number;
+  /** SHA-256 do resumo da versão atual (ver finance/fechamento.ts). */
+  hash?: string;
+  reabertoEm?: number;
+  motivoReabertura?: string;
 }
 
 export interface Conciliacao {

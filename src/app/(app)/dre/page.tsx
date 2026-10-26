@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   mesPadrao,
@@ -24,6 +24,7 @@ import { useDreComparativo } from "@/lib/finance/useDreComparativo";
 import { groupByCategory } from "@/lib/finance/entries";
 import { formatPercent, hojeISO } from "@/lib/finance/calculations";
 import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
+import { resumoParaFechamento, divergenciaDoFechamento, Divergencia } from "@/lib/finance/fechamento";
 import { areaDaVida } from "@/lib/abundancia";
 import { valorNoMes } from "@/lib/finance/recorrencia";
 import {
@@ -145,6 +146,35 @@ export default function DrePage() {
     );
   }
   const resultadoOperacionalLiquido = resultadoLiquido(dre.atual, dre.impostoAtual);
+
+  // fechamento versionado (D30): o resumo vivo vai pra versão ao fechar e,
+  // com o mês fechado, é comparado com o que foi fechado
+  const resumoVivo = useMemo(
+    () =>
+      resumoParaFechamento(mes, dre.entriesAtual, {
+        receita: dre.atual.receitaOperacional,
+        despesas: totalDespesasEntries,
+        resultado: resultadoOperacionalLiquido,
+      }),
+    [mes, dre.entriesAtual, dre.atual.receitaOperacional, totalDespesasEntries, resultadoOperacionalLiquido]
+  );
+  const [divergencia, setDivergencia] = useState<Divergencia | null>(null);
+  const { fechado: mesFechado, resumoFechado, fechamento: dadosFechamento } = monthClose;
+  useEffect(() => {
+    let vivo = true;
+    if (!mesFechado || loading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- limpa o aviso fora do mês fechado
+      setDivergencia(null);
+      return;
+    }
+    resumoFechado().then((fechadoResumo) => {
+      if (vivo) setDivergencia(fechadoResumo ? divergenciaDoFechamento(fechadoResumo, resumoVivo) : null);
+    });
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resumoFechado muda junto com a versão
+  }, [mesFechado, loading, resumoVivo, dadosFechamento?.versao]);
   const resultadoOperacionalLiquidoAnterior = resultadoLiquido(dre.anterior, dre.impostoAnterior);
 
   function variacao(atualValor: number, anteriorValor: number): string | null {
@@ -222,8 +252,22 @@ export default function DrePage() {
 
       {monthClose.fechado && (
         <div className="mb-4 rounded-xl border border-line-soft bg-surface-2/50 px-4 py-3 text-xs text-text-faint">
-          Este mês está fechado. Marcar pago/recebido no checklist e lançar
-          fatura ficam bloqueados até reabrir.
+          Este mês está fechado
+          {monthClose.fechamento?.versao ? ` (versão ${monthClose.fechamento.versao})` : ""}. Marcar
+          pago/recebido no checklist e lançar fatura ficam bloqueados até reabrir.
+          {monthClose.fechamento?.snapshot && (
+            <span className="mt-1 block">
+              Resultado no fechamento: {formatarMoeda(monthClose.fechamento.snapshot.result)}.
+            </span>
+          )}
+          {divergencia && (
+            <span className="mt-1 block font-medium text-gold">
+              Desde o fechamento, os números ao vivo mudaram {divergencia.diferencaResultado >= 0 ? "+" : "−"}
+              {formatarMoeda(Math.abs(divergencia.diferencaResultado))} ({divergencia.linhasDiferentes}{" "}
+              lançamento(s) diferentes — ex.: cadastro editado). O fechamento continua valendo; reabra se
+              precisar corrigir.
+            </span>
+          )}
         </div>
       )}
 
@@ -233,11 +277,17 @@ export default function DrePage() {
         descricao={`Trava marcar pago/recebido e lançar fatura pra ${mes}. Dá pra reabrir depois, com motivo.`}
         textoConfirmar="Fechar"
         onConfirmar={() => {
-          toast.sucessoSe(monthClose.fechar({
-            income: dre.atual.receitaOperacional,
-            expenses: totalDespesasEntries,
-            result: resultadoOperacionalLiquido,
-          }), `Mês de ${mes} fechado.`);
+          toast.sucessoSe(
+            monthClose.fechar(
+              {
+                income: dre.atual.receitaOperacional,
+                expenses: totalDespesasEntries,
+                result: resultadoOperacionalLiquido,
+              },
+              resumoVivo
+            ),
+            `Mês de ${mes} fechado.`
+          );
           setConfirmandoFechar(false);
         }}
         onCancelar={() => setConfirmandoFechar(false)}

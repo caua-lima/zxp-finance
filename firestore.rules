@@ -245,6 +245,26 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // versões de fechamento e reaberturas: só acréscimo (história fechada não se reescreve)
+      match /monthCloses/{m}/versoes/{v} {
+        allow read: if dono(uid);
+        allow create: if dono(uid)
+          && campos(['versao', 'fechadoEm', 'fechadoPor', 'hash', 'resumo'])
+          && request.resource.data.versao is int
+          && v == string(request.resource.data.versao)
+          && texto(request.resource.data.hash, 64)
+          && request.resource.data.resumo is map;
+        allow update, delete: if false;
+      }
+      match /monthCloses/{m}/reaberturas/{v} {
+        allow read: if dono(uid);
+        allow create: if dono(uid)
+          && campos(['versao', 'motivo', 'reabertoEm', 'reabertoPor'])
+          && texto(request.resource.data.motivo, 500)
+          && request.resource.data.motivo.size() >= 3;
+        allow update, delete: if false;
+      }
+
       // fechamento: reabrir exige motivo
       match /monthCloses/{m} {
         allow read: if dono(uid);

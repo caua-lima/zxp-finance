@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot, writeBatch } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, runTransaction, writeBatch } from "firebase/firestore";
+import { ResumoFechamento, hashDoResumo } from "./finance/fechamento";
 import { db } from "./firebase";
 import { MonthClose } from "./types";
 import { useAuth } from "./AuthContext";
@@ -41,27 +42,53 @@ export function useMonthClose(mes: string) {
 
   const fechado = fechamento?.status === "closed";
 
-  async function fechar(snapshot: { income: number; expenses: number; result: number }, notes?: string) {
+  /**
+   * Fecha o mês gravando uma VERSÃO imutável (totais + linhas + hash) e
+   * apontando o documento do mês pra ela, numa transação: fechar de novo
+   * depois de reabrir cria a versão seguinte, nunca reescreve a anterior
+   * (auditoria 25/10 D30).
+   */
+  async function fechar(
+    snapshot: { income: number; expenses: number; result: number },
+    resumo: ResumoFechamento,
+    notes?: string
+  ) {
     if (!user) return false;
     try {
-      const batch = writeBatch(db);
+      const hash = await hashDoResumo(resumo);
       const ref = doc(db, "usuarios", user.uid, "monthCloses", mes);
-      batch.set(ref, {
-        month: mes,
-        status: "closed",
-        closedAt: Date.now(),
-        closedBy: user.email ?? user.uid,
-        ...(notes ? { notes } : {}),
-        snapshot,
+      await runTransaction(db, async (tx) => {
+        const atual = await tx.get(ref);
+        const versao = ((atual.exists() ? (atual.data().versao as number | undefined) : 0) ?? 0) + 1;
+        tx.set(doc(db, "usuarios", user.uid, "monthCloses", mes, "versoes", String(versao)), {
+          versao,
+          fechadoEm: Date.now(),
+          fechadoPor: user.email ?? user.uid,
+          hash,
+          resumo,
+        });
+        tx.set(
+          ref,
+          {
+            month: mes,
+            status: "closed",
+            closedAt: Date.now(),
+            closedBy: user.email ?? user.uid,
+            ...(notes ? { notes } : {}),
+            snapshot,
+            versao,
+            hash,
+          },
+          { merge: true }
+        );
+        anexarAuditLog(tx, user.uid, user.email, {
+          action: "closed_month",
+          entityType: "monthClose",
+          entityId: mes,
+          summary: `Mês ${mes} fechado (versão ${versao})`,
+          after: { ...snapshot, versao, hash },
+        });
       });
-      anexarAuditLog(batch, user.uid, user.email, {
-        action: "closed_month",
-        entityType: "monthClose",
-        entityId: mes,
-        summary: `Mês ${mes} fechado`,
-        after: snapshot,
-      });
-      await batch.commit();
       setErro(null);
       return true;
     } catch (e) {
@@ -70,23 +97,29 @@ export function useMonthClose(mes: string) {
     }
   }
 
+  /** Reabre com motivo; a versão fechada fica intacta e a reabertura vira registro só-acréscimo. */
   async function reabrir(motivo: string) {
     if (!user) return false;
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "monthCloses", mes);
+      const versao = fechamento?.versao ?? 0;
       // o motivo fica no próprio documento: as regras do Firestore só
       // aceitam reabrir um mês fechado com motivo (auditoria F11)
-      batch.set(
-        ref,
-        { status: "open", reabertoEm: Date.now(), motivoReabertura: motivo },
-        { merge: true }
-      );
+      batch.set(ref, { status: "open", reabertoEm: Date.now(), motivoReabertura: motivo }, { merge: true });
+      if (versao > 0) {
+        batch.set(doc(db, "usuarios", user.uid, "monthCloses", mes, "reaberturas", String(versao)), {
+          versao,
+          motivo,
+          reabertoEm: Date.now(),
+          reabertoPor: user.email ?? user.uid,
+        });
+      }
       anexarAuditLog(batch, user.uid, user.email, {
         action: "updated",
         entityType: "monthClose",
         entityId: mes,
-        summary: `Mês ${mes} reaberto: ${motivo}`,
+        summary: `Mês ${mes} reaberto${versao ? ` (versão ${versao} fica guardada)` : ""}: ${motivo}`,
       });
       await batch.commit();
       setErro(null);
@@ -97,5 +130,12 @@ export function useMonthClose(mes: string) {
     }
   }
 
-  return { fechamento, fechado, loading, erro, fechar, reabrir };
+  /** O resumo gravado na versão atual (pra comparar com os números vivos). */
+  async function resumoFechado(): Promise<ResumoFechamento | null> {
+    if (!user || !fechamento?.versao) return null;
+    const snap = await getDoc(doc(db, "usuarios", user.uid, "monthCloses", mes, "versoes", String(fechamento.versao)));
+    return snap.exists() ? (snap.data().resumo as ResumoFechamento) : null;
+  }
+
+  return { fechamento, fechado, loading, erro, fechar, reabrir, resumoFechado };
 }

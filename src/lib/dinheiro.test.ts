@@ -243,3 +243,25 @@ describe("compra no crédito na fatura certa, sem contar duas vezes (D29)", asyn
     assert.equal(saldoConfirmado(ref, [perfume], pagouFatura), 100);
   });
 });
+
+describe("fechamento versionado (D30)", async () => {
+  const { resumoParaFechamento, hashDoResumo, divergenciaDoFechamento } = await import("./finance/fechamento");
+  const e = (id: string, type: "income" | "expense", amount: number) =>
+    ({ id, type, amount, competenceMonth: "2026-09", status: "paid", dueDate: "2026-09-10", description: id, categoryId: "x", source: "manual", createdAt: 0, updatedAt: 0 }) as never;
+  const totais = { receita: 2600, despesas: 1300, resultado: 1144 };
+
+  test("mesmo conjunto, mesmo hash — em qualquer ordem", async () => {
+    const a = resumoParaFechamento("2026-09", [e("x", "income", 2600), e("y", "expense", 1300)], totais);
+    const b = resumoParaFechamento("2026-09", [e("y", "expense", 1300), e("x", "income", 2600)], totais);
+    assert.equal(await hashDoResumo(a), await hashDoResumo(b));
+    assert.match(await hashDoResumo(a), /^[0-9a-f]{64}$/);
+  });
+
+  test("assinatura editada depois do fechamento aparece como divergência, não reescreve", async () => {
+    const fechado = resumoParaFechamento("2026-09", [e("x", "income", 2600), e("assinatura", "expense", 20)], totais);
+    const vivo = resumoParaFechamento("2026-09", [e("x", "income", 2600), e("assinatura", "expense", 25)], { ...totais, resultado: 1139 });
+    assert.deepEqual(divergenciaDoFechamento(fechado, vivo), { diferencaResultado: -5, linhasDiferentes: 1 });
+    assert.notEqual(await hashDoResumo(fechado), await hashDoResumo(vivo));
+    assert.equal(divergenciaDoFechamento(fechado, fechado), null);
+  });
+});

@@ -315,3 +315,19 @@ describe("transferência de caixinha é imutável (C22)", () => {
     await assertFails(setDoc(doc(db, "usuarios/userA/transferencias/t3"), { ...t, valor: 0 }));
   });
 });
+
+describe("fechamento versionado é só acréscimo (D30)", () => {
+  test("versão e reabertura: cria, não edita, não apaga", async () => {
+    const db = dbDe("userA");
+    const versao = { versao: 1, fechadoEm: 1, fechadoPor: "a", hash: "f".repeat(64), resumo: { mes: "2026-09" } };
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/monthCloses/2026-09/versoes/1"), versao));
+    await assertFails(updateDoc(doc(db, "usuarios/userA/monthCloses/2026-09/versoes/1"), { hash: "a".repeat(64) }));
+    await assertFails(deleteDoc(doc(db, "usuarios/userA/monthCloses/2026-09/versoes/1")));
+    // número da versão tem que bater com o id
+    await assertFails(setDoc(doc(db, "usuarios/userA/monthCloses/2026-09/versoes/2"), versao));
+    const reab = { versao: 1, motivo: "lancei a fatura errada", reabertoEm: 2, reabertoPor: "a" };
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/monthCloses/2026-09/reaberturas/1"), reab));
+    await assertFails(setDoc(doc(db, "usuarios/userA/monthCloses/2026-09/reaberturas/2"), { ...reab, motivo: "" }));
+    await assertFails(updateDoc(doc(db, "usuarios/userA/monthCloses/2026-09/reaberturas/1"), { motivo: "outro" }));
+  });
+});
