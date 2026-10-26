@@ -8,7 +8,9 @@ export const maxDuration = 60;
 
 /** Baixa todos os dados do PRÓPRIO usuário (o uid vem do token, nunca da URL). */
 export async function GET(req: NextRequest) {
-  const acesso = await verificarChamadorAtivo(req);
+  // exportar os próprios dados vale mesmo com acesso suspenso/encerrado:
+  // a pessoa nunca fica sem os dados dela (auditoria 25/10 S03)
+  const acesso = await verificarChamadorAtivo(req, { exigirConcessao: false });
   if (!acesso.ok) return acesso.resposta;
   try {
     const dados = await exportarCliente(acesso.identidade.uid);

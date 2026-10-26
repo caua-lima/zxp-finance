@@ -7,6 +7,8 @@ import { Nav } from "@/components/Nav";
 import { ToastProvider } from "@/components/Toast";
 import { SemConexao } from "@/components/SemConexao";
 import { useConfigApp } from "@/lib/useConfigApp";
+import { useAcesso } from "@/lib/useAcesso";
+import { AcessoBloqueado } from "@/components/AcessoBloqueado";
 
 export default function AppLayout({
   children,
@@ -16,6 +18,7 @@ export default function AppLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
   const { versao } = useConfigApp();
+  const acesso = useAcesso();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -25,13 +28,16 @@ export default function AppLayout({
 
   // espera a configuração do cliente (imposto, início do histórico) pra não
   // renderizar cálculo com valor errado e trocar logo depois
-  if (loading || !user || !versao) {
+  if (loading || !user || !versao || !acesso) {
     return (
       <main className="flex flex-1 items-center justify-center">
         <p className="text-text-faint text-sm">Carregando...</p>
       </main>
     );
   }
+
+  // sem acesso liberado: explica o motivo em vez de telas com erro de permissão
+  if (!acesso.liberado && acesso.motivo) return <AcessoBloqueado motivo={acesso.motivo} />;
 
   return (
     <ToastProvider>

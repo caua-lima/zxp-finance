@@ -79,3 +79,16 @@ export async function conviteNoEmulador(opcoes: { expiraEm?: number } = {}): Pro
   });
   return token;
 }
+
+/** UID de uma conta do emulador (login pela API REST do Auth emulator). */
+export async function uidNoEmulador(conta: { email: string; senha: string }): Promise<string> {
+  const AUTH = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? "127.0.0.1:9099";
+  const r = await fetch(`http://${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: conta.email, password: conta.senha, returnSecureToken: true }),
+  });
+  const j = await r.json();
+  if (!j.localId) throw new Error("conta não encontrada no emulador");
+  return j.localId;
+}
