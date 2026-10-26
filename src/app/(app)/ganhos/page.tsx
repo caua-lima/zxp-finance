@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { mesPadrao, formatarMes, formatarMoeda, taxaImpostoAtual, calcularImposto, arredondarCentavos, Ganho } from "@/lib/types";
 import { useConfigApp } from "@/lib/useConfigApp";
+import { valorNoMes } from "@/lib/finance/recorrencia";
 import { CATEGORIAS_RECEITA, iconeCategoriaReceita } from "@/lib/categoriasFinanceiras";
 import { useGanhos } from "@/lib/useGanhos";
 import { sugerirCategoriaReceita } from "@/lib/categorizacao";
@@ -237,7 +238,7 @@ export default function GanhosPage() {
           <Secao
             titulo="Recorrentes (todo mês)"
             vazio="Nenhum ganho recorrente cadastrado."
-            itens={recorrentes}
+            itens={recorrentes.map((g) => ({ ...g, valor: valorNoMes(g, mes) }))}
             comAtivo
             onEditar={editar}
             onRemover={remover}

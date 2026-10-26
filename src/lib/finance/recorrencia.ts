@@ -40,6 +40,25 @@ export function valorNoMes(r: Pick<Recorrencia, "valor" | "historicoValores">, m
   return vigentes.length > 0 ? vigentes[vigentes.length - 1].valor : r.valor;
 }
 
+/** Ganho recorrente no formato de recorrência (ganho usa `ativo`, conta usa `ativa`). */
+export function recorrenciaDoGanho(g: {
+  ativo?: boolean;
+  valor: number;
+  criadoEm: number;
+  inicioEm?: string;
+  desativadaEm?: string | null;
+  historicoValores?: VigenciaValor[];
+}): Recorrencia {
+  return {
+    ativa: g.ativo !== false,
+    valor: g.valor,
+    criadoEm: g.criadoEm,
+    inicioEm: g.inicioEm,
+    desativadaEm: g.desativadaEm,
+    historicoValores: g.historicoValores,
+  };
+}
+
 /**
  * Histórico novo ao mudar o valor a partir de `mes`: preserva o valor
  * antigo desde o início (se ainda não havia histórico) e grava o novo.

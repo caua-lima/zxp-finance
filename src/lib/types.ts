@@ -22,6 +22,12 @@ export interface Ganho {
   entrouNoSaldo?: boolean;
   /** Quanto caiu na conta (líquido) quando entrou no saldo. */
   valorRecebido?: number;
+  /** Recorrente: mês em que começou ("AAAA-MM"); ausente = mês do cadastro. */
+  inicioEm?: string;
+  /** Recorrente: arquivado a partir deste mês (vale até o anterior). */
+  desativadaEm?: string | null;
+  /** Recorrente: mudanças de valor, cada uma valendo dali pra frente. */
+  historicoValores?: VigenciaValor[];
   criadoEm: number;
 }
 

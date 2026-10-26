@@ -135,3 +135,31 @@ describe("estornado é derivado do lançamento de estorno (D25)", async () => {
     assert.deepEqual(r.map((g) => [g.id, !!g.estornado]), [["g1", true], ["estorno__g1", false], ["g2", false]]);
   });
 });
+
+describe("ganho recorrente com vigência (D27)", async () => {
+  const { ganhosParaEntries } = await import("./finance/adapters");
+  const { historicoAoMudarValor, recorrenciaDoGanho } = await import("./finance/recorrencia");
+  const salario = {
+    id: "s", tipo: "recorrente", descricao: "Salário", valor: 2600, ativo: true,
+    criadoEm: Date.parse("2026-08-01T12:00:00-03:00"),
+  } as never as import("./types").Ganho;
+
+  test("aumento em novembro não muda setembro e outubro", () => {
+    const comAumento = { ...salario, valor: 3000, historicoValores: historicoAoMudarValor(recorrenciaDoGanho(salario), 3000, "2026-11") };
+    const valor = (mes: string) => ganhosParaEntries([comAumento], mes, () => false)[0]?.amount;
+    // lançamento é bruto (o imposto entra uma vez, depois, sobre o tributável)
+    assert.equal(valor("2026-09"), 2600);
+    assert.equal(valor("2026-10"), 2600);
+    assert.equal(valor("2026-11"), 3000);
+  });
+
+  test("arquivado em novembro continua em outubro, some de novembro", () => {
+    const arquivado = { ...salario, ativo: false, desativadaEm: "2026-11" };
+    assert.equal(ganhosParaEntries([arquivado], "2026-10", () => false).length, 1);
+    assert.equal(ganhosParaEntries([arquivado], "2026-11", () => false).length, 0);
+  });
+
+  test("antes do início não existe", () => {
+    assert.equal(ganhosParaEntries([salario], "2026-07", () => false).length, 0);
+  });
+});

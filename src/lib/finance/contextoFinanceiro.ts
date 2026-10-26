@@ -12,6 +12,7 @@ import {
   Gasto,
 } from "@/lib/types";
 import { hojeISO } from "./calculations";
+import { recorrenciaDoGanho, recorrenciaNoMes, valorNoMes } from "./recorrencia";
 import { recebimentosAvulsos, saldoConfirmado, MovimentoPagamento, Transferencia } from "./saldo";
 import { compromissosPorMes } from "./compromissosFuturos";
 import { ContextoSimulacao, MESES_MAXIMOS } from "./simulador";
@@ -86,10 +87,15 @@ export async function montarContextoSimulacao(uid: string): Promise<ContextoSimu
   );
 
   // renda conservadora: só o que é recorrente e ativo, líquido de imposto
+  // valor vigente NESTE mês (vigência: o salário de hoje, não o de antes)
+  const mesAtual = hojeISO().slice(0, 7);
   const rendaMensalLiquida = arredondarCentavos(
     listaGanhos
-      .filter((g) => g.tipo === "recorrente" && g.ativo !== false)
-      .reduce((acc, g) => acc + g.valor - (g.semImposto ? 0 : calcularImposto(g.valor, taxa)), 0)
+      .filter((g) => g.tipo === "recorrente" && recorrenciaNoMes(recorrenciaDoGanho(g), mesAtual))
+      .reduce((acc, g) => {
+        const v = valorNoMes(g, mesAtual);
+        return acc + v - (g.semImposto ? 0 : calcularImposto(v, taxa));
+      }, 0)
   );
 
   return {

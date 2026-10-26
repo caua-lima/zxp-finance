@@ -9,13 +9,14 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Ganho, calcularImposto } from "./types";
+import { Ganho, calcularImposto, mesPadrao } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
 import { useComissoes } from "./useComissoes";
 import { comissaoAReceber } from "./finance/comissaoPrevista";
 import { recebimentosAvulsos } from "./finance/saldo";
+import { historicoAoMudarValor, recorrenciaDoGanho, recorrenciaNoMes, valorNoMes } from "./finance/recorrencia";
 
 export function useGanhos(mes: string) {
   const { user } = useAuth();
@@ -134,11 +135,17 @@ export function useGanhos(mes: string) {
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "ganhos", id);
+      // recorrente: valor novo vale do mês atual em diante; meses passados
+      // continuam com o valor que tinham (auditoria 25/10 D27)
+      const mudouValorRecorrente = ganho?.tipo === "recorrente" && ganho.valor !== dados.valor;
       batch.update(ref, {
         descricao: dados.descricao,
         valor: dados.valor,
         categoriaReceita: dados.categoriaReceita ?? null,
         semImposto: !!dados.semImposto,
+        ...(mudouValorRecorrente
+          ? { historicoValores: historicoAoMudarValor(recorrenciaDoGanho(ganho!), dados.valor, mesPadrao()) }
+          : {}),
       });
       if (ganho) {
         anexarAuditLog(batch, user.uid, user.email, {
@@ -233,7 +240,8 @@ export function useGanhos(mes: string) {
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "ganhos", id);
-      batch.update(ref, { ativo });
+      // arquivar guarda o mês: os meses anteriores continuam com o ganho
+      batch.update(ref, { ativo, desativadaEm: ativo ? null : mesPadrao() });
       if (ganho) {
         anexarAuditLog(batch, user.uid, user.email, {
           action: ativo ? "updated" : "archived",
@@ -322,9 +330,9 @@ export function useGanhos(mes: string) {
   const comissaoDoMes = comissaoAReceber(mes, comissoes.todas, todos);
   const brutoComissao = comissaoDoMes?.restanteBruto ?? 0;
 
-  const totalRecorrentes = recorrentes
-    .filter((g) => g.ativo !== false)
-    .reduce((acc, g) => acc + g.valor, 0);
+  // recorrente no mês: vigência (início/arquivamento) e valor daquele mês
+  const recorrentesNoMes = recorrentes.filter((g) => recorrenciaNoMes(recorrenciaDoGanho(g), mes));
+  const totalRecorrentes = recorrentesNoMes.reduce((acc, g) => acc + valorNoMes(g, mes), 0);
   const totalPontuais = pontuais
     .filter((g) => !g.arquivado)
     .reduce((acc, g) => acc + g.valor, 0);
@@ -332,9 +340,10 @@ export function useGanhos(mes: string) {
   // Imposto só incide sobre o que não foi marcado como "sem imposto" (ex:
   // bico/trabalho por fora recebido já líquido) — não é uma taxa sobre o
   // total, é a soma do imposto de cada ganho tributável individualmente.
-  const totalTributavel = [...recorrentes, ...pontuais]
-    .filter((g) => !g.semImposto && (g.tipo === "recorrente" ? g.ativo !== false : !g.arquivado))
-    .reduce((acc, g) => acc + g.valor, 0) + brutoComissao;
+  const totalTributavel =
+    [...recorrentesNoMes.map((g) => ({ ...g, valor: valorNoMes(g, mes) })), ...pontuais.filter((g) => !g.arquivado)]
+      .filter((g) => !g.semImposto)
+      .reduce((acc, g) => acc + g.valor, 0) + brutoComissao;
   const imposto = calcularImposto(totalTributavel);
   const totalLiquido = total - imposto;
 

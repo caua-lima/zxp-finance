@@ -25,6 +25,7 @@ import { groupByCategory } from "@/lib/finance/entries";
 import { formatPercent, hojeISO } from "@/lib/finance/calculations";
 import { resumoGastosDiarios } from "@/lib/finance/gastosDiarios";
 import { areaDaVida } from "@/lib/abundancia";
+import { valorNoMes } from "@/lib/finance/recorrencia";
 import {
   sugerirCrescimentoCategorias,
   compararComBenchmarkIBGE,
@@ -504,7 +505,7 @@ export default function DrePage() {
                   <ItemLinha
                     key={g.id}
                     nome={g.descricao}
-                    valor={g.valor}
+                    valor={valorNoMes(g, mes)}
                     cor="text-positive"
                     inativo={g.ativo === false}
                     nota={g.ativo === false ? "desativado" : undefined}

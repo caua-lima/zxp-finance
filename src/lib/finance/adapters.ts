@@ -22,7 +22,7 @@ import {
   CARTAO_NAO_INFORMADO,
 } from "./faturaPrevista";
 import { comissaoPrevistaParaEntries } from "./comissaoPrevista";
-import { recorrenciaNoMes, valorNoMes } from "./recorrencia";
+import { recorrenciaNoMes, valorNoMes, recorrenciaDoGanho } from "./recorrencia";
 import { CARTOES_PREDEFINIDOS } from "@/lib/cartoes";
 
 /**
@@ -74,7 +74,8 @@ export function ganhosParaEntries(
     // ganho sem tipo (sobra de edição manual no Firestore) passava pelos
     // dois filtros abaixo e entrava como "a receber" em TODO mês
     if (g.tipo !== "recorrente" && g.tipo !== "pontual") continue;
-    if (g.tipo === "recorrente" && g.ativo === false) continue;
+    // recorrente: existe no mês (início/arquivamento) e com o valor vigente nele
+    if (g.tipo === "recorrente" && !recorrenciaNoMes(recorrenciaDoGanho(g), mes)) continue;
     if (g.tipo === "pontual" && (g.mes !== mes || g.arquivado)) continue;
     const recebido =
       g.tipo === "recorrente" ? estaPago("ganho", g.id) : !!g.recebido;
@@ -82,7 +83,7 @@ export function ganhosParaEntries(
       id: `ganho__${g.id}__${mes}`,
       type: "income",
       status: recebido ? "received" : "planned",
-      amount: g.valor,
+      amount: g.tipo === "recorrente" ? valorNoMes(g, mes) : g.valor,
       dueDate: `${mes}-01`,
       paidAt:
         g.tipo === "pontual"
