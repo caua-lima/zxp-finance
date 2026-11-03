@@ -6,6 +6,7 @@ import { useModulos } from "@/lib/useModulos";
 import { useConfigApp } from "@/lib/useConfigApp";
 import { useToast } from "@/components/Toast";
 import { Botao } from "@/components/Botao";
+import { RecomecarDoZero } from "@/components/RecomecarDoZero";
 
 /**
  * O que era regra fixa do dono do app vira escolha de cada cliente
@@ -157,6 +158,8 @@ export function ConfiguracoesConta() {
         </div>
         <p className="mt-1 text-xs text-text-muted">Meses antes disso não aparecem na navegação.</p>
       </div>
+
+      <RecomecarDoZero />
 
       <div>
         <label htmlFor="config-uso" className="rotulo">

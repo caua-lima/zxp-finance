@@ -78,3 +78,25 @@ describe("excluir caixinha com dinheiro dentro", () => {
     assert.equal(await excluirCaixinha(db, UID, "c1", "devolver", "x4"), 0);
   });
 });
+
+describe("recomeçar do zero (nada é apagado)", async () => {
+  const { recomecarDoZero } = await import("../src/lib/recomecar");
+
+  test("saldo novo, contagem a partir de hoje e caixinha zerada, num commit", async () => {
+    await setDoc(doc(db, "usuarios", UID, "gastos", "g1"), {
+      descricao: "antigo", valor: 50, categoria: "Outros", mes: "2026-11", data: "2026-11-01", criadoEm: 1,
+    });
+    await recomecarDoZero(db, UID, { saldo: 1234.56, hoje: "2026-11-03", zerarCaixinhas: ["c1"] });
+    assert.equal((await getDoc(doc(db, "usuarios", UID, "saldo", "atual"))).data()?.valor, 1234.56);
+    const prefs = (await getDoc(doc(db, "usuarios", UID, "preferencias", "app"))).data();
+    assert.deepEqual([prefs?.inicioUso, prefs?.inicioHistorico], ["2026-11-03", "2026-11"]);
+    assert.equal(await saldoCaixa(), 0);
+    assert.equal((await getDoc(doc(db, "usuarios", UID, "gastos", "g1"))).exists(), true);
+  });
+
+  test("sem zerar caixinhas, elas ficam como estão", async () => {
+    await recomecarDoZero(db, UID, { saldo: 0, hoje: "2026-11-03", zerarCaixinhas: [] });
+    assert.equal(await saldoCaixa(), 100);
+    assert.equal((await getDoc(doc(db, "usuarios", UID, "saldo", "atual"))).data()?.valor, 0);
+  });
+});
