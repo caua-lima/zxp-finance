@@ -9,7 +9,7 @@ import {
   doc,
   writeBatch,
 } from "firebase/firestore";
-import { ajustarCaixinha, transferirCaixinha, ErroCaixinha } from "./caixinhasOperacoes";
+import { ajustarCaixinha, excluirCaixinha, transferirCaixinha, ErroCaixinha } from "./caixinhasOperacoes";
 import { Transferencia } from "./finance/saldo";
 import { db } from "./firebase";
 import { Caixinha, arredondarCentavos, formatarMoeda } from "./types";
@@ -191,29 +191,28 @@ export function useCaixinhas() {
     }
   }
 
-  async function remover(id: string) {
+  /**
+   * Exclui a caixinha. Com dinheiro dentro: "devolver" volta o valor pro
+   * saldo (resgate registrado), "descartar" só tira da lista — pro valor que
+   * nunca foi separado de verdade no banco.
+   */
+  async function remover(id: string, modo: "devolver" | "descartar" = "devolver") {
     if (!user) return false;
     const caixinha = todas.find((c) => c.id === id);
     if (!caixinha) return false;
-    // com dinheiro dentro, excluir faria o dinheiro "sumir" do controle:
-    // primeiro resgata (volta pro saldo), depois exclui (F03)
-    if (Math.round(caixinha.saldo * 100) !== 0) {
-      setErro(`"${caixinha.nome}" ainda tem ${formatarMoeda(caixinha.saldo)}. Resgate antes de excluir.`);
-      return false;
-    }
     try {
-      const batch = writeBatch(db);
-      anexarAuditLog(batch, user.uid, user.email, {
-        action: "archived",
-        entityType: "caixinha",
-        entityId: id,
-        summary: `Caixinha "${caixinha.nome}" excluída com ${formatarMoeda(
-          caixinha.saldo
-        )} guardado`,
-        before: { ...caixinha },
-      });
-      batch.delete(doc(db, "usuarios", user.uid, "caixinhas", id));
-      await batch.commit();
+      await excluirCaixinha(db, user.uid, id, modo, `excluir_${id}_${Date.now()}`, (tx, dados) =>
+        anexarAuditLog(tx, user.uid, user.email, {
+          action: "archived",
+          entityType: "caixinha",
+          entityId: id,
+          summary:
+            modo === "devolver"
+              ? `Caixinha "${caixinha.nome}" excluída; ${formatarMoeda(caixinha.saldo)} voltou pro saldo`
+              : `Caixinha "${caixinha.nome}" excluída sem mexer no saldo (${formatarMoeda(caixinha.saldo)} descartado)`,
+          before: { ...dados },
+        })
+      );
       setErro(null);
       return true;
     } catch (e) {

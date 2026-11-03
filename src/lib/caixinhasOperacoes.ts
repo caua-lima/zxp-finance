@@ -1,4 +1,4 @@
-import { Firestore, doc, increment, runTransaction, serverTimestamp } from "firebase/firestore";
+import { Firestore, Transaction, doc, increment, runTransaction, serverTimestamp } from "firebase/firestore";
 
 /**
  * Operações de dinheiro das caixinhas, fora do React pra serem testadas no
@@ -71,5 +71,43 @@ export async function transferirCaixinha(
     // increment: um depósito automático concorrente não é sobrescrito
     tx.update(refCaixinha, { saldo: increment((direcao === "guardar" ? c : -c) / 100), atualizadoEm: Date.now() });
     return true;
+  });
+}
+
+/**
+ * Exclui a caixinha numa transação. Com dinheiro dentro, a pessoa escolhe:
+ * "devolver" grava um resgate (o valor volta pro saldo) antes de excluir;
+ * "descartar" exclui sem mexer no saldo — pra caixinha cujo valor nunca
+ * foi separado de verdade no banco. Devolve o valor que voltou pro saldo.
+ */
+export async function excluirCaixinha(
+  db: Firestore,
+  uid: string,
+  caixinhaId: string,
+  modo: "devolver" | "descartar",
+  chave: string,
+  aoGravar?: (tx: Transaction, dados: Record<string, unknown>) => void
+): Promise<number> {
+  const refCaixinha = doc(db, "usuarios", uid, "caixinhas", caixinhaId);
+  return runTransaction(db, async (tx) => {
+    const caixa = await tx.get(refCaixinha);
+    if (!caixa.exists()) return 0;
+    const dados = caixa.data();
+    const c = centavos(Number(dados.saldo) || 0);
+    let devolvido = 0;
+    if (modo === "devolver" && c > 0) {
+      tx.set(doc(db, "usuarios", uid, "transferencias", `t_${chave}`), {
+        caixinhaId,
+        nome: dados.nome,
+        direcao: "resgatar",
+        valor: c / 100,
+        criadoEm: Date.now(),
+        registradoEm: serverTimestamp(),
+      });
+      devolvido = c / 100;
+    }
+    aoGravar?.(tx, dados);
+    tx.delete(refCaixinha);
+    return devolvido;
   });
 }

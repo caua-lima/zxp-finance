@@ -247,7 +247,7 @@ function ItemCaixinha({
   ) => Promise<boolean>;
   onAjustarSaldo: (id: string, novoSaldo: number) => Promise<boolean>;
   onAlternarAtiva: (id: string) => Promise<boolean>;
-  onRemover: (id: string) => Promise<boolean>;
+  onRemover: (id: string, modo?: "devolver" | "descartar") => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -506,23 +506,60 @@ function ItemCaixinha({
         {caixinha.ativa ? "Pausar depósitos" : "Voltar a guardar"}
       </button>
 
-      <ConfirmModal
-        aberto={confirmando}
-        titulo={`Excluir "${caixinha.nome}"?`}
-        descricao={
-          caixinha.saldo > 0
-            ? `"${caixinha.nome}" ainda tem ${formatarMoeda(caixinha.saldo)}. Resgate antes (o valor volta pro seu saldo) — excluir com dinheiro dentro faria ele sumir do controle.`
-            : `"${caixinha.nome}" está vazia e sai da lista. O histórico de transferências continua.`
-        }
-        textoConfirmar="Excluir"
-        perigo
-        onConfirmar={() => {
-          setConfirmando(false);
-          if (caixinha.saldo > 0) return;
-          toast.sucessoSe(onRemover(caixinha.id), "Caixinha excluída.");
-        }}
-        onCancelar={() => setConfirmando(false)}
-      />
+      {Math.round(caixinha.saldo * 100) > 0 ? (
+        <Dialogo
+          aberto={confirmando}
+          titulo={`Excluir "${caixinha.nome}"?`}
+          descricao={`Ela tem ${formatarMoeda(caixinha.saldo)}. Esse dinheiro está separado de verdade no banco?`}
+          onFechar={() => setConfirmando(false)}
+        >
+          <div className="mt-2 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmando(false);
+                toast.sucessoSe(
+                  onRemover(caixinha.id, "devolver"),
+                  `Caixinha excluída. ${formatarMoeda(caixinha.saldo)} voltou pro saldo.`
+                );
+              }}
+              className="min-h-[44px] rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand hover:bg-brand-dark"
+            >
+              Sim: devolver {formatarMoeda(caixinha.saldo)} ao saldo e excluir
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmando(false);
+                toast.sucessoSe(onRemover(caixinha.id, "descartar"), "Caixinha excluída. O saldo não mudou.");
+              }}
+              className="min-h-[44px] rounded-xl bg-negative px-3 text-sm font-semibold text-white hover:bg-negative/85"
+            >
+              Não: excluir sem mexer no saldo
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmando(false)}
+              className="min-h-[44px] rounded-xl border border-line px-3 text-sm font-medium text-text-muted hover:text-text"
+            >
+              Cancelar
+            </button>
+          </div>
+        </Dialogo>
+      ) : (
+        <ConfirmModal
+          aberto={confirmando}
+          titulo={`Excluir "${caixinha.nome}"?`}
+          descricao={`"${caixinha.nome}" está vazia e sai da lista. O histórico de transferências continua.`}
+          textoConfirmar="Excluir"
+          perigo
+          onConfirmar={() => {
+            setConfirmando(false);
+            toast.sucessoSe(onRemover(caixinha.id, "descartar"), "Caixinha excluída.");
+          }}
+          onCancelar={() => setConfirmando(false)}
+        />
+      )}
     </li>
   );
 }

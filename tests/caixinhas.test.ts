@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { initializeTestEnvironment, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { readFileSync } from "node:fs";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, getDocs, Firestore } from "firebase/firestore";
-import { ajustarCaixinha, transferirCaixinha, ErroCaixinha } from "../src/lib/caixinhasOperacoes";
+import { ajustarCaixinha, excluirCaixinha, transferirCaixinha, ErroCaixinha } from "../src/lib/caixinhasOperacoes";
 
 let env: RulesTestEnvironment;
 let db: Firestore;
@@ -56,5 +56,25 @@ describe("caixinhas sob concorrência (C23)", () => {
     ]);
     assert.equal(await saldoCaixa(), 120);
     assert.equal((await getDocs(collection(db, "usuarios", UID, "transferencias"))).size, 2);
+  });
+});
+
+describe("excluir caixinha com dinheiro dentro", () => {
+  test("devolver: grava o resgate e exclui, numa transação", async () => {
+    assert.equal(await excluirCaixinha(db, UID, "c1", "devolver", "x1"), 100);
+    assert.equal((await getDoc(caixa())).exists(), false);
+    const t = await getDocs(collection(db, "usuarios", UID, "transferencias"));
+    assert.deepEqual(t.docs.map((d) => [d.data().direcao, d.data().valor]), [["resgatar", 100]]);
+  });
+
+  test("descartar: exclui sem mexer no saldo", async () => {
+    assert.equal(await excluirCaixinha(db, UID, "c1", "descartar", "x2"), 0);
+    assert.equal((await getDoc(caixa())).exists(), false);
+    assert.equal((await getDocs(collection(db, "usuarios", UID, "transferencias"))).size, 0);
+  });
+
+  test("caixinha que já sumiu não dá erro", async () => {
+    await excluirCaixinha(db, UID, "c1", "descartar", "x3");
+    assert.equal(await excluirCaixinha(db, UID, "c1", "devolver", "x4"), 0);
   });
 });
