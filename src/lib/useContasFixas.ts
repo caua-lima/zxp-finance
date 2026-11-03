@@ -50,7 +50,9 @@ export function useContasFixas() {
     nome: string,
     valor: number,
     categoria: string,
-    diaVencimento?: number
+    diaVencimento?: number,
+    /** "AAAA-MM": conta avulsa, só nesse mês. */
+    mesUnico?: string
   ) {
     if (!user) return false;
     try {
@@ -60,6 +62,7 @@ export function useContasFixas() {
         categoria,
         ativa: true,
         ...(diaVencimento ? { diaVencimento } : {}),
+        ...(mesUnico ? { mesUnico, inicioEm: mesUnico } : {}),
         criadoEm: Date.now(),
       });
       setErro(null);
@@ -173,8 +176,9 @@ export function useContasFixas() {
     }
   }
 
+  // total mensal = o que se repete; avulsa não entra na conta de todo mês
   const total = contas
-    .filter((c) => c.ativa)
+    .filter((c) => c.ativa && !c.mesUnico)
     .reduce((acc, c) => acc + c.valor, 0);
 
   return {

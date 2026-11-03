@@ -60,6 +60,8 @@ export interface ContaFixa {
   pausas?: PeriodoPausa[];
   /** Mudanças de valor com vigência — mês antigo mantém o valor antigo. */
   historicoValores?: VigenciaValor[];
+  /** Conta avulsa: vence só neste mês ("AAAA-MM"), não se repete. */
+  mesUnico?: string;
 }
 
 export function diaVencimentoNoMes(mes: string, diaVencimento: number): string {

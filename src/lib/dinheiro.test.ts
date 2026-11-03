@@ -297,3 +297,19 @@ describe("configuração explícita por usuário (D31)", async () => {
     assert.deepEqual(configFinanceiraDe(null), { taxaImposto: 0.06, inicioUso: "" });
   });
 });
+
+describe("conta avulsa: só no mês dela", async () => {
+  const { recorrenciaNoMes, mudancaDeAtivo } = await import("./finance/recorrencia");
+  const avulsa = { ativa: true, valor: 450, criadoEm: Date.parse("2026-11-03T12:00:00-03:00"), mesUnico: "2026-11", desativadaEm: null as string | null };
+
+  test("conta em novembro e em nenhum outro mês", () => {
+    assert.equal(recorrenciaNoMes(avulsa, "2026-11"), true);
+    assert.equal(recorrenciaNoMes(avulsa, "2026-10"), false);
+    assert.equal(recorrenciaNoMes(avulsa, "2026-12"), false);
+  });
+
+  test("desmarcada no próprio mês sai da conta", () => {
+    const desmarcada = { ...avulsa, ativa: false, ...mudancaDeAtivo(avulsa, false, "2026-11") };
+    assert.equal(recorrenciaNoMes(desmarcada, "2026-11"), false);
+  });
+});

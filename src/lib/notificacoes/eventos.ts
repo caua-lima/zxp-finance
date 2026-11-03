@@ -181,7 +181,7 @@ export function eventosDoDia(dados: DadosDoUsuario, hojeISO: string): Evento[] {
   // vale até o dia 12 — com id por mês, sai uma vez só
   const diaDoMes = Number(hojeISO.split("-")[2]);
   if (diaDoMes >= 8 && diaDoMes <= 12) {
-    const contasAtivas = dados.contas.filter((c) => c.ativa).length;
+    const contasAtivas = dados.contas.filter((c) => c.ativa && (!c.mesUnico || c.mesUnico === mes)).length;
     const pagosNoMes = dados.pagamentos.filter((p) => p.id.startsWith(`${mes}__`)).length;
     const aviso = avisoChecklistParado(contasAtivas, pagosNoMes, `${mes}-08`);
     if (aviso) {

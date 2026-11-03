@@ -184,7 +184,11 @@ export default function DrePage() {
   }
 
   const contasPorCategoria = useMemo(() => {
-    const grupos = agruparPorChave(contas.contas, (c) => c.categoria);
+    // avulsa só aparece no mês dela
+    const grupos = agruparPorChave(
+      contas.contas.filter((c) => !c.mesUnico || c.mesUnico === mes),
+      (c) => c.categoria
+    );
     const ordem = CATEGORIAS_CONTAS as readonly string[];
     return [...grupos.entries()].sort((a, b) => {
       const ia = ordem.indexOf(a[0]);
@@ -194,7 +198,7 @@ export default function DrePage() {
       if (ib === -1) return -1;
       return ia - ib;
     });
-  }, [contas.contas]);
+  }, [contas.contas, mes]);
 
   const parcelasDoMes = useMemo(
     () => parcelas.parcelas.filter((p) => parcelasRestantesEm(p, mes) > 0),
@@ -717,7 +721,7 @@ export default function DrePage() {
                     valor={c.valor}
                     cor="text-gold"
                     inativo={!c.ativa}
-                    nota={!c.ativa ? "desativada" : undefined}
+                    nota={!c.ativa ? "desativada" : c.mesUnico ? "avulsa" : undefined}
                   />
                 ))}
               </SubGrupo>

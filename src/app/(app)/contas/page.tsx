@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { formatarMoeda, ContaFixa } from "@/lib/types";
+import { formatarMoeda, formatarMes, mesPadrao, mesSeguinte, ContaFixa } from "@/lib/types";
 import { CATEGORIAS_CONTAS, iconeCategoria } from "@/lib/categorias";
 import { sugerirCategoriaConta } from "@/lib/categorizacao";
 import { useContasFixas } from "@/lib/useContasFixas";
@@ -53,9 +53,19 @@ export default function ContasPage() {
   // a categoria acompanha o nome até você escolher uma na mão
   const [categoriaManual, setCategoriaManual] = useState(false);
   const [diaVencimento, setDiaVencimento] = useState("");
+  // "fixa" repete todo mês; "avulsa" vale só no mês escolhido
+  const [tipo, setTipo] = useState<"fixa" | "avulsa">("fixa");
+  const [mesAvulsa, setMesAvulsa] = useState(mesPadrao());
   const toast = useToast();
 
-  const grupos = useMemo(() => agruparPorCategoria(contas), [contas]);
+  const mesAtual = mesPadrao();
+  // avulsa de mês que já passou sai da lista (continua no DRE daquele mês)
+  const visiveis = useMemo(
+    () => contas.filter((c) => !c.mesUnico || c.mesUnico >= mesAtual),
+    [contas, mesAtual]
+  );
+  const grupos = useMemo(() => agruparPorCategoria(visiveis), [visiveis]);
+  const mesesAvulsa = [mesAtual, mesSeguinte(mesAtual), mesSeguinte(mesSeguinte(mesAtual))];
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -71,14 +81,20 @@ export default function ContasPage() {
     setCategoriaCustom("");
     setCategoriaManual(false);
     setDiaVencimento("");
-    toast.sucessoSe(adicionar(nomeAparado, valor, cat, dia), `"${nomeAparado}" adicionada.`);
+    const mesUnico = tipo === "avulsa" ? mesAvulsa : undefined;
+    toast.sucessoSe(
+      adicionar(nomeAparado, valor, cat, dia, mesUnico),
+      mesUnico
+        ? `"${nomeAparado}" adicionada só em ${formatarMes(mesUnico)}.`
+        : `"${nomeAparado}" adicionada.`
+    );
   }
 
   return (
     <div>
       <PageHeader
-        titulo="Contas fixas"
-        descricao="O que vence todo mês, independente do que você fizer"
+        titulo="Contas"
+        descricao="O que vence todo mês e as contas avulsas, que aparecem uma vez só"
       />
       <ErroBanner mensagem={erro} />
 
@@ -86,13 +102,34 @@ export default function ContasPage() {
         onSubmit={handleSubmit}
         className="rounded-2xl border border-line bg-surface p-4 mb-4 space-y-3"
       >
+        <div role="radiogroup" aria-label="Tipo de conta" className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
+          {(
+            [
+              ["fixa", "Todo mês"],
+              ["avulsa", "Só uma vez"],
+            ] as const
+          ).map(([valorTipo, rotulo]) => (
+            <button
+              key={valorTipo}
+              type="button"
+              role="radio"
+              aria-checked={tipo === valorTipo}
+              onClick={() => setTipo(valorTipo)}
+              className={`min-h-[40px] rounded-lg text-sm font-medium transition-colors ${
+                tipo === valorTipo ? "bg-surface text-text shadow-sm" : "text-text-muted hover:text-text"
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
         <div>
           <label htmlFor="contas-form-nome" className="rotulo">
             Nome da conta
           </label>
           <input
             id="contas-form-nome"
-            placeholder="ex: Internet"
+            placeholder={tipo === "avulsa" ? "ex: IPVA, conserto do carro" : "ex: Internet"}
             value={nome}
             onChange={(e) => {
               setNome(e.target.value);
@@ -147,13 +184,32 @@ export default function ContasPage() {
             className="campo"
           />
         )}
+        {tipo === "avulsa" && (
+          <div>
+            <label htmlFor="contas-form-mes" className="rotulo">
+              Mês em que vence
+            </label>
+            <select
+              id="contas-form-mes"
+              value={mesAvulsa}
+              onChange={(e) => setMesAvulsa(e.target.value)}
+              className="campo"
+            >
+              {mesesAvulsa.map((m) => (
+                <option key={m} value={m}>
+                  {formatarMes(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <Botao type="submit" larguraTotal>
-          Adicionar conta
+          {tipo === "avulsa" ? "Adicionar conta avulsa" : "Adicionar conta"}
         </Botao>
       </form>
 
       <div className="rounded-2xl border border-line bg-surface p-4 mb-5 flex justify-between items-center">
-        <span className="text-sm text-text-muted">Total ativo mensal</span>
+        <span className="text-sm text-text-muted">Total fixo mensal</span>
         <span className="text-lg font-semibold text-gold">
           {formatarMoeda(total)}
         </span>
@@ -161,9 +217,9 @@ export default function ContasPage() {
 
       {loading ? (
         <SkeletonLista linhas={4} />
-      ) : contas.length === 0 ? (
+      ) : visiveis.length === 0 ? (
         <EmptyState
-          mensagem="Nenhuma conta fixa cadastrada."
+          mensagem="Nenhuma conta cadastrada."
           alvoId="contas-form-nome"
         />
       ) : (
@@ -201,7 +257,7 @@ function GrupoCategoria({
   onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const subtotal = itens
-    .filter((c) => c.ativa)
+    .filter((c) => c.ativa && !c.mesUnico)
     .reduce((acc, c) => acc + c.valor, 0);
 
   return (
@@ -343,9 +399,11 @@ function ItemConta({
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm">{conta.nome}</span>
-          {conta.diaVencimento && (
+          {(conta.diaVencimento || conta.mesUnico) && (
             <span className="block text-xs text-text-faint">
-              vence dia {conta.diaVencimento}
+              {conta.mesUnico && <span className="font-medium text-brand">Avulsa · {formatarMes(conta.mesUnico)}</span>}
+              {conta.mesUnico && conta.diaVencimento && " · "}
+              {conta.diaVencimento && `vence dia ${conta.diaVencimento}`}
             </span>
           )}
         </span>

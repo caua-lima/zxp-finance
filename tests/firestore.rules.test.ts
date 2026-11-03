@@ -114,6 +114,13 @@ describe("validação de campos (S03)", () => {
     await assertFails(setDoc(doc(db, "usuarios/userA/gastos/c2"), { ...gastoValido, pagoCom: "fiado" }));
   });
 
+  test("conta avulsa: aceita mês válido, recusa mês inventado", async () => {
+    const db = dbDe("userA");
+    const conta = { nome: "IPVA", valor: 450, categoria: "Outros", ativa: true, criadoEm: 1 };
+    await assertSucceeds(setDoc(doc(db, "usuarios/userA/contasFixas/a1"), { ...conta, mesUnico: "2026-11", inicioEm: "2026-11" }));
+    await assertFails(setDoc(doc(db, "usuarios/userA/contasFixas/a2"), { ...conta, mesUnico: "2026-13" }));
+  });
+
   test("saldo: só o documento 'atual', com número de verdade", async () => {
     const db = dbDe("userA");
     await assertSucceeds(setDoc(doc(db, "usuarios/userA/saldo/atual"), { valor: 100, atualizadoEm: 1 }));

@@ -17,6 +17,8 @@ interface Recorrencia {
   desativadaEm?: string | null;
   historicoValores?: VigenciaValor[];
   pausas?: PeriodoPausa[];
+  /** Avulsa: existe só neste mês. */
+  mesUnico?: string;
 }
 
 export function mesDeInicio(r: Pick<Recorrencia, "inicioEm" | "criadoEm">): string {
@@ -25,6 +27,8 @@ export function mesDeInicio(r: Pick<Recorrencia, "inicioEm" | "criadoEm">): stri
 
 /** A recorrência existe (e cobra) nesse mês? */
 export function recorrenciaNoMes(r: Recorrencia, mes: string): boolean {
+  // conta avulsa: só no mês dela; desmarcada no próprio mês, não conta
+  if (r.mesUnico) return mes === r.mesUnico && (r.ativa || (!!r.desativadaEm && mes < r.desativadaEm));
   if (mes < mesDeInicio(r)) return false;
   // arquivou e reativou depois: os meses do meio não contam
   if ((r.pausas ?? []).some((p) => mes >= p.de && mes < p.ate)) return false;

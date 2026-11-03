@@ -169,9 +169,10 @@ service cloud.firestore {
         allow read: if dono(uid);
         allow create, update: if dono(uid)
           && criaOuAltera(['nome', 'valor', 'categoria', 'ativa', 'diaVencimento', 'criadoEm',
-                           'inicioEm', 'desativadaEm', 'historicoValores', 'pausas'])
+                           'inicioEm', 'desativadaEm', 'historicoValores', 'pausas', 'mesUnico'])
           && texto(request.resource.data.nome, 200)
-          && numeroEntre(request.resource.data.valor, 0, 1000000);
+          && numeroEntre(request.resource.data.valor, 0, 1000000)
+          && (opcional(request.resource.data, 'mesUnico') || mes(request.resource.data.mesUnico));
         allow delete: if dono(uid);
       }
 
