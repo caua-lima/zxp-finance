@@ -142,7 +142,7 @@ export default function ChecklistPage() {
       (a.diaVencimento ?? 99) - (b.diaVencimento ?? 99);
 
     return [
-      { titulo: "Contas fixas", itens: [...itensContas].sort(porVencimento) },
+      { titulo: "Contas", itens: [...itensContas].sort(porVencimento) },
       { titulo: "Assinaturas", itens: [...itensAssinaturas].sort(porVencimento) },
       { titulo: "Parcelas e financiamentos", itens: itensParcelas },
       { titulo: "Fatura do cartão", itens: [...itensFaturas].sort(porVencimento) },

@@ -107,7 +107,7 @@ const SECOES: Secao[] = [
     titulo: "Cadastros",
     itens: [
       { href: "/ganhos", label: "Ganhos", Icon: IconGanhos, descricao: "Salário e entradas do mês" },
-      { href: "/contas", label: "Contas fixas", Icon: IconContas, descricao: "O que vence todo mês" },
+      { href: "/contas", label: "Contas", Icon: IconContas, descricao: "Fixas e avulsas" },
       { href: "/parcelas", label: "Parcelas", Icon: IconParcelas, descricao: "Quanto de parcela você tem ativa" },
       { href: "/assinaturas", label: "Assinaturas", Icon: IconAssinaturas, descricao: "Serviços recorrentes" },
       { href: "/fatura", label: "Cartões", Icon: IconFatura, descricao: "Fatura, fechamento e vencimento de cada cartão" },

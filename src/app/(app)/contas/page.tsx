@@ -257,7 +257,7 @@ function GrupoCategoria({
   onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const subtotal = itens
-    .filter((c) => c.ativa && !c.mesUnico)
+    .filter((c) => c.ativa)
     .reduce((acc, c) => acc + c.valor, 0);
 
   return (
