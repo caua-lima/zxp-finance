@@ -568,15 +568,7 @@ export default function DrePage() {
               )}
             </SubGrupo>
             <SubGrupo titulo="Só este mês">
-              {ganhos.comissaoDoMes && (
-                <ItemLinha
-                  nome="Comissão do mês passado"
-                  valor={ganhos.comissaoDoMes.restanteBruto}
-                  cor="text-positive"
-                  nota="a receber"
-                />
-              )}
-              {ganhos.pontuais.length === 0 && !ganhos.comissaoDoMes ? (
+              {ganhos.pontuais.length === 0 ? (
                 <Vazio />
               ) : (
                 ganhos.pontuais.map((g: Ganho) => (

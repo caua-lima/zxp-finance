@@ -13,8 +13,6 @@ import { Ganho, calcularImposto, mesPadrao } from "./types";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
-import { useComissoes } from "./useComissoes";
-import { comissaoAReceber } from "./finance/comissaoPrevista";
 import { recebimentosAvulsos } from "./finance/saldo";
 import { historicoAoMudarValor, mudancaDeAtivo, recorrenciaDoGanho, recorrenciaNoMes, valorNoMes } from "./finance/recorrencia";
 
@@ -23,7 +21,6 @@ export function useGanhos(mes: string) {
   const [todos, setTodos] = useState<Ganho[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const comissoes = useComissoes(mes);
 
   useEffect(() => {
     if (!user) return;
@@ -325,10 +322,8 @@ export function useGanhos(mes: string) {
     }
   }
 
-  // Comissão lançada no mês anterior cai neste mês: é ganho como qualquer
-  // outro (com imposto), só que calculada a partir dos lançamentos diários.
-  const comissaoDoMes = comissaoAReceber(mes, comissoes.todas, todos);
-  const brutoComissao = comissaoDoMes?.restanteBruto ?? 0;
+  // A comissão NÃO entra sozinha nos ganhos: o salário e o que cair de
+  // comissão a pessoa lança à mão, com o valor que de fato recebeu.
 
   // recorrente no mês: vigência (início/arquivamento) e valor daquele mês
   const recorrentesNoMes = recorrentes.filter((g) => recorrenciaNoMes(recorrenciaDoGanho(g), mes));
@@ -336,14 +331,14 @@ export function useGanhos(mes: string) {
   const totalPontuais = pontuais
     .filter((g) => !g.arquivado)
     .reduce((acc, g) => acc + g.valor, 0);
-  const total = totalRecorrentes + totalPontuais + brutoComissao;
+  const total = totalRecorrentes + totalPontuais;
   // Imposto só incide sobre o que não foi marcado como "sem imposto" (ex:
   // bico/trabalho por fora recebido já líquido) — não é uma taxa sobre o
   // total, é a soma do imposto de cada ganho tributável individualmente.
   const totalTributavel =
     [...recorrentesNoMes.map((g) => ({ ...g, valor: valorNoMes(g, mes) })), ...pontuais.filter((g) => !g.arquivado)]
       .filter((g) => !g.semImposto)
-      .reduce((acc, g) => acc + g.valor, 0) + brutoComissao;
+      .reduce((acc, g) => acc + g.valor, 0);
   const imposto = calcularImposto(totalTributavel);
   const totalLiquido = total - imposto;
 
@@ -355,8 +350,7 @@ export function useGanhos(mes: string) {
     recorrentes,
     pontuais,
     orfaos,
-    comissaoDoMes,
-    loading: loading || comissoes.loading,
+    loading,
     erro,
     total,
     imposto,

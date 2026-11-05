@@ -13,7 +13,6 @@ import { usePagamentos } from "@/lib/usePagamentos";
 import { useConfigApp } from "@/lib/useConfigApp";
 import { construirFinancialEntries } from "./adapters";
 import { calculateDreBreakdown, DreBreakdown } from "./calculations";
-import { comissaoBrutaParaEntry } from "./comissaoPrevista";
 
 /**
  * Monta o DRE do mês selecionado e do mês anterior (pra comparação),
@@ -63,8 +62,6 @@ export function useDreComparativo(mes: string) {
     pagamentosAtual.erro ||
     pagamentosAnterior.erro;
 
-  const comissaoAtual = ganhosAtual.comissaoDoMes;
-  const comissaoAnterior = ganhosAnterior.comissaoDoMes;
 
   // configuração DESTE usuário, explícita (a mesma que o servidor usa)
   const { config: configApp } = useConfigApp();
@@ -104,9 +101,8 @@ export function useDreComparativo(mes: string) {
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
       config,
-    }).concat(comissaoAtual ? [comissaoBrutaParaEntry(comissaoAtual, mes)] : []);
+    });
   }, [
-    comissaoAtual,
     loading,
     ganhosAtual.recorrentes,
     ganhosAtual.pontuais,
@@ -136,9 +132,8 @@ export function useDreComparativo(mes: string) {
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
       config,
-    }).concat(comissaoAnterior ? [comissaoBrutaParaEntry(comissaoAnterior, mesAnterior)] : []);
+    });
   }, [
-    comissaoAnterior,
     loading,
     ganhosAnterior.recorrentes,
     ganhosAnterior.pontuais,

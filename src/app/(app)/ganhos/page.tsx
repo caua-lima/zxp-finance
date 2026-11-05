@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { mesPadrao, formatarMes, formatarMoeda, taxaImpostoAtual, calcularImposto, arredondarCentavos, Ganho } from "@/lib/types";
+import { mesPadrao, formatarMoeda, taxaImpostoAtual, calcularImposto, arredondarCentavos, Ganho } from "@/lib/types";
 import { useConfigApp } from "@/lib/useConfigApp";
 import { valorNoMes } from "@/lib/finance/recorrencia";
 import { CATEGORIAS_RECEITA, iconeCategoriaReceita } from "@/lib/categoriasFinanceiras";
@@ -28,7 +28,6 @@ export default function GanhosPage() {
     recorrentes,
     pontuais,
     orfaos,
-    comissaoDoMes,
     loading,
     erro,
     total,
@@ -202,34 +201,6 @@ export default function GanhosPage() {
           </span>
         </div>
       </div>
-
-      {comissaoDoMes && (
-        <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-text">Comissão de {formatarMes(comissaoDoMes.mesOrigem)}</p>
-              <p className="text-xs text-text-muted">
-                {comissaoDoMes.dias} {comissaoDoMes.dias === 1 ? "dia lançado" : "dias lançados"} · cai neste mês
-                {comissaoDoMes.recebidoBruto > 0 &&
-                  ` · já recebido ${formatarMoeda(comissaoDoMes.recebidoBruto)}`}
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-base font-semibold text-positive">
-                {formatarMoeda(comissaoDoMes.restanteLiquido)}
-              </p>
-              <p className="text-xs text-text-muted">
-                bruto {formatarMoeda(comissaoDoMes.restanteBruto)} · imposto{" "}
-                {formatarMoeda(comissaoDoMes.restanteImposto)}
-              </p>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-text-muted">
-            Já está somada no total acima. Quando o dinheiro cair, registre em Comissões; o que
-            faltar continua aparecendo aqui.
-          </p>
-        </div>
-      )}
 
       {loading ? (
         <SkeletonLista linhas={4} />
