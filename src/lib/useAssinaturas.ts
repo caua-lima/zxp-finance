@@ -134,14 +134,10 @@ export function useAssinaturas() {
    * checkbox já é o caminho normal e não destrutivo. Snapshot completo vai
    * pro audit log antes de apagar.
    */
-  async function remover(id: string, motivo: string) {
+  async function remover(id: string, motivo = "") {
     if (!user) return false;
     const assinatura = assinaturas.find((a) => a.id === id);
     if (!assinatura) return false;
-    if (assinatura.ativa) {
-      setErro("Arquive a assinatura antes de excluir definitivamente.");
-      return false;
-    }
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "assinaturas", id);
@@ -149,7 +145,7 @@ export function useAssinaturas() {
         action: "archived",
         entityType: "assinatura",
         entityId: id,
-        summary: `Exclusão definitiva de "${assinatura.nome}": ${motivo}`,
+        summary: `Exclusão definitiva de "${assinatura.nome}"${motivo ? `: ${motivo}` : ""}`,
         before: { ...assinatura },
       });
       batch.delete(ref);

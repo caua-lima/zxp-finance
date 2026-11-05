@@ -222,7 +222,7 @@ function ItemAssinatura({
       usoPercebido?: UsoPercebidoAssinatura;
     }
   ) => Promise<boolean>;
-  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onRemover: (id: string, motivo?: string) => Promise<boolean>;
   onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
@@ -371,26 +371,23 @@ function ItemAssinatura({
         <BotaoIcone label="Editar assinatura" onClick={() => setEditando(true)}>
           <IconEditar width={17} height={17} />
         </BotaoIcone>
-        {!assinatura.ativa && (
-          <BotaoIcone
-            label="Excluir definitivamente"
-            tom="perigo"
-            onClick={() => setConfirmando(true)}
-          >
-            <IconExcluir width={17} height={17} />
-          </BotaoIcone>
-        )}
+        <BotaoIcone
+          label="Excluir definitivamente"
+          tom="perigo"
+          onClick={() => setConfirmando(true)}
+        >
+          <IconExcluir width={17} height={17} />
+        </BotaoIcone>
       </AcoesItem>
 
       <ConfirmModal
         aberto={confirmando}
         titulo="Excluir definitivamente"
-        descricao={`"${assinatura.nome}" será apagada de vez — isso não pode ser desfeito. Se é só pra parar de contar no mês, desmarque a caixinha em vez de excluir.`}
+        descricao={`"${assinatura.nome}" será apagada de vez, de todos os meses — isso não pode ser desfeito. Se é só pra parar de contar daqui pra frente, desmarque em vez de excluir.`}
         textoConfirmar="Excluir"
         perigo
-        pedirMotivo
-        onConfirmar={(motivo) => {
-          toast.sucessoSe(onRemover(assinatura.id, motivo ?? ""), "Assinatura excluída.");
+        onConfirmar={() => {
+          toast.sucessoSe(onRemover(assinatura.id), "Assinatura excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}

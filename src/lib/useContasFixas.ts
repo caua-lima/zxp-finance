@@ -119,14 +119,10 @@ export function useContasFixas() {
    * O snapshot completo vai pro audit log antes de apagar, então o dado
    * sobrevive na trilha de auditoria mesmo depois do documento sumir.
    */
-  async function remover(id: string, motivo: string) {
+  async function remover(id: string, motivo = "") {
     if (!user) return false;
     const conta = contas.find((c) => c.id === id);
     if (!conta) return false;
-    if (conta.ativa) {
-      setErro("Arquive a conta antes de excluir definitivamente.");
-      return false;
-    }
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "contasFixas", id);
@@ -134,7 +130,7 @@ export function useContasFixas() {
         action: "archived",
         entityType: "contaFixa",
         entityId: id,
-        summary: `Exclusão definitiva de "${conta.nome}": ${motivo}`,
+        summary: `Exclusão definitiva de "${conta.nome}"${motivo ? `: ${motivo}` : ""}`,
         before: { ...conta },
       });
       batch.delete(ref);

@@ -253,7 +253,7 @@ function GrupoCategoria({
     id: string,
     dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) => Promise<boolean>;
-  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onRemover: (id: string, motivo?: string) => Promise<boolean>;
   onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const subtotal = itens
@@ -297,7 +297,7 @@ function ItemConta({
     id: string,
     dados: { nome: string; valor: number; categoria: string; diaVencimento?: number }
   ) => Promise<boolean>;
-  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onRemover: (id: string, motivo?: string) => Promise<boolean>;
   onAlternarAtiva: (id: string, ativa: boolean) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
@@ -415,26 +415,23 @@ function ItemConta({
         <BotaoIcone label="Editar conta" onClick={() => setEditando(true)}>
           <IconEditar width={17} height={17} />
         </BotaoIcone>
-        {!conta.ativa && (
-          <BotaoIcone
-            label="Excluir definitivamente"
-            tom="perigo"
-            onClick={() => setConfirmando(true)}
-          >
-            <IconExcluir width={17} height={17} />
-          </BotaoIcone>
-        )}
+        <BotaoIcone
+          label="Excluir definitivamente"
+          tom="perigo"
+          onClick={() => setConfirmando(true)}
+        >
+          <IconExcluir width={17} height={17} />
+        </BotaoIcone>
       </AcoesItem>
 
       <ConfirmModal
         aberto={confirmando}
         titulo="Excluir definitivamente"
-        descricao={`"${conta.nome}" será apagada de vez — isso não pode ser desfeito. Se é só pra parar de contar no mês, desmarque a caixinha em vez de excluir.`}
+        descricao={`"${conta.nome}" será apagada de vez, de todos os meses — isso não pode ser desfeito. Se é só pra parar de contar daqui pra frente, desmarque em vez de excluir.`}
         textoConfirmar="Excluir"
         perigo
-        pedirMotivo
-        onConfirmar={(motivo) => {
-          toast.sucessoSe(onRemover(conta.id, motivo ?? ""), "Conta excluída.");
+        onConfirmar={() => {
+          toast.sucessoSe(onRemover(conta.id), "Conta excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
