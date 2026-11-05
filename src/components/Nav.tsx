@@ -19,11 +19,9 @@ import {
   IconDre,
   IconAcesso,
   IconComissoes,
-  IconMicrofone,
   IconPerfil,
   IconMais,
   IconCaixinha,
-  IconConsultor,
   IconSair,
   IconSino,
 } from "./icons";
@@ -56,12 +54,6 @@ const SECOES: Secao[] = [
         Icon: IconDre,
         descricao: "Pra onde foi o dinheiro no mês",
       },
-      {
-        href: "/consultor",
-        label: "Consultor",
-        Icon: IconConsultor,
-        descricao: "Pergunte se dá pra assumir um novo compromisso",
-      },
     ],
   },
   {
@@ -93,13 +85,6 @@ const SECOES: Secao[] = [
         labelCurto: "Metas",
         Icon: IconCaixinha,
         descricao: "Dinheiro guardado e o quanto falta pra meta",
-      },
-      {
-        href: "/chat",
-        label: "Investi em mim (voz)",
-        labelCurto: "Anotar",
-        Icon: IconMicrofone,
-        descricao: "Falar ou escrever no que você investiu em você",
       },
     ],
   },
