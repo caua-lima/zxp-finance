@@ -5,6 +5,7 @@ import {
   mesPadrao,
   formatarMoeda,
   parcelasRestantesEm,
+  parcelaPagaNoMes,
   valorMinhaParte,
 } from "@/lib/types";
 import { iconeCategoria } from "@/lib/categorias";
@@ -159,23 +160,35 @@ export default function ChecklistPage() {
   const hoje = hojeISO();
   const ehMesCorrente = mes === hoje.slice(0, 7);
 
-  // Pagar a fatura não mexe mais nas parcelas do cartão: o app já conta
-  // uma parcela por mês sozinho (ver parcelasRestantesEm). Dar baixa aqui
-  // também avançava a parcela duas vezes quando a fatura era marcada fora
-  // do mês de referência, e fazia a fatura prevista encolher sozinha
-  // depois de marcada como paga.
+  // Parcela: marcar aqui é a MESMA operação do "Dar baixa" da tela de
+  // Parcelas (as duas telas mostram sempre o mesmo). Fatura: pagar dá baixa
+  // nas parcelas que estão dentro dela; desmarcar desfaz.
   function alternarPago(item: ItemChecklist, marcado: boolean) {
     if (monthClose.fechado) return;
+    if (item.origem === "parcela") {
+      parcelas.marcarPaga(item.id, mes, marcado);
+      return;
+    }
     pagamentos.marcar(item.origem, item.id, marcado, {
       nome: item.nome,
       valor: item.valor,
     });
+    if (item.origem === "fatura") parcelas.baixaPelaFatura(item.nome, mes, marcado);
   }
+
+  // parcela cadastrada com "já pagas" cobrindo este mês aparece paga mesmo
+  // sem marcação aqui
+  const estaPago = (origem: ItemChecklist["origem"], id: string) => {
+    if (pagamentos.estaPago(origem, id)) return true;
+    if (origem !== "parcela") return false;
+    const p = parcelas.parcelas.find((x) => x.id === id);
+    return !!p && parcelaPagaNoMes(p, mes);
+  };
 
   const todosItens = grupos.flatMap((g) => g.itens);
   const totalGeral = todosItens.reduce((acc, i) => acc + i.valor, 0);
   const itensPagos = todosItens.filter((i) =>
-    pagamentos.estaPago(i.origem, i.id)
+    estaPago(i.origem, i.id)
   );
   const totalPago = itensPagos.reduce((acc, i) => acc + i.valor, 0);
   const totalFalta = totalGeral - totalPago;
@@ -268,7 +281,7 @@ export default function ChecklistPage() {
                     <span className="text-xs text-text-faint">
                       {
                         grupo.itens.filter((i) =>
-                          pagamentos.estaPago(i.origem, i.id)
+                          estaPago(i.origem, i.id)
                         ).length
                       }
                       /{grupo.itens.length}
@@ -276,7 +289,7 @@ export default function ChecklistPage() {
                   </div>
                   <ul className="space-y-2">
                     {grupo.itens.map((item) => {
-                      const pago = pagamentos.estaPago(item.origem, item.id);
+                      const pago = estaPago(item.origem, item.id);
                       // Só marca atraso no mês corrente: navegando pra um mês
                       // futuro nada está atrasado, e num passado tudo estaria.
                       // Vencimento efetivo: caindo em fim de semana ou

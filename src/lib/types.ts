@@ -399,11 +399,29 @@ export function mesAnteriorDe(mes: string): string {
  * parcela cujo início era só no mês seguinte aparecer como "parcela 1"
  * já no mês atual, em toda tela que usa essa função.
  */
+/**
+ * Quantas parcelas faltam no começo de `mes` (contando a do mês), pela
+ * agenda: uma por mês a partir da próxima a pagar (`mesReferencia`). Vale
+ * pra trás também — a parcela do mês continua lá depois de paga (só fica
+ * marcada como paga, ver parcelaPagaNoMes). Fora da agenda (antes da 1ª ou
+ * depois da última) é 0; antes do cadastro, também.
+ */
 export function parcelasRestantesEm(parcela: Parcela, mes: string): number {
   const referencia = parcela.mesReferencia ?? mesPadrao();
   const decorridos = diferencaMeses(referencia, mes);
-  if (decorridos < 0) return 0;
-  return Math.max(0, parcela.parcelasRestantes - decorridos);
+  const restantes = parcela.parcelasRestantes - decorridos;
+  if (restantes <= 0 || restantes > parcela.totalParcelas) return 0;
+  if (decorridos < 0 && parcela.criadoEm > 0) {
+    const criado = new Date(parcela.criadoEm);
+    const mesCadastro = `${criado.getFullYear()}-${String(criado.getMonth() + 1).padStart(2, "0")}`;
+    if (mes < mesCadastro) return 0;
+  }
+  return restantes;
+}
+
+/** A parcela que cai em `mes` já foi paga? */
+export function parcelaPagaNoMes(parcela: Parcela, mes: string): boolean {
+  return parcelasRestantesEm(parcela, mes) > 0 && (parcela.mesReferencia ?? mesPadrao()) > mes;
 }
 
 export function formatarMes(mes: string): string {

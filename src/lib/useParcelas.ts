@@ -14,10 +14,10 @@ import {
   TipoParcela,
   VinculoDesejo,
   mesPadrao,
-  mesSeguinte,
-  mesAnteriorDe,
+  parcelasRestantesEm,
   valorMinhaParte,
 } from "./types";
+import { baixaDasParcelasDaFatura, marcarParcelaPaga } from "./parcelasOperacoes";
 import { useAuth } from "./AuthContext";
 import { mensagemErro } from "./erroFirebase";
 import { anexarAuditLog } from "./auditoria";
@@ -151,20 +151,13 @@ export function useParcelas() {
   }
 
   /**
-   * Parcela ativa nunca pode ser excluída direto — regra explícita do
-   * briefing, porque apagar uma parcela em andamento derruba o
-   * compromisso mensal sem deixar rastro. Só dá pra excluir depois de
-   * quitada (parcelasRestantes === 0), e mesmo assim com motivo e
-   * snapshot completo gravado em audit log antes do delete.
+   * Exclusão definitiva (a pessoa quer recomeçar o cadastro). O retrato
+   * completo vai pra trilha de auditoria antes de apagar.
    */
-  async function remover(id: string, motivo: string) {
+  async function remover(id: string, motivo = "") {
     if (!user) return false;
     const parcela = parcelas.find((p) => p.id === id);
     if (!parcela) return false;
-    if (parcela.parcelasRestantes > 0) {
-      setErro("Parcela ativa não pode ser excluída — espere ela ficar quitada.");
-      return false;
-    }
     try {
       const batch = writeBatch(db);
       const ref = doc(db, "usuarios", user.uid, "parcelas", id);
@@ -172,7 +165,7 @@ export function useParcelas() {
         action: "archived",
         entityType: "parcela",
         entityId: id,
-        summary: `Exclusão definitiva de "${parcela.nome}" (quitada): ${motivo}`,
+        summary: `Parcela "${parcela.nome}" excluída${motivo ? `: ${motivo}` : ""}`,
         before: { ...parcela },
       });
       batch.delete(ref);
@@ -185,28 +178,16 @@ export function useParcelas() {
     }
   }
 
-  async function darBaixa(id: string) {
+  /**
+   * Marca a parcela do mês como paga (ou desfaz). É a MESMA operação do
+   * "A pagar": as duas telas mostram sempre o mesmo.
+   */
+  async function marcarPaga(id: string, mes: string, pago: boolean) {
     if (!user) return false;
     const p = parcelas.find((x) => x.id === id);
     if (!p) return false;
-    const novoValor = Math.max(0, p.parcelasRestantes - 1);
-    // Avança a partir da própria referência da parcela, não do mês real de
-    // hoje — assim pagar em dia ou colocar em dia várias parcelas atrasadas
-    // de uma vez sempre aponta a próxima pro mês seguinte certo.
-    const novaReferencia = mesSeguinte(p.mesReferencia ?? mesPadrao());
     try {
-      const batch = writeBatch(db);
-      const ref = doc(db, "usuarios", user.uid, "parcelas", id);
-      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: novaReferencia });
-      anexarAuditLog(batch, user.uid, user.email, {
-        action: "paid",
-        entityType: "parcela",
-        entityId: id,
-        summary: `Baixa em "${p.nome}"`,
-        before: { parcelasRestantes: p.parcelasRestantes },
-        after: { parcelasRestantes: novoValor },
-      });
-      await batch.commit();
+      await marcarParcelaPaga(db, user.uid, id, mes, pago, valorMinhaParte(p));
       setErro(null);
       return true;
     } catch (e) {
@@ -215,26 +196,14 @@ export function useParcelas() {
     }
   }
 
-  async function reverterBaixa(id: string) {
+  /** Pagar/desmarcar a fatura de um cartão dá/desfaz baixa nas parcelas dentro dela. */
+  async function baixaPelaFatura(cartao: string, mes: string, pago: boolean) {
     if (!user) return false;
-    const p = parcelas.find((x) => x.id === id);
-    if (!p) return false;
-    const novoValor = Math.min(p.totalParcelas, p.parcelasRestantes + 1);
-    const novaReferencia = mesAnteriorDe(p.mesReferencia ?? mesPadrao());
+    const ids = parcelas
+      .filter((p) => p.naFatura && p.cartao === cartao && parcelasRestantesEm(p, mes) > 0)
+      .map((p) => p.id);
     try {
-      const batch = writeBatch(db);
-      const ref = doc(db, "usuarios", user.uid, "parcelas", id);
-      batch.update(ref, { parcelasRestantes: novoValor, mesReferencia: novaReferencia });
-      anexarAuditLog(batch, user.uid, user.email, {
-        action: "reversed",
-        entityType: "parcela",
-        entityId: id,
-        summary: `Baixa revertida em "${p.nome}"`,
-        before: { parcelasRestantes: p.parcelasRestantes },
-        after: { parcelasRestantes: novoValor },
-      });
-      await batch.commit();
-      setErro(null);
+      await baixaDasParcelasDaFatura(db, user.uid, ids, mes, pago);
       return true;
     } catch (e) {
       setErro(mensagemErro(e));
@@ -256,7 +225,7 @@ export function useParcelas() {
     adicionar,
     editar,
     remover,
-    darBaixa,
-    reverterBaixa,
+    marcarPaga,
+    baixaPelaFatura,
   };
 }

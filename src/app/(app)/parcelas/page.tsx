@@ -6,6 +6,7 @@ import {
   formatarMes,
   mesPadrao,
   parcelasRestantesEm,
+  parcelaPagaNoMes,
   diferencaMeses,
   mesSeguinte,
   Parcela,
@@ -37,7 +38,7 @@ export default function ParcelasPage() {
     adicionar,
     editar,
     remover,
-    darBaixa,
+    marcarPaga,
   } = useParcelas();
 
   const [mes, setMes] = useState(mesPadrao());
@@ -223,7 +224,7 @@ export default function ParcelasPage() {
             />
           </div>
           <div>
-            <label className="rotulo">Já pagas</label>
+            <label className="rotulo">Já pagas até hoje</label>
             <input
               placeholder="0"
               inputMode="numeric"
@@ -275,7 +276,10 @@ export default function ParcelasPage() {
         )}
 
         <div className="rounded-xl border border-line-soft bg-surface-2/50 px-3 py-2.5">
-          <p className="rotulo">Mês da 1ª parcela que você vai pagar</p>
+          <p className="rotulo">Mês da próxima parcela a pagar</p>
+          <p className="mb-1.5 text-xs text-text-faint">
+            Ex.: pagou 3 de 10 e a 4ª vence em dezembro: &quot;Já pagas&quot; 3 e aqui dezembro.
+          </p>
           <MonthSelector mes={mesInicio} onChange={setMesInicio} />
         </div>
 
@@ -315,7 +319,7 @@ export default function ParcelasPage() {
             mes={mes}
             onEditar={editar}
             onRemover={remover}
-            onDarBaixa={darBaixa}
+            onMarcarPaga={marcarPaga}
           />
           <GrupoParcelas
             titulo="Financiamento"
@@ -323,7 +327,7 @@ export default function ParcelasPage() {
             mes={mes}
             onEditar={editar}
             onRemover={remover}
-            onDarBaixa={darBaixa}
+            onMarcarPaga={marcarPaga}
           />
         </div>
       )}
@@ -349,14 +353,14 @@ function GrupoParcelas({
   mes,
   onEditar,
   onRemover,
-  onDarBaixa,
+  onMarcarPaga,
 }: {
   titulo: string;
   itens: Parcela[];
   mes: string;
   onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
-  onRemover: (id: string, motivo: string) => Promise<boolean>;
-  onDarBaixa: (id: string) => Promise<boolean>;
+  onRemover: (id: string, motivo?: string) => Promise<boolean>;
+  onMarcarPaga: (id: string, mes: string, pago: boolean) => Promise<boolean>;
 }) {
   if (itens.length === 0) return null;
 
@@ -383,7 +387,8 @@ function GrupoParcelas({
               parcela={p}
               mes={mes}
               onEditar={onEditar}
-              onDarBaixa={onDarBaixa}
+              onRemover={onRemover}
+              onMarcarPaga={onMarcarPaga}
             />
           ))}
         </ul>
@@ -416,7 +421,7 @@ function ItemParcelaQuitada({
 }: {
   parcela: Parcela;
   onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
-  onRemover: (id: string, motivo: string) => Promise<boolean>;
+  onRemover: (id: string, motivo?: string) => Promise<boolean>;
 }) {
   const [confirmando, setConfirmando] = useState(false);
   const toast = useToast();
@@ -461,12 +466,11 @@ function ItemParcelaQuitada({
       <ConfirmModal
         aberto={confirmando}
         titulo="Excluir definitivamente"
-        descricao={`"${parcela.nome}" já está quitada e será apagada de vez — isso não pode ser desfeito.`}
+        descricao={`"${parcela.nome}" será apagada de vez — isso não pode ser desfeito.`}
         textoConfirmar="Excluir"
         perigo
-        pedirMotivo
-        onConfirmar={(motivo) => {
-          toast.sucessoSe(onRemover(parcela.id, motivo ?? ""), "Parcela excluída.");
+        onConfirmar={() => {
+          toast.sucessoSe(onRemover(parcela.id), "Parcela excluída.");
           setConfirmando(false);
         }}
         onCancelar={() => setConfirmando(false)}
@@ -479,14 +483,17 @@ function ItemParcela({
   parcela,
   mes,
   onEditar,
-  onDarBaixa,
+  onRemover,
+  onMarcarPaga,
 }: {
   parcela: Parcela;
   mes: string;
   onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
-  onDarBaixa: (id: string) => Promise<boolean>;
+  onRemover: (id: string, motivo?: string) => Promise<boolean>;
+  onMarcarPaga: (id: string, mes: string, pago: boolean) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [nome, setNome] = useState(parcela.nome);
   const [valorParcela, setValorParcela] = useState(parcela.valorParcela);
   const [totalParcelas, setTotalParcelas] = useState(
@@ -510,10 +517,12 @@ function ItemParcela({
   // pra esse mês) mas são coisas diferentes: a parcela ainda não começou,
   // ou já foi dada baixa até aqui e a próxima só cai no mês seguinte —
   // os dois casos mostram "próxima parcela em X" em vez de "parcela 1"/"quitada".
-  const decorridos = diferencaMeses(referencia, mes);
   const restantesNoMes = parcelasRestantesEm(parcela, mes);
   const numeroNoMes = parcela.totalParcelas - restantesNoMes + 1;
-  const ehMesAtual = mes === mesPadrao();
+  const pagaNoMes = parcelaPagaNoMes(parcela, mes);
+  // meses de trás sem baixa (a próxima a pagar ficou antes do mês olhado)
+  const atrasadas = restantesNoMes > 0 && referencia < mes ? diferencaMeses(referencia, mes) : 0;
+  const jaPagas = parcela.totalParcelas - parcela.parcelasRestantes;
 
   function salvar() {
     const nomeAparado = nome.trim();
@@ -627,7 +636,7 @@ function ItemParcela({
         )}
         <div className="rounded-lg border border-line-soft bg-surface-2/50 px-3 py-2">
           <p className="text-xs text-text-muted mb-1.5">
-            Mês em que &quot;faltam/pagas&quot; acima é válido
+            Mês da próxima parcela a pagar
           </p>
           <MonthSelector mes={mesReferencia} onChange={setMesReferencia} />
         </div>
@@ -689,6 +698,9 @@ function ItemParcela({
           <BotaoIcone label="Editar parcela" onClick={() => setEditando(true)}>
             <IconEditar width={17} height={17} />
           </BotaoIcone>
+          <BotaoIcone label="Excluir parcela" tom="perigo" onClick={() => setExcluindo(true)}>
+            <IconExcluir width={17} height={17} />
+          </BotaoIcone>
         </div>
       </div>
       {/* linha do tempo */}
@@ -709,31 +721,55 @@ function ItemParcela({
       </p>
       <div className="flex items-center justify-between mt-2">
         <p className="text-xs text-text-faint">
-          Faltam {parcela.parcelasRestantes} de {parcela.totalParcelas} ·{" "}
-          {parcela.totalParcelas - parcela.parcelasRestantes} pagas
+          {jaPagas} de {parcela.totalParcelas} pagas · faltam {parcela.parcelasRestantes}
         </p>
-        {parcela.parcelasRestantes > 0 && decorridos >= 0 && (
+        {restantesNoMes > 0 && (
           <button
             onClick={() => {
-              toast.sucessoSe(onDarBaixa(parcela.id), `Baixa dada em "${parcela.nome}".`);
+              toast.sucessoSe(
+                onMarcarPaga(parcela.id, mes, !pagaNoMes),
+                pagaNoMes
+                  ? `Baixa desfeita em "${parcela.nome}".`
+                  : `Parcela ${numeroNoMes} de "${parcela.nome}" paga.`
+              );
             }}
-            className="inline-flex min-h-[44px] items-center px-2 -mx-2 text-xs text-brand hover:text-brand-dark"
+            className={`inline-flex min-h-[44px] items-center px-2 -mx-2 text-xs ${
+              pagaNoMes ? "text-text-muted hover:text-text" : "font-medium text-brand hover:text-brand-dark"
+            }`}
           >
-            Dar baixa neste mês
+            {pagaNoMes ? "Desfazer" : "Marcar paga"}
           </button>
         )}
       </div>
-      <p className="text-xs text-info mt-1">
-        {decorridos < 0
-          ? `próxima parcela em ${formatarMes(referencia)}`
-          : ehMesAtual
-          ? restantesNoMes > 0
-            ? `este mês: parcela ${numeroNoMes} de ${parcela.totalParcelas}`
-            : "quitada"
-          : restantesNoMes > 0
-          ? `previsão pra ${formatarMes(mes)}: parcela ${numeroNoMes} de ${parcela.totalParcelas} (se pagar 1 por mês)`
-          : `previsão: já estaria quitada em ${formatarMes(mes)} — só confirmado quando você de fato pagar`}
+      <p className={`text-xs mt-1 ${pagaNoMes ? "text-positive" : "text-info"}`}>
+        {restantesNoMes === 0
+          ? parcela.parcelasRestantes === 0
+            ? "quitada"
+            : `próxima parcela em ${formatarMes(referencia)}`
+          : pagaNoMes
+          ? `✓ parcela ${numeroNoMes} de ${parcela.totalParcelas} paga (${formatarMes(mes)})`
+          : atrasadas > 0
+          ? `parcela ${numeroNoMes} de ${parcela.totalParcelas} a pagar · ${atrasadas} mês(es) antes sem baixa (marcar paga põe em dia)`
+          : `parcela ${numeroNoMes} de ${parcela.totalParcelas} a pagar em ${formatarMes(mes)}`}
       </p>
+      {parcela.naFatura && restantesNoMes > 0 && !pagaNoMes && (
+        <p className="mt-0.5 text-xs text-text-faint">
+          Pagar a fatura do cartão no &quot;A pagar&quot; já dá baixa aqui.
+        </p>
+      )}
+
+      <ConfirmModal
+        aberto={excluindo}
+        titulo={`Excluir "${parcela.nome}"?`}
+        descricao="A parcela sai de vez, de todos os meses. Pagamentos já marcados no A pagar continuam no histórico do saldo."
+        textoConfirmar="Excluir"
+        perigo
+        onConfirmar={() => {
+          setExcluindo(false);
+          toast.sucessoSe(onRemover(parcela.id), "Parcela excluída.");
+        }}
+        onCancelar={() => setExcluindo(false)}
+      />
     </li>
   );
 }

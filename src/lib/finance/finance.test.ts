@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   FinancialEntry,
   parcelasRestantesEm,
+  parcelaPagaNoMes,
   mesSeguinte,
   mesAnteriorDe,
   idadeEm,
@@ -317,7 +318,10 @@ describe("parcela — projeção mês a mês", () => {
       mesReferencia: referenciaAposBaixa,
     };
     assert.equal(referenciaAposBaixa, "2026-09");
-    assert.equal(parcelasRestantesEm(parcelaAposBaixa, "2026-08"), 0); // agosto já foi pago, nada resta nele
+    // agosto continua mostrando a 5ª (paga), em vez de sumir do mês
+    assert.equal(parcelasRestantesEm(parcelaAposBaixa, "2026-08"), 2);
+    assert.equal(parcelaPagaNoMes(parcelaAposBaixa, "2026-08"), true);
+    assert.equal(parcelaPagaNoMes(parcelaAposBaixa, "2026-09"), false);
     assert.equal(parcelasRestantesEm(parcelaAposBaixa, "2026-09"), 1); // a 6ª cai em setembro
   });
 });
@@ -1844,5 +1848,39 @@ describe("configuração por cliente (O03)", () => {
     assert.equal(mesMinimoAtual(), "2027-03");
     assert.ok(mesPadrao() >= "2027-03");
     configurarInicioHistorico(MES_MINIMO);
+  });
+});
+
+describe("baixa de parcela: uma fonte só (A pagar e Parcelas)", async () => {
+  const { baixaAte, desfazerBaixa } = await import("../parcelasOperacoes");
+  const treinamento = { totalParcelas: 10, parcelasRestantes: 7, mesReferencia: "2026-12" };
+
+  test("3 pagas, próxima em dezembro: novembro é a 3ª (paga), dezembro a 4ª", () => {
+    const p = { ...treinamento, id: "t", tipo: "cartao", nome: "x", valorParcela: 1, criadoEm: Date.parse("2026-11-05T12:00:00-03:00") } as Parcela;
+    assert.equal(10 - parcelasRestantesEm(p, "2026-11") + 1, 3);
+    assert.equal(parcelaPagaNoMes(p, "2026-11"), true);
+    assert.equal(10 - parcelasRestantesEm(p, "2026-12") + 1, 4);
+    assert.equal(parcelaPagaNoMes(p, "2026-12"), false);
+    // antes do cadastro o app não inventa parcela
+    assert.equal(parcelasRestantesEm(p, "2026-10"), 0);
+  });
+
+  test("pagar dezembro: próxima vai pra janeiro; marcar de novo não muda nada", () => {
+    const pago = baixaAte(treinamento, "2026-12");
+    assert.deepEqual(pago, { parcelasRestantes: 6, mesReferencia: "2027-01" });
+    assert.equal(baixaAte({ ...treinamento, ...pago! }, "2026-12"), null);
+  });
+
+  test("desfazer volta exatamente um mês; desfazer mês errado não mexe", () => {
+    const pago = { ...treinamento, ...baixaAte(treinamento, "2026-12")! };
+    assert.deepEqual(desfazerBaixa(pago, "2026-12"), { parcelasRestantes: 7, mesReferencia: "2026-12" });
+    assert.equal(desfazerBaixa(pago, "2026-11"), null);
+  });
+
+  test("atrasada: pagar o mês atual põe em dia os meses de trás", () => {
+    assert.deepEqual(baixaAte({ totalParcelas: 10, parcelasRestantes: 9, mesReferencia: "2026-09" }, "2026-11"), {
+      parcelasRestantes: 6,
+      mesReferencia: "2026-12",
+    });
   });
 });
