@@ -28,8 +28,10 @@ test("guardar e resgatar: saldo e caixinha mudam juntos, total conservado", asyn
   await page.goto("/saldo");
   await expect.poll(() => saldoNaTela(page)).toBeCloseTo(saldoAntes - 30, 2);
 
-  // com dinheiro dentro, excluir é recusado
+  // com dinheiro dentro, excluir pergunta: devolver ao saldo ou não
   await page.goto("/caixinhas");
   await item.getByRole("button", { name: "Excluir caixinha" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Resgate antes");
+  await expect(page.getByRole("dialog")).toContainText("devolver");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
 });
