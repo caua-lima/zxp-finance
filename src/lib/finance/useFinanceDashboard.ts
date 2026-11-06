@@ -12,6 +12,7 @@ import { useGastos } from "@/lib/useGastos";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { useSaldo } from "@/lib/useSaldo";
 import { useComissoes } from "@/lib/useComissoes";
+import { useModulos } from "@/lib/useModulos";
 import { useCaixinhas } from "@/lib/useCaixinhas";
 import { useConfigApp } from "@/lib/useConfigApp";
 import { construirFinancialEntries } from "./adapters";
@@ -47,6 +48,8 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
   const pagamentos = usePagamentos(mes);
   const saldoHook = useSaldo();
   const comissoes = useComissoes(mes);
+  // módulo desligado: comissão não aparece em lugar nenhum
+  const { comissoes: moduloComissoes } = useModulos();
   const { transferencias } = useCaixinhas();
 
   const loading =
@@ -112,7 +115,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
       config,
-      comissoes: comissoes.todas,
+      comissoes: moduloComissoes ? comissoes.todas : [],
     });
   }, [
     loading,
@@ -130,6 +133,7 @@ export function useFinanceDashboard(mes: string = mesPadrao()) {
     diaFechamentoPorCartao,
     config,
     comissoes.todas,
+    moduloComissoes,
   ]);
 
   // mesma conta da tela de Saldo: valor informado menos o que foi gasto

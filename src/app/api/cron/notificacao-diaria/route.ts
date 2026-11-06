@@ -93,13 +93,16 @@ export async function GET(req: NextRequest) {
         ler<{ nome: string; diaVencimento?: number | null; diaFechamento?: number | null }>("cartoesConfig"),
         obterDocumento<Partial<PreferenciasNotificacao>>(`${base}/preferencias/notificacoes`),
         // a MESMA configuração financeira da tela (imposto, início da contagem)
-        obterDocumento<{ taxaImposto?: number; inicioUso?: string }>(`${base}/preferencias/app`),
+        obterDocumento<{ taxaImposto?: number; inicioUso?: string; comissoes?: boolean }>(`${base}/preferencias/app`),
       ]);
+
+    // módulo de comissões desligado no Perfil: some de tudo
+    const comissoesAtivas = prefsApp?.comissoes === false ? [] : comissoes;
 
     // preferência salva vence o padrão; comissão é opt-in (liga sozinha só
     // pra quem usa o módulo)
     const prefs: PreferenciasNotificacao = {
-      ...preferenciasPadrao(comissoes.length > 0),
+      ...preferenciasPadrao(comissoesAtivas.length > 0),
       ...Object.fromEntries(Object.entries(prefsDoc ?? {}).filter(([, v]) => typeof v === "boolean")),
     };
 
@@ -117,12 +120,12 @@ export async function GET(req: NextRequest) {
       parcelas,
       faturas,
       ganhos,
-      comissoes,
+      comissoes: comissoesAtivas,
       transferencias,
       diaVencimentoPorCartao,
       diaFechamentoPorCartao,
       config: configFinanceiraDe(prefsApp),
-      diasComComissao: new Set(comissoes.map((x) => x.data)),
+      diasComComissao: new Set(comissoesAtivas.map((x) => x.data)),
     };
 
     // aparelhos com a geração de cada cadastro: a entrega fica presa a ela
