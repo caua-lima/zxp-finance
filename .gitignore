@@ -50,3 +50,6 @@ firestore-debug.log
 backups-ensaio/
 playwright-report/
 test-results/
+
+# relatórios financeiros pessoais (PDF/CSV) — nunca sobem pro repositório público
+relatorios/

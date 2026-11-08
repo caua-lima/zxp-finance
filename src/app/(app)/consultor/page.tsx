@@ -29,9 +29,11 @@ interface Troca {
 }
 
 const SUGESTOES = [
-  "Dá pra eu assumir uma parcela de 200 em 12x?",
-  "Consigo financiar 3500 em 10 vezes de 350?",
-  "Dá pra comprar algo de 1200 parcelado em 6x de 200?",
+  "Quanto estou gastando de iFood nos últimos 3 meses?",
+  "Hoje, assumir uma parcela de R$ 600 me prejudica?",
+  "Pra onde foi meu dinheiro no mês passado?",
+  "Quanto gastei com transporte este mês?",
+  "Quais parcelas eu tenho e quando terminam?",
 ];
 
 // contador simples, não Date.now() — id só precisa ser único nesta lista,
@@ -88,7 +90,14 @@ export default function ConsultorPage() {
       const resposta = await fetch("/api/consultor", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ pergunta }),
+        // as últimas respostas vão junto: dá pra emendar ("e em 6x?")
+        body: JSON.stringify({
+          pergunta,
+          historico: trocas
+            .filter((t) => t.resposta)
+            .slice(-4)
+            .map((t) => ({ pergunta: t.pergunta, resposta: t.resposta })),
+        }),
       });
       const dados = await resposta.json();
       setTrocas((atual) =>
@@ -131,7 +140,7 @@ export default function ConsultorPage() {
     <div className="flex min-h-[calc(100vh-13rem)] flex-col">
       <PageHeader
         titulo="Consultor"
-        descricao="Pergunte se dá pra assumir um novo compromisso — a resposta usa seus números reais"
+        descricao="Pergunte qualquer coisa sobre o seu dinheiro: a resposta usa o seu extrato e os seus números reais"
       />
 
       {trocas.length === 0 && (
@@ -167,7 +176,7 @@ export default function ConsultorPage() {
               </div>
             ) : t.resposta === null ? (
               <div className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-text-faint italic">
-                Calculando com seus números...
+                Lendo o seu extrato e fazendo as contas...
               </div>
             ) : (
               <RespostaConsultor
@@ -187,7 +196,7 @@ export default function ConsultorPage() {
         <input
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          placeholder="Dá pra eu assumir uma parcela de..."
+          placeholder="Ex.: quanto gastei de Uber este mês?"
           className="campo flex-1"
           disabled={enviando}
         />
@@ -266,7 +275,7 @@ function RespostaConsultor({
           : "border-negative/30 bg-negative-soft"
       }`}
     >
-      <p className={viavel ? "text-text" : "text-text"}>{troca.resposta}</p>
+      <p className="whitespace-pre-line text-text">{troca.resposta}</p>
 
       {troca.simulacao && (
         <p className="mt-2 text-xs text-text-faint">
