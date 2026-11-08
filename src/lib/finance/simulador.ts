@@ -4,7 +4,7 @@ import { arredondarCentavos } from "@/lib/types";
  * Simulação de viabilidade: "dá pra eu assumir uma parcela de X em Nx?"
  *
  * Puro de propósito — quem chama isso é uma ferramenta de IA (ver
- * anthropicClient.ts), e o modelo NUNCA pode "chutar" o número. Ele só lê o
+ * consultor/ferramentas.ts), e o modelo NUNCA pode "chutar" o número. Ele só lê o
  * resultado real deste cálculo e traduz pra português. Toda a matemática
  * que decide se algo é viável mora aqui, testável sem rede nem chave.
  */
