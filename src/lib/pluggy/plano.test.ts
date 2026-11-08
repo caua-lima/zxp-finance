@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { planejarSincronizacao, EstadoApp, DadosBanco, ehMovimentoInterno } from "./plano";
-import { configPluggy } from "./cliente";
+import { configPluggy, credenciaisPluggy, comConexoes } from "./cliente";
 import type { ContaPluggy, TransacaoPluggy } from "./cliente";
 import { saldoConfirmado, recebimentosAvulsos } from "../finance/saldo";
 import type { Gasto, Ganho } from "../types";
@@ -152,5 +152,12 @@ describe("configuração da Pluggy", () => {
     const id = "123e4567-e89b-12d3-a456-426614174000";
     const c = configPluggy({ PLUGGY_CLIENT_ID: "a", PLUGGY_CLIENT_SECRET: "b", PLUGGY_ITEM_IDS: `${id}, lixo`, PLUGGY_UID: "u" });
     assert.deepEqual(c?.itemIds, [id]);
+  });
+
+  test("conexão gravada pelo botão completa a configuração, sem repetir", () => {
+    const id = "123e4567-e89b-12d3-a456-426614174000";
+    const cred = credenciaisPluggy({ PLUGGY_CLIENT_ID: "a", PLUGGY_CLIENT_SECRET: "b", PLUGGY_UID: "u" });
+    assert.deepEqual(cred?.itemIds, []);
+    assert.deepEqual(comConexoes(cred!, [id, id, "lixo", 3]).itemIds, [id]);
   });
 });

@@ -141,6 +141,20 @@ async function executar(cfg: ConfigPluggy, simular: boolean): Promise<Previa> {
   }
 }
 
+/** Conexões gravadas pelo botão "Conectar banco" (usuarios/{uid}/integracoes/conexao). */
+export async function conexoesGravadas(uid: string): Promise<string[]> {
+  const doc = await obterDocumento<{ itemIds?: unknown }>(`usuarios/${uid}/integracoes/conexao`);
+  return Array.isArray(doc?.itemIds) ? (doc.itemIds as unknown[]).filter((x): x is string => typeof x === "string") : [];
+}
+
+export async function gravarConexao(uid: string, itemId: string): Promise<string[]> {
+  const ids = [...new Set([...(await conexoesGravadas(uid)), itemId])];
+  await gravarJuntas([
+    { caminho: `usuarios/${uid}/integracoes/conexao`, dados: { itemIds: ids, atualizadoEm: Date.now() }, campos: ["itemIds", "atualizadoEm"] },
+  ]);
+  return ids;
+}
+
 export async function statusDoBanco(uid: string): Promise<StatusBanco | null> {
   return obterDocumento<StatusBanco>(`usuarios/${uid}/integracoes/banco`);
 }

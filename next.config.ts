@@ -18,6 +18,8 @@ const csp = [
   "img-src 'self' blob: data:",
   "font-src 'self'",
   "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com",
+  // janela do Pluggy Connect (conectar o banco por Open Finance)
+  "frame-src https://connect.pluggy.ai",
   "worker-src 'self'",
   "manifest-src 'self'",
   "object-src 'none'",

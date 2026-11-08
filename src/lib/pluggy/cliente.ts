@@ -21,17 +21,32 @@ export interface ConfigPluggy {
   uid: string;
 }
 
-/** Lê a configuração do ambiente; null quando falta algo (integração desligada). */
-export function configPluggy(env: Record<string, string | undefined> = process.env): ConfigPluggy | null {
+export const ehIdDeItem = (s: unknown): s is string =>
+  typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+/**
+ * Credenciais do ambiente (as conexões podem vir vazias: elas também ficam
+ * gravadas no app quando você conecta pelo botão). null = integração desligada.
+ */
+export function credenciaisPluggy(env: Record<string, string | undefined> = process.env): ConfigPluggy | null {
   const clientId = env.PLUGGY_CLIENT_ID?.trim();
   const clientSecret = env.PLUGGY_CLIENT_SECRET?.trim();
-  const itemIds = (env.PLUGGY_ITEM_IDS ?? "")
-    .split(/[\s,;]+/)
-    .map((s) => s.trim())
-    .filter((s) => /^[0-9a-f-]{36}$/i.test(s));
   const uid = env.PLUGGY_UID?.trim();
-  if (!clientId || !clientSecret || itemIds.length === 0 || !uid) return null;
+  if (!clientId || !clientSecret || !uid) return null;
+  const itemIds = (env.PLUGGY_ITEM_IDS ?? "").split(/[\s,;]+/).map((s) => s.trim()).filter(ehIdDeItem);
   return { clientId, clientSecret, itemIds, uid };
+}
+
+/** Configuração pronta pra sincronizar: credenciais + pelo menos uma conexão. */
+export function configPluggy(env: Record<string, string | undefined> = process.env): ConfigPluggy | null {
+  const cfg = credenciaisPluggy(env);
+  return cfg && cfg.itemIds.length > 0 ? cfg : null;
+}
+
+/** Junta as conexões do ambiente com as gravadas no app. */
+export function comConexoes(cfg: ConfigPluggy, gravadas: unknown): ConfigPluggy {
+  const extras = Array.isArray(gravadas) ? gravadas.filter(ehIdDeItem) : [];
+  return { ...cfg, itemIds: [...new Set([...cfg.itemIds, ...extras])] };
 }
 
 export interface ItemPluggy {
@@ -131,6 +146,22 @@ async function todasAsPaginas<T>(cfg: ConfigPluggy, caminho: string): Promise<T[
     if (!p.totalPages || page >= p.totalPages) break;
   }
   return itens;
+}
+
+/**
+ * Token de 30 minutos pro widget Pluggy Connect abrir no navegador. Ele só
+ * cria/atualiza conexão — não lê dados (a chave de API nunca vai pro navegador).
+ */
+export async function criarConnectToken(cfg: ConfigPluggy, clientUserId: string): Promise<string> {
+  const r = await fetch(`${BASE}/connect_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-KEY": await apiKey(cfg) },
+    body: JSON.stringify({ clientUserId }),
+  });
+  if (!r.ok) throw new ErroPluggy(`A Pluggy respondeu ${r.status} ao criar o token de conexão.`, r.status);
+  const { accessToken } = (await r.json()) as { accessToken?: string };
+  if (!accessToken) throw new ErroPluggy("A Pluggy não devolveu o token de conexão.");
+  return accessToken;
 }
 
 export function obterItem(cfg: ConfigPluggy, itemId: string): Promise<ItemPluggy> {

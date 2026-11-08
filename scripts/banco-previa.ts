@@ -4,13 +4,18 @@
  * Mostra o saldo do banco e como cada transação seria tratada. Não imprime
  * chave nem token.
  */
-import { configPluggy } from "../src/lib/pluggy/cliente";
-import { previaDoBanco } from "../src/lib/pluggy/sincronizar";
+import { comConexoes, credenciaisPluggy } from "../src/lib/pluggy/cliente";
+import { conexoesGravadas, previaDoBanco } from "../src/lib/pluggy/sincronizar";
 
 async function main() {
-  const cfg = configPluggy();
-  if (!cfg) {
-    console.error("Faltam PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET, PLUGGY_ITEM_IDS ou PLUGGY_UID no .env.local.");
+  const cred = credenciaisPluggy();
+  if (!cred) {
+    console.error("Faltam PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET ou PLUGGY_UID no .env.local.");
+    process.exit(1);
+  }
+  const cfg = comConexoes(cred, await conexoesGravadas(cred.uid));
+  if (cfg.itemIds.length === 0) {
+    console.error("Nenhum banco conectado ainda: use o botão \"Conectar banco\" na tela de Saldo.");
     process.exit(1);
   }
   const { status, escritas } = await previaDoBanco(cfg);
