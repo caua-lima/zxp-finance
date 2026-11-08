@@ -51,6 +51,10 @@ export interface EstadoApp {
   processados: Set<string>;
 }
 
+/** Caixinha que espelha uma reserva do banco ("Money", "Viagens"...). */
+export const idCaixinhaDaReserva = (nome: string) =>
+  `banco_res_${normalizarTexto(nome).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "reserva"}`;
+
 export interface DadosBanco {
   /** Quando o banco foi lido de fato (ms). */
   lidoEm: number;
@@ -107,22 +111,67 @@ function temPalavraEmComum(a: string, b: string): boolean {
 const INTERNO_CATEGORIA =
   /same person|automatic investment|fixed income|mutual fund|variable income|^investments?$|credit card payment|transfer - internal/i;
 const INTERNO_DESCRICAO =
-  /cofrinho|reserva|aplica[cç][aã]o|resgate|investimento|pagamento (de )?fatura|fatura do cart|entre contas|mesma titularidade/i;
+  /cofrinho|aplica[cç][aã]o|resgate|investimento|pagamento (de )?fatura|fatura do cart|entre contas|mesma titularidade/i;
 const RENDIMENTO = /rendimento|juros|proceeds interests|dividend/i;
+const RESERVA = /^(reserva por gastos?|dinheiro reservado|dinheiro retirado)\s+(.+)$/i;
 
-/** Movimento entre bolsos seus (cofrinho, investimento, fatura, mesma titularidade). */
-export function ehMovimentoInterno(tx: TransacaoPluggy): boolean {
+/**
+ * Reserva do Mercado Pago (as "caixinhas" de lá): "Reserva por gasto
+ * Money", "Dinheiro reservado Viagens", "Dinheiro retirado Money".
+ * Guardar tira da conta; retirar devolve.
+ */
+export function reservaDaTransacao(tx: TransacaoPluggy): { nome: string; direcao: "guardar" | "resgatar" } | null {
+  const m = tx.description.trim().match(RESERVA);
+  if (!m) return null;
+  return { nome: m[2].trim().slice(0, 60), direcao: /retirado/i.test(m[1]) ? "resgatar" : "guardar" };
+}
+
+/** Pix/transferência pra você mesmo (outra conta sua, seu CNPJ). */
+export function ehParaVoceMesmo(tx: TransacaoPluggy, titulares: string[]): boolean {
+  const texto = normalizarTexto(`${tx.description} ${tx.descriptionRaw ?? ""}`);
+  return titulares.some((t) => {
+    const nome = normalizarTexto(t).trim();
+    return nome.split(/\s+/).length >= 2 && texto.includes(nome);
+  });
+}
+
+/** Movimento entre bolsos seus (reserva, investimento, fatura, mesma titularidade). */
+export function ehMovimentoInterno(tx: TransacaoPluggy, titulares: string[] = []): boolean {
+  if (reservaDaTransacao(tx)) return true;
   if (tx.category && INTERNO_CATEGORIA.test(tx.category)) return true;
+  if (ehParaVoceMesmo(tx, titulares)) return true;
   const texto = `${tx.description} ${tx.descriptionRaw ?? ""}`;
   if (RENDIMENTO.test(texto) && tx.amount > 0) return false;
   return INTERNO_DESCRICAO.test(texto);
 }
 
-/** Descrição curta e legível (nome do estabelecimento quando vier). */
+export function ehRendimento(tx: TransacaoPluggy): boolean {
+  return RENDIMENTO.test(`${tx.description} ${tx.category ?? ""}`);
+}
+
+const PREFIXOS =
+  /^(pix (enviado|recebido)|pagamento com (qr )?pix|pagamento de conta|pagamento|transfer[eê]ncia (enviada|recebida)|compra (no )?(d[eé]bito|cr[eé]dito)?)\s+/i;
+const SUFIXOS = /\s+(ltda\.?|s\.?\s?a\.?|eireli|me|epp|mei)$/i;
+
+function tituloLegivel(texto: string): string {
+  // NOME TODO EM MAIÚSCULA vira "Nome Todo Em Maiúscula"
+  if (texto !== texto.toUpperCase()) return texto;
+  return texto.toLowerCase().replace(/(^|\s)(\S)/g, (_, esp: string, l: string) => esp + l.toUpperCase());
+}
+
+/**
+ * Descrição curta e legível: o nome do estabelecimento ou de quem recebeu
+ * ("Pix enviado 52.502.755 Igor Juan" → "Igor Juan"; "Pagamento com Pix
+ * IFOOD.COM AGENCIA..." → "Ifood.com Agencia...").
+ */
 export function descricaoLimpa(tx: TransacaoPluggy): string {
   const nome = tx.merchant?.businessName || tx.merchant?.name;
-  const base = (nome && nome.trim().length >= 3 ? nome : tx.description).replace(/\s+/g, " ").trim();
-  return base.slice(0, 120) || "Movimento do banco";
+  let base = (nome && nome.trim().length >= 3 ? nome : tx.description).replace(/\s+/g, " ").trim();
+  base = base.replace(PREFIXOS, "");
+  // CPF/CNPJ no começo ("52.502.755", "***.123.456-**", "### ### ###")
+  base = base.replace(/^([\d*#.\-/]+\s+)+/, "");
+  base = base.replace(SUFIXOS, "").replace(SUFIXOS, "").trim();
+  return tituloLegivel(base).slice(0, 120) || tx.description.slice(0, 120) || "Movimento do banco";
 }
 
 /** Categoria do banco → categoria do app, quando a nossa não tem palpite. */
@@ -132,14 +181,32 @@ export function categoriaDoBanco(categoria: string | null | undefined): string |
   if (/food|eating|restaurant|grocer|supermarket|delivery|bakery/.test(c)) return "Alimentação";
   if (/transport|taxi|ride|gas station|fuel|parking|toll|uber|vehicle/.test(c)) return "Transporte";
   if (/housing|rent|utilities|electricity|water|internet|telecom|mobile|tv/.test(c)) return "Casa";
-  if (/health|pharmac|drugstore|hospital|clinic|dentist|gym|fitness/.test(c)) return "Saúde";
+  if (/health|pharmac|drugstore|hospital|clinic|dentist|gym|fitness|sport|wellness/.test(c)) return "Saúde";
   if (/education|course|school|book/.test(c)) return "Educação";
-  if (/leisure|entertainment|travel|tickets|streaming|games|digital service/.test(c)) return "Lazer";
+  if (/leisure|entertainment|travel|tickets|streaming|games|gambling|cinema|theater|concert|digital service/.test(c))
+    return "Lazer";
   if (/shopping|clothing|electronics|department|online shopping/.test(c)) return "Compras";
   if (/pet/.test(c)) return "Pets";
   if (/beauty|cosmetic|hair/.test(c)) return "Beleza";
   if (/gift|donation/.test(c)) return "Presentes";
   return null;
+}
+
+/** Categoria do gasto: o que você já fez → dicionário → categoria do banco. */
+export function categoriaDoGasto(tx: TransacaoPluggy, descricao: string, historico: Gasto[]): string {
+  const sugestao = sugerirCategoria(descricao, historico);
+  if (sugestao.categoria !== "Outros") return sugestao.categoria;
+  return categoriaDoBanco(tx.category) ?? "Outros";
+}
+
+/** Categoria da entrada: a que você deu antes pro mesmo pagador → termos → "Outros". */
+export function categoriaDaEntrada(tx: TransacaoPluggy, descricao: string, ganhos: Ganho[]): string {
+  if (ehRendimento(tx)) return "Rendimentos";
+  if (/reembolso|estorno|devolu/i.test(tx.description)) return "Reembolsos";
+  const chave = normalizarTexto(descricao);
+  const anterior = ganhos.find((g) => g.categoriaReceita && normalizarTexto(g.descricao) === chave);
+  if (anterior?.categoriaReceita) return anterior.categoriaReceita;
+  return sugerirCategoriaReceita(descricao) || "Outros";
 }
 
 interface ItemAPagar {
@@ -207,6 +274,13 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
 
   // ---- transações ----
   const tipoDaConta = new Map(banco.contas.map((c) => [c.id, c]));
+  const titulares = [
+    ...new Set(banco.contas.map((c) => (c as ContaPluggy & { owner?: string | null }).owner).filter((n): n is string => !!n)),
+  ];
+  // reservas do banco (caixinhas de lá): soma do que entrou/saiu nesta rodada
+  const reservas = new Map<string, { nome: string; delta: number }>();
+  // rendimentos: um ganho por mês, somando os do dia
+  const rendimentos = new Map<string, { valor: number; quando: number }>();
   const pagosAgora = new Set(e.pagamentos.map((p) => p.id));
   const gastosLivres = e.gastos.filter((g) => !g.idExterno && !g.estornoDeId && !g.ajusteConciliacaoId);
   const ganhosLivres = e.ganhos.filter((g) => g.tipo === "pontual" && !g.idExterno && !g.arquivado);
@@ -244,7 +318,20 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
       registro("antes_do_inicio");
       continue;
     }
-    if (valor === 0 || ehMovimentoInterno(tx)) {
+    const reserva = reservaDaTransacao(tx);
+    if (reserva) {
+      const id = idCaixinhaDaReserva(reserva.nome);
+      const caixinha = e.caixinhas.find((c) => c.id === id);
+      // depois de você corrigir o valor da caixinha, só conta o que veio depois
+      if (!caixinha || ms > (caixinha.atualizadoEm ?? 0)) {
+        const r = reservas.get(id) ?? { nome: reserva.nome, delta: 0 };
+        r.delta += reserva.direcao === "guardar" ? valor : -valor;
+        reservas.set(id, r);
+      }
+      registro("interno", `caixinhas/${id}`);
+      continue;
+    }
+    if (valor === 0 || ehMovimentoInterno(tx, titulares)) {
       registro("interno");
       continue;
     }
@@ -256,6 +343,15 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
 
     if (cartao && !saida) {
       registro("interno"); // pagamento da fatura / estorno no cartão
+      continue;
+    }
+
+    if (!saida && ehRendimento(tx)) {
+      const r = rendimentos.get(mes) ?? { valor: 0, quando: 0 };
+      r.valor += valor;
+      r.quando = Math.max(r.quando, quando);
+      rendimentos.set(mes, r);
+      registro("ganho", `ganhos/banco_rendimentos_${mes}`);
       continue;
     }
 
@@ -277,12 +373,11 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
         continue;
       }
       const id = `banco_${tx.id}`;
-      const texto = `${tx.description} ${tx.category ?? ""}`;
       escritas.push({
         caminho: `ganhos/${id}`,
         dados: {
           tipo: "pontual", mes, descricao, valor,
-          categoriaReceita: RENDIMENTO.test(texto) ? "Rendimentos" : sugerirCategoriaReceita(descricao) || "Outros",
+          categoriaReceita: categoriaDaEntrada(tx, descricao, e.ganhos),
           // já caiu líquido na conta
           semImposto: true, recebido: true, recebidoEm: quando, entrouNoSaldo: true, valorRecebido: valor,
           idExterno: tx.id, origem: "banco", criadoEm: quando,
@@ -373,9 +468,7 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     }
 
     // ---- gasto novo ----
-    const sugestao = sugerirCategoria(descricao, e.gastos);
-    const categoria =
-      sugestao.categoria !== "Outros" ? sugestao.categoria : categoriaDoBanco(tx.category) ?? "Outros";
+    const categoria = categoriaDoGasto(tx, descricao, e.gastos);
     const id = `banco_${tx.id}`;
     escritas.push({
       caminho: `gastos/${id}`,
@@ -388,8 +481,42 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     registro(cartao ? "gasto_credito" : "gasto", `gastos/${id}`);
   }
 
-  // ---- cofrinhos e investimentos → caixinhas com valor e rendimento reais ----
+  // ---- rendimentos do mês: um ganho só, somando ----
+  for (const [mes, r] of rendimentos) {
+    const id = `banco_rendimentos_${mes}`;
+    const atual = e.ganhos.find((g) => g.id === id);
+    const total = Math.round(((atual?.valor ?? 0) + r.valor) * 100) / 100;
+    escritas.push({
+      caminho: `ganhos/${id}`,
+      dados: {
+        tipo: "pontual", mes, descricao: "Rendimentos da conta", valor: total, categoriaReceita: "Rendimentos",
+        semImposto: true, recebido: true, recebidoEm: Math.max(atual?.recebidoEm ?? 0, r.quando),
+        entrouNoSaldo: true, valorRecebido: total, origem: "banco", criadoEm: atual?.criadoEm ?? r.quando,
+      },
+    });
+  }
+
+  // ---- reservas do banco → caixinhas, atualizadas a cada movimento ----
   let caixinhas = 0;
+  for (const [id, r] of reservas) {
+    const atual = e.caixinhas.find((c) => c.id === id);
+    caixinhas++;
+    if (atual) {
+      escritas.push({
+        caminho: `caixinhas/${id}`,
+        dados: { saldo: Math.round((atual.saldo + r.delta) * 100) / 100, sincronizadoEm: ref },
+        campos: ["saldo", "sincronizadoEm"],
+      });
+    } else {
+      escritas.push({
+        caminho: `caixinhas/${id}`,
+        dados: {
+          nome: r.nome, saldo: Math.max(0, Math.round(r.delta * 100) / 100), porGasto: 0, meta: null, ativa: true,
+          depositos: 0, criadoEm: ref, atualizadoEm: 0, sincronizadoEm: ref, origem: "banco", reserva: r.nome,
+        },
+      });
+    }
+  }
   for (const inv of banco.investimentos) {
     const id = `banco_${inv.id}`;
     const existe = e.caixinhas.some((c) => c.id === id);

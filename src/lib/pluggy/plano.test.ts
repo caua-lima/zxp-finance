@@ -161,3 +161,84 @@ describe("configuração da Pluggy", () => {
     assert.deepEqual(comConexoes(cred!, [id, id, "lixo", 3]).itemIds, [id]);
   });
 });
+
+describe("Mercado Pago de verdade: reservas, você mesmo, rendimentos, nomes", async () => {
+  const { descricaoLimpa, reservaDaTransacao, idCaixinhaDaReserva } = await import("./plano");
+  const comDono = { ...conta, owner: "Caua Araujo Vaz de Lima" } as ContaPluggy;
+  const bancoDono = (transacoes: TransacaoPluggy[]) => banco(transacoes, { contas: [comDono, cartao] });
+
+  test("reserva por gasto e dinheiro reservado/retirado viram movimento da caixinha, não gasto", () => {
+    assert.deepEqual(reservaDaTransacao(tx("r", -0.1, "2026-11-08", "Reserva por gasto Money")), { nome: "Money", direcao: "guardar" });
+    assert.deepEqual(reservaDaTransacao(tx("r", 118.89, "2026-11-08", "Dinheiro retirado Cartão - NUBANK")), {
+      nome: "Cartão - NUBANK", direcao: "resgatar",
+    });
+    const id = idCaixinhaDaReserva("Money");
+    const p = planejarSincronizacao(
+      vazio({ caixinhas: [{ id, nome: "Money", saldo: 2000, porGasto: 0, ativa: true, depositos: 0, criadoEm: 1, atualizadoEm: 0 }] }),
+      bancoDono([
+        tx("a", -0.1, "2026-11-08", "Reserva por gastos Money"),
+        tx("b", -50, "2026-11-08", "Dinheiro reservado Money"),
+        tx("c", 20, "2026-11-08", "Dinheiro retirado Money"),
+      ])
+    );
+    assert.equal(escrita(p, "gastos/").length + escrita(p, "ganhos/").length, 0);
+    assert.deepEqual(escrita(p, `caixinhas/${id}`)[0].dados, { saldo: 2030.1, sincronizadoEm: LIDO });
+  });
+
+  test("depois de você corrigir o valor da caixinha, movimento anterior não soma de novo", () => {
+    const id = idCaixinhaDaReserva("Money");
+    const corrigida = Date.parse("2026-11-08T20:00:00-03:00");
+    const p = planejarSincronizacao(
+      vazio({ caixinhas: [{ id, nome: "Money", saldo: 2100, porGasto: 0, ativa: true, depositos: 0, criadoEm: 1, atualizadoEm: corrigida }] }),
+      bancoDono([tx("a", -50, "2026-11-08", "Dinheiro reservado Money")]) // 12:00 do dia 8, antes da correção
+    );
+    assert.equal(escrita(p, "caixinhas/").length, 0);
+  });
+
+  test("reserva nova vira caixinha nova", () => {
+    const p = planejarSincronizacao(vazio(), bancoDono([tx("a", -30, "2026-11-08", "Dinheiro reservado Viagens - LaCa")]));
+    const c = escrita(p, "caixinhas/")[0];
+    assert.equal(c.caminho, `caixinhas/${idCaixinhaDaReserva("Viagens - LaCa")}`);
+    assert.equal((c.dados as { saldo: number }).saldo, 30);
+  });
+
+  test("Pix pra você mesmo (inclusive pro seu CNPJ) é interno, nos dois sentidos", () => {
+    const p = planejarSincronizacao(
+      vazio(),
+      bancoDono([
+        tx("a", -731.74, "2026-11-08", "Pix enviado 58.467.349 Caua Araujo Vaz de Lima", { category: "Education" }),
+        tx("b", 200, "2026-11-08", "Pix recebido CAUA ARAUJO VAZ DE LIMA"),
+      ])
+    );
+    assert.equal(escrita(p, "gastos/").length + escrita(p, "ganhos/").length, 0);
+    assert.equal(p.resumo.novos.interno, 2);
+  });
+
+  test("rendimentos do mês viram um ganho só, somando com o que já havia", () => {
+    const p = planejarSincronizacao(
+      vazio({ ganhos: [{ id: "banco_rendimentos_2026-11", tipo: "pontual", mes: "2026-11", descricao: "Rendimentos da conta", valor: 0.6, criadoEm: 1 }] }),
+      bancoDono([
+        tx("a", 2.31, "2026-11-06", "Rendimentos", { category: "Proceeds interests and dividends" }),
+        tx("b", 1.09, "2026-11-07", "Rendimentos", { category: "Proceeds interests and dividends" }),
+      ])
+    );
+    const g = escrita(p, "ganhos/");
+    assert.equal(g.length, 1);
+    assert.equal((g[0].dados as { valor: number }).valor, 4);
+  });
+
+  test("nome de quem recebeu vira a descrição, e bebida cai na categoria certa", () => {
+    assert.equal(descricaoLimpa(tx("a", -7, "2026-11-08", "Pix enviado 52.502.755 Igor Juan da Silva Lopes")), "Igor Juan da Silva Lopes");
+    assert.equal(descricaoLimpa(tx("a", -3, "2026-11-08", "Pix enviado BEER HOUSE LTDA")), "Beer House");
+    const p = planejarSincronizacao(vazio(), bancoDono([tx("a", -3, "2026-11-08", "Pix enviado BEER HOUSE LTDA")]));
+    const g = escrita(p, "gastos/")[0].dados as unknown as Gasto;
+    assert.equal(g.descricao, "Beer House");
+    assert.equal(g.categoria, "Lazer");
+  });
+
+  test("categoria que você corrigiu ensina as próximas do mesmo lugar", () => {
+    const antigo = { id: "x", descricao: "Jose Rogerio da Silva", valor: 2, categoria: "Alimentação", mes: "2026-11", criadoEm: 1 } as Gasto;
+    const p = planejarSincronizacao(vazio({ gastos: [antigo] }), bancoDono([tx("a", -4, "2026-11-08", "Pix enviado Jose Rogerio da Silva")]));
+    assert.equal((escrita(p, "gastos/")[0].dados as unknown as Gasto).categoria, "Alimentação");
+  });
+});

@@ -366,7 +366,9 @@ function ItemCaixinha({
           </p>
           <p className="mt-0.5 text-xs text-text-faint">
             {caixinha.origem === "banco"
-              ? `🏦 valor do banco${caixinha.rendimento ? ` · já rendeu ${formatarMoeda(caixinha.rendimento)}` : ""}`
+              ? caixinha.atualizadoEm
+                ? `🏦 reserva do banco · atualiza sozinha${caixinha.rendimento ? ` · já rendeu ${formatarMoeda(caixinha.rendimento)}` : ""}`
+                : "🏦 reserva do banco · confira o valor no app do banco e corrija uma vez"
               : pctCdi > 0
                 ? `rende ${pctCdi}% do CDI`
                 : "sem rendimento configurado"}

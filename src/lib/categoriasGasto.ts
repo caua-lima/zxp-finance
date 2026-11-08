@@ -92,7 +92,7 @@ const DICIONARIO: Record<string, string[]> = {
   ],
   Lazer: [
     "cinema", "cinemark", "ingresso", "show", "teatro", "museu", "bar", "boteco", "balada",
-    "festa", "role", "rolezinho", "breja", "gelada", "cerveja", "chopp", "bebida", "drink", "vinho", "whisky", "narguile",
+    "festa", "role", "rolezinho", "breja", "gelada", "cerveja", "cervejaria", "beer", "pub", "choperia", "adega", "chopp", "bebida", "bebidas", "drink", "vinho", "whisky", "narguile",
     "tabacaria", "tabaco", "cigarro", "paieiro", "palheiro", "seda", "piteira", "isqueiro",
     "pod", "vape", "essencia", "maconha", "erva", "beck",
     "viagem", "passeio", "hotel", "pousada", "airbnb", "booking", "passagem aerea",
