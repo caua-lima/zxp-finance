@@ -39,7 +39,7 @@ import type { ContaPluggy, InvestimentoPluggy, TransacaoPluggy } from "./cliente
 export interface EstadoApp {
   inicioUso: string;
   saldo: { valor: number; atualizadoEm: number } | null;
-  gastos: (Gasto & { idExterno?: string })[];
+  gastos: (Gasto & { idExterno?: string; pendente?: boolean })[];
   ganhos: (Ganho & { idExterno?: string })[];
   pagamentos: { id: string; pagoEm?: number; idExterno?: string }[];
   contas: ContaFixa[];
@@ -168,10 +168,14 @@ export function descricaoLimpa(tx: TransacaoPluggy): string {
   const nome = tx.merchant?.businessName || tx.merchant?.name;
   let base = (nome && nome.trim().length >= 3 ? nome : tx.description).replace(/\s+/g, " ").trim();
   base = base.replace(PREFIXOS, "");
+  // compra pelo iFood no cartão vem como "IFD*NOME DO RESTAURANTE"
+  const ifood = /^IFD\*\s*/i.test(base);
+  base = base.replace(/^IFD\*\s*/i, "");
   // CPF/CNPJ no começo ("52.502.755", "***.123.456-**", "### ### ###")
   base = base.replace(/^([\d*#.\-/]+\s+)+/, "");
   base = base.replace(SUFIXOS, "").replace(SUFIXOS, "").trim();
-  return tituloLegivel(base).slice(0, 120) || tx.description.slice(0, 120) || "Movimento do banco";
+  const legivel = tituloLegivel(base);
+  return (ifood ? `iFood · ${legivel}` : legivel).slice(0, 120) || tx.description.slice(0, 120) || "Movimento do banco";
 }
 
 /** Categoria do banco → categoria do app, quando a nossa não tem palpite. */
@@ -282,7 +286,10 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
   // rendimentos: um ganho por mês, somando os do dia
   const rendimentos = new Map<string, { valor: number; quando: number }>();
   const pagosAgora = new Set(e.pagamentos.map((p) => p.id));
-  const gastosLivres = e.gastos.filter((g) => !g.idExterno && !g.estornoDeId && !g.ajusteConciliacaoId);
+  // livres pra ligar: o que você anotou à mão e compra do cartão que entrou ainda pendente
+  const gastosLivres = e.gastos.filter(
+    (g) => (!g.idExterno || g.pendente) && !g.estornoDeId && !g.ajusteConciliacaoId
+  );
   const ganhosLivres = e.ganhos.filter((g) => g.tipo === "pontual" && !g.idExterno && !g.arquivado);
   const usados = new Set<string>();
   const parcelasAtualizadas = new Map<string, Parcela>();
@@ -291,12 +298,16 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
   const ordenadas = [...banco.transacoes].sort((a, b) => a.date.localeCompare(b.date));
   for (const tx of ordenadas) {
     if (e.processados.has(tx.id)) continue;
-    if (tx.status === "PENDING") {
-      pendentes++;
-      continue; // volta quando for confirmada
-    }
     const conta = tipoDaConta.get(tx.accountId);
     if (!conta) continue;
+    // na conta, pendente pode mudar: espera confirmar. No cartão, a compra fica
+    // pendente até a fatura fechar — entra já, marcada, e é ligada à versão
+    // confirmada quando ela chegar (sem duplicar).
+    const pendente = tx.status === "PENDING";
+    if (pendente && !(conta.type === "CREDIT" && tx.amount > 0)) {
+      pendentes++;
+      continue;
+    }
     const ms = Date.parse(tx.date);
     const dia = diaISOde(ms);
     const mes = dia.slice(0, 7);
@@ -460,8 +471,8 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
       escritas.push({
         caminho: `gastos/${manual.id}`,
         // vai pra antes da leitura: o saldo do banco já tem esse dinheiro fora
-        dados: { idExterno: tx.id, criadoEm: Math.min(manual.criadoEm, quando), data: dia, mes },
-        campos: ["idExterno", "criadoEm", "data", "mes"],
+        dados: { idExterno: tx.id, criadoEm: Math.min(manual.criadoEm, quando), data: dia, mes, pendente },
+        campos: ["idExterno", "criadoEm", "data", "mes", "pendente"],
       });
       registro("vinculado", `gastos/${manual.id}`);
       continue;
@@ -475,7 +486,7 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
       dados: {
         descricao, valor, categoria, mes, data: dia, criadoEm: quando,
         ...(cartao ? { pagoCom: "credito", cartao: (conta.marketingName || conta.name).slice(0, 60) } : {}),
-        idExterno: tx.id, origem: "banco",
+        idExterno: tx.id, origem: "banco", ...(pendente ? { pendente: true } : {}),
       },
     });
     registro(cartao ? "gasto_credito" : "gasto", `gastos/${id}`);

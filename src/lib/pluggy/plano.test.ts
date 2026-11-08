@@ -242,3 +242,35 @@ describe("Mercado Pago de verdade: reservas, você mesmo, rendimentos, nomes", a
     assert.equal((escrita(p, "gastos/")[0].dados as unknown as Gasto).categoria, "Alimentação");
   });
 });
+
+describe("iFood no cartão", async () => {
+  const { descricaoLimpa } = await import("./plano");
+  test("IFD*NOME vira iFood · Nome e cai em Alimentação", () => {
+    const t = tx("i", 33.41, "2026-11-08", "IFD*ARCOS DOURADOS COMERC", { accountId: "cc", category: "Food delivery" });
+    assert.equal(descricaoLimpa(t), "iFood · Arcos Dourados Comerc");
+    const p = planejarSincronizacao(vazio(), banco([t]));
+    assert.equal((escrita(p, "gastos/")[0].dados as unknown as Gasto).categoria, "Alimentação");
+  });
+});
+
+describe("compra no cartão ainda pendente", () => {
+  test("entra já, marcada; quando confirma com outro id, só liga (sem duplicar)", () => {
+    const pendente = tx("p1", 24.89, "2026-11-08", "IFD*ZAMP S.A.", { accountId: "cc", status: "PENDING" });
+    const p1 = planejarSincronizacao(vazio(), banco([pendente]));
+    const g = escrita(p1, "gastos/")[0];
+    assert.equal((g.dados as { pendente?: boolean }).pendente, true);
+    const importado = { id: g.caminho.split("/")[1], ...(g.dados as object) } as Gasto & { idExterno: string; pendente: boolean };
+    const confirmada = tx("p2", 24.89, "2026-11-09", "IFD*ZAMP S.A.", { accountId: "cc" });
+    const p2 = planejarSincronizacao(vazio({ gastos: [importado], processados: new Set(["p1"]) }), banco([confirmada]));
+    const ligado = escrita(p2, "gastos/");
+    assert.equal(ligado.length, 1);
+    assert.equal(ligado[0].caminho, g.caminho);
+    assert.deepEqual([(ligado[0].dados as { idExterno: string }).idExterno, (ligado[0].dados as { pendente: boolean }).pendente], ["p2", false]);
+  });
+
+  test("Pix pendente na conta continua esperando confirmar", () => {
+    const p = planejarSincronizacao(vazio(), banco([tx("x", -50, "2026-11-08", "Pix enviado Fulano", { status: "PENDING" })]));
+    assert.equal(p.resumo.pendentes, 1);
+    assert.equal(escrita(p, "gastos/").length, 0);
+  });
+});
