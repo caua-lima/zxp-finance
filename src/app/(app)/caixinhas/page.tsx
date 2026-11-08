@@ -365,8 +365,12 @@ function ItemCaixinha({
             )}
           </p>
           <p className="mt-0.5 text-xs text-text-faint">
-            {pctCdi > 0 ? `rende ${pctCdi}% do CDI` : "sem rendimento configurado"}
-            {estimativa > 0 && ` · ~${formatarMoeda(estimativa)}/mês (estimativa)`}
+            {caixinha.origem === "banco"
+              ? `🏦 valor do banco${caixinha.rendimento ? ` · já rendeu ${formatarMoeda(caixinha.rendimento)}` : ""}`
+              : pctCdi > 0
+                ? `rende ${pctCdi}% do CDI`
+                : "sem rendimento configurado"}
+            {caixinha.origem !== "banco" && estimativa > 0 && ` · ~${formatarMoeda(estimativa)}/mês (estimativa)`}
           </p>
           <p className="text-xs text-text-faint">
             {!caixinha.ativa

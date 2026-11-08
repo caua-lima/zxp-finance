@@ -27,6 +27,7 @@ import { useCdi } from "@/lib/useCdi";
 import { usePagamentos } from "@/lib/usePagamentos";
 import { Dialogo } from "@/components/Dialogo";
 import { ComoChegamos } from "@/components/ComoChegamos";
+import { BancoConectado } from "@/components/BancoConectado";
 import {
   saldoConfirmado,
   dataEfetivaDoGasto,
@@ -370,6 +371,7 @@ export default function SaldoPage() {
     <div>
       <PageHeader titulo="Saldo e qualidade de vida" />
       <ErroBanner mensagem={erro || voz.erro} />
+      <BancoConectado />
 
       {loading ? (
         <SkeletonLista linhas={3} />
