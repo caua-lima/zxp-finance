@@ -182,7 +182,7 @@ describe("Mercado Pago de verdade: reservas, você mesmo, rendimentos, nomes", a
       ])
     );
     assert.equal(escrita(p, "gastos/").length + escrita(p, "ganhos/").length, 0);
-    assert.deepEqual(escrita(p, `caixinhas/${id}`)[0].dados, { saldo: 2030.1, sincronizadoEm: LIDO });
+    assert.deepEqual(escrita(p, `caixinhas/${id}`)[0].dados, { saldo: 2030.1, sincronizadoEm: LIDO, porGasto: 0, origem: "banco", reserva: "Money" });
   });
 
   test("depois de você corrigir o valor da caixinha, movimento anterior não soma de novo", () => {
@@ -272,5 +272,16 @@ describe("compra no cartão ainda pendente", () => {
     const p = planejarSincronizacao(vazio(), banco([tx("x", -50, "2026-11-08", "Pix enviado Fulano", { status: "PENDING" })]));
     assert.equal(p.resumo.pendentes, 1);
     assert.equal(escrita(p, "gastos/").length, 0);
+  });
+});
+
+describe("caixinha que você já tinha com o mesmo nome", () => {
+  test("vira o espelho da reserva do banco e para de guardar por registro", () => {
+    const sua = { id: "abc", nome: "Money", saldo: 349.15, porGasto: 0.1, ativa: true, depositos: 3, criadoEm: 1, atualizadoEm: 1 };
+    const p = planejarSincronizacao(vazio({ caixinhas: [sua] }), banco([tx("r", -0.1, "2026-11-08", "Reserva por gasto Money")]));
+    const c = escrita(p, "caixinhas/");
+    assert.equal(c.length, 1);
+    assert.equal(c[0].caminho, "caixinhas/abc");
+    assert.deepEqual([(c[0].dados as { saldo: number }).saldo, (c[0].dados as { porGasto: number }).porGasto], [349.25, 0]);
   });
 });

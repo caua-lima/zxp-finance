@@ -331,8 +331,11 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     }
     const reserva = reservaDaTransacao(tx);
     if (reserva) {
-      const id = idCaixinhaDaReserva(reserva.nome);
-      const caixinha = e.caixinhas.find((c) => c.id === id);
+      // a caixinha de mesmo nome que você já tinha no app vira o espelho da reserva
+      const caixinha =
+        e.caixinhas.find((c) => c.id === idCaixinhaDaReserva(reserva.nome)) ??
+        e.caixinhas.find((c) => normalizarTexto(c.nome).trim() === normalizarTexto(reserva.nome).trim());
+      const id = caixinha?.id ?? idCaixinhaDaReserva(reserva.nome);
       // depois de você corrigir o valor da caixinha, só conta o que veio depois
       if (!caixinha || ms > (caixinha.atualizadoEm ?? 0)) {
         const r = reservas.get(id) ?? { nome: reserva.nome, delta: 0 };
@@ -513,10 +516,14 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     const atual = e.caixinhas.find((c) => c.id === id);
     caixinhas++;
     if (atual) {
+      // o banco já reserva por compra: o depósito automático do app duplicaria
       escritas.push({
         caminho: `caixinhas/${id}`,
-        dados: { saldo: Math.round((atual.saldo + r.delta) * 100) / 100, sincronizadoEm: ref },
-        campos: ["saldo", "sincronizadoEm"],
+        dados: {
+          saldo: Math.round((atual.saldo + r.delta) * 100) / 100, sincronizadoEm: ref, porGasto: 0,
+          origem: "banco", reserva: r.nome,
+        },
+        campos: ["saldo", "sincronizadoEm", "porGasto", "origem", "reserva"],
       });
     } else {
       escritas.push({
