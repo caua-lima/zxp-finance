@@ -1,0 +1,156 @@
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { planejarSincronizacao, EstadoApp, DadosBanco, ehMovimentoInterno } from "./plano";
+import { configPluggy } from "./cliente";
+import type { ContaPluggy, TransacaoPluggy } from "./cliente";
+import { saldoConfirmado, recebimentosAvulsos } from "../finance/saldo";
+import type { Gasto, Ganho } from "../types";
+
+const LIDO = Date.parse("2026-11-10T09:00:00-03:00");
+const conta: ContaPluggy = { id: "acc", type: "BANK", name: "Conta Mercado Pago", balance: 4800.97, itemId: "it" };
+const cartao: ContaPluggy = { id: "cc", type: "CREDIT", name: "Mercado Pago", balance: 0, itemId: "it" };
+
+const vazio = (extra: Partial<EstadoApp> = {}): EstadoApp => ({
+  inicioUso: "2026-11-05",
+  saldo: { valor: 5000, atualizadoEm: Date.parse("2026-11-05T12:00:00-03:00") },
+  gastos: [], ganhos: [], pagamentos: [], contas: [], assinaturas: [], parcelas: [], faturas: [], caixinhas: [],
+  processados: new Set(),
+  ...extra,
+});
+const tx = (id: string, amount: number, date: string, description: string, extra: Partial<TransacaoPluggy> = {}): TransacaoPluggy => ({
+  id, amount, date: `${date}T15:00:00.000Z`, description, type: amount < 0 ? "DEBIT" : "CREDIT",
+  accountId: "acc", status: "POSTED", ...extra,
+});
+const banco = (transacoes: TransacaoPluggy[], extra: Partial<DadosBanco> = {}): DadosBanco => ({
+  lidoEm: LIDO, contas: [conta, cartao], transacoes, investimentos: [], ...extra,
+});
+const escrita = (p: ReturnType<typeof planejarSincronizacao>, prefixo: string) =>
+  p.escritas.filter((e) => e.caminho.startsWith(prefixo));
+
+describe("sincronização com o banco", () => {
+  test("saldo vira o do banco, na hora em que o banco foi lido", () => {
+    const p = planejarSincronizacao(vazio(), banco([]));
+    assert.deepEqual(escrita(p, "saldo/")[0].dados, { valor: 4800.97, atualizadoEm: LIDO });
+  });
+
+  test("reajuste seu feito depois da leitura do banco não é atropelado", () => {
+    const p = planejarSincronizacao(vazio({ saldo: { valor: 4700, atualizadoEm: LIDO + 1000 } }), banco([]));
+    assert.equal(escrita(p, "saldo/").length, 0);
+    assert.equal(p.resumo.saldoAtualizado, false);
+  });
+
+  test("compra no débito vira gasto com categoria, antes da leitura; não desconta de novo do saldo", () => {
+    const p = planejarSincronizacao(vazio(), banco([tx("t1", -32.5, "2026-11-08", "IFOOD *RESTAURANTE")]));
+    const g = escrita(p, "gastos/")[0].dados as unknown as Gasto;
+    assert.equal(g.valor, 32.5);
+    assert.equal(g.categoria, "Alimentação");
+    assert.equal(g.data, "2026-11-08");
+    assert.ok(g.criadoEm < LIDO);
+    // o saldo do banco já tem esse dinheiro fora: o app mostra exatamente o do banco
+    assert.equal(saldoConfirmado({ valor: 4800.97, atualizadoEm: LIDO }, [{ ...g, id: "x" }]), 4800.97);
+  });
+
+  test("a mesma transação nunca entra duas vezes", () => {
+    const p = planejarSincronizacao(vazio({ processados: new Set(["t1"]) }), banco([tx("t1", -10, "2026-11-08", "Padaria")]));
+    assert.equal(escrita(p, "gastos/").length, 0);
+  });
+
+  test("débito que bate com conta do A pagar marca como pago (nome ou vencimento)", () => {
+    const internet = { id: "net", nome: "Internet Vivo", valor: 100, categoria: "Internet", ativa: true, diaVencimento: 10, criadoEm: 1 };
+    const p = planejarSincronizacao(vazio({ contas: [internet] }), banco([tx("t2", -100, "2026-11-09", "PIX VIVO FIBRA")]));
+    const pag = escrita(p, "pagamentos/")[0];
+    assert.equal(pag.caminho, "pagamentos/2026-11__conta__net");
+    assert.equal((pag.dados as { pagoEm: number }).pagoEm < LIDO, true);
+    assert.equal(escrita(p, "gastos/").length, 0);
+  });
+
+  test("conta já marcada à mão no A pagar: só liga, sem gasto duplicado", () => {
+    const internet = { id: "net", nome: "Internet Vivo", valor: 100, categoria: "Internet", ativa: true, criadoEm: 1 };
+    const p = planejarSincronizacao(
+      vazio({ contas: [internet], pagamentos: [{ id: "2026-11__conta__net", pagoEm: LIDO + 5000 }] }),
+      banco([tx("t2", -100, "2026-11-09", "Pagamento Vivo")])
+    );
+    assert.equal(escrita(p, "gastos/").length, 0);
+    const pag = escrita(p, "pagamentos/")[0];
+    assert.deepEqual(pag.campos, ["idExterno", "pagoEm"]);
+    assert.ok((pag.dados as { pagoEm: number }).pagoEm < LIDO);
+  });
+
+  test("gasto que você já anotou (mesmo valor, até 3 dias) só é ligado", () => {
+    const manual = { id: "m1", descricao: "almoço", valor: 32.5, categoria: "Alimentação", mes: "2026-11", data: "2026-11-09", criadoEm: LIDO + 10 } as Gasto;
+    const p = planejarSincronizacao(vazio({ gastos: [manual] }), banco([tx("t1", -32.5, "2026-11-08", "RESTAURANTE X")]));
+    const g = escrita(p, "gastos/");
+    assert.equal(g.length, 1);
+    assert.equal(g[0].caminho, "gastos/m1");
+    assert.equal((g[0].dados as { data: string }).data, "2026-11-08");
+  });
+
+  test("compra no cartão vira gasto no crédito; pagamento da fatura no cartão é interno", () => {
+    const p = planejarSincronizacao(
+      vazio(),
+      banco([
+        tx("c1", 120, "2026-11-08", "MAGALU", { accountId: "cc", type: "DEBIT" }),
+        tx("c2", -500, "2026-11-09", "Pagamento recebido", { accountId: "cc" }),
+      ])
+    );
+    const g = escrita(p, "gastos/")[0].dados as unknown as Gasto;
+    assert.equal(g.pagoCom, "credito");
+    assert.equal(p.resumo.novos.interno, 1);
+  });
+
+  test("cofrinho e investimento não são gasto nem ganho", () => {
+    assert.equal(ehMovimentoInterno(tx("i", -200, "2026-11-08", "Dinheiro reservado no Cofrinho")), true);
+    assert.equal(ehMovimentoInterno(tx("i", -200, "2026-11-08", "Pix", { category: "Same person transfer" })), true);
+    assert.equal(ehMovimentoInterno(tx("i", 3.1, "2026-11-08", "Rendimento do dinheiro")), false);
+    const p = planejarSincronizacao(vazio(), banco([tx("i", -200, "2026-11-08", "Aplicação Cofrinho Viagem")]));
+    assert.equal(escrita(p, "gastos/").length + escrita(p, "ganhos/").length, 0);
+  });
+
+  test("entrada vira ganho recebido líquido, sem somar de novo no saldo", () => {
+    const p = planejarSincronizacao(vazio(), banco([tx("e1", 2444, "2026-11-08", "PIX RECEBIDO EMPRESA SALARIO")]));
+    const g = escrita(p, "ganhos/")[0].dados as unknown as Ganho;
+    assert.equal(g.semImposto, true);
+    assert.equal(g.recebido, true);
+    assert.equal(saldoConfirmado({ valor: 4800.97, atualizadoEm: LIDO }, [], [], recebimentosAvulsos([{ ...g, id: "x" }])), 4800.97);
+  });
+
+  test("antes do início da contagem só fica registrado", () => {
+    const p = planejarSincronizacao(vazio(), banco([tx("v", -50, "2026-11-01", "Mercado")]));
+    assert.equal(p.resumo.novos.antes_do_inicio, 1);
+    assert.equal(escrita(p, "gastos/").length, 0);
+  });
+
+  test("pendente espera confirmar", () => {
+    const p = planejarSincronizacao(vazio(), banco([tx("p", -50, "2026-11-08", "Mercado", { status: "PENDING" })]));
+    assert.equal(p.resumo.pendentes, 1);
+    assert.equal(escrita(p, "bancoTransacoes/").length, 0);
+  });
+
+  test("fatura paga pela conta marca a fatura e dá baixa nas parcelas dentro dela", () => {
+    const parcela = { id: "p1", tipo: "cartao", nome: "Curso", valorParcela: 239.62, totalParcelas: 10, parcelasRestantes: 7, mesReferencia: "2026-11", naFatura: true, cartao: "Nubank CNPJ", criadoEm: 1 } as const;
+    const p = planejarSincronizacao(
+      vazio({ parcelas: [parcela], faturas: [{ id: "f1", nome: "Nubank CNPJ", valor: 900, mes: "2026-11", criadoEm: 1 }] }),
+      banco([tx("f", -912.4, "2026-11-09", "PAGAMENTO NUBANK")])
+    );
+    assert.equal(escrita(p, "pagamentos/")[0].caminho, "pagamentos/2026-11__fatura__f1");
+    assert.deepEqual(escrita(p, "parcelas/")[0].dados, { parcelasRestantes: 6, mesReferencia: "2026-12" });
+  });
+
+  test("cofrinho do banco vira caixinha com valor e rendimento reais", () => {
+    const p = planejarSincronizacao(
+      vazio(),
+      banco([], { investimentos: [{ id: "inv", name: "Cofrinho Viagem", type: "FIXED_INCOME", balance: 1500.5, amountProfit: 12.3, rate: 100, rateType: "CDI" }] })
+    );
+    const c = escrita(p, "caixinhas/")[0].dados as Record<string, unknown>;
+    assert.deepEqual([c.saldo, c.rendimento, c.porGasto, c.percentualCdi], [1500.5, 12.3, 0, 100]);
+  });
+});
+
+describe("configuração da Pluggy", () => {
+  test("desligada sem todas as variáveis; lê vários itens", () => {
+    assert.equal(configPluggy({}), null);
+    const id = "123e4567-e89b-12d3-a456-426614174000";
+    const c = configPluggy({ PLUGGY_CLIENT_ID: "a", PLUGGY_CLIENT_SECRET: "b", PLUGGY_ITEM_IDS: `${id}, lixo`, PLUGGY_UID: "u" });
+    assert.deepEqual(c?.itemIds, [id]);
+  });
+});

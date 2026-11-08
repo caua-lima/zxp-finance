@@ -31,6 +31,9 @@ export interface Ganho {
   /** Recorrente: mudanças de valor, cada uma valendo dali pra frente. */
   historicoValores?: VigenciaValor[];
   criadoEm: number;
+  /** Id da transação no banco (Open Finance), quando veio de lá ou foi ligado a ela. */
+  idExterno?: string;
+  origem?: "banco";
 }
 
 /** Pausa de um recorrente: não cobra/recebe de `de` até o mês anterior a `ate`. */
@@ -164,6 +167,10 @@ export interface Gasto {
   pagoCom?: "conta" | "credito";
   /** Nome do cartão, quando `pagoCom` é "credito". */
   cartao?: string;
+  /** Id da transação no banco (Open Finance), quando veio de lá ou foi ligado a ela. */
+  idExterno?: string;
+  /** "banco": criado pela sincronização com o banco. */
+  origem?: "banco";
 }
 
 /**
@@ -193,6 +200,11 @@ export interface Caixinha {
    * caixinha só muda por depósito ou quando você corrige o valor.
    */
   percentualCdi?: number;
+  /** Quanto já rendeu, segundo o banco (só caixinha sincronizada). */
+  rendimento?: number;
+  /** Id do cofrinho/investimento no banco: o saldo vem de lá a cada sincronização. */
+  idExterno?: string;
+  origem?: "banco";
 }
 
 export type NivelEscolaridade =
