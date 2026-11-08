@@ -97,11 +97,27 @@ export default function ParcelasPage() {
     setMesInicio(mesPadrao());
   }
 
+  // um grupo por cartão (em ordem alfabética) e, no fim, financiamentos
   const grupos = useMemo(() => {
-    const cartao = parcelas.filter((p) => p.tipo === "cartao" || !p.tipo);
+    const porCartao = new Map<string, Parcela[]>();
+    for (const p of parcelas) {
+      if (p.tipo === "financiamento") continue;
+      const nomeCartao = p.cartao || "Cartão não informado";
+      porCartao.set(nomeCartao, [...(porCartao.get(nomeCartao) ?? []), p]);
+    }
+    const lista = [...porCartao.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
+      .map(([nomeCartao, itens]) => ({ chave: `cartao:${nomeCartao}`, titulo: nomeCartao, cartao: true, itens }));
     const financiamento = parcelas.filter((p) => p.tipo === "financiamento");
-    return { cartao, financiamento };
+    if (financiamento.length > 0) {
+      lista.push({ chave: "financiamento", titulo: "Financiamentos", cartao: false, itens: financiamento });
+    }
+    return lista;
   }, [parcelas]);
+  const [filtro, setFiltro] = useState("todos");
+  // filtro de um cartão que sumiu (todas excluídas) volta pra "Todos"
+  const filtroValido = filtro === "todos" || grupos.some((g) => g.chave === filtro) ? filtro : "todos";
+  const gruposVisiveis = filtroValido === "todos" ? grupos : grupos.filter((g) => g.chave === filtroValido);
 
   return (
     <div>
@@ -313,22 +329,47 @@ export default function ParcelasPage() {
         </p>
       ) : (
         <div className="space-y-5">
-          <GrupoParcelas
-            titulo="Cartão de crédito"
-            itens={grupos.cartao}
-            mes={mes}
-            onEditar={editar}
-            onRemover={remover}
-            onMarcarPaga={marcarPaga}
-          />
-          <GrupoParcelas
-            titulo="Financiamento"
-            itens={grupos.financiamento}
-            mes={mes}
-            onEditar={editar}
-            onRemover={remover}
-            onMarcarPaga={marcarPaga}
-          />
+          {grupos.length > 1 && (
+            <div
+              role="radiogroup"
+              aria-label="Filtrar parcelas por cartão"
+              className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1"
+            >
+              {[{ chave: "todos", titulo: "Todos", itens: parcelas }, ...grupos].map((g) => {
+                const ativo = filtroValido === g.chave;
+                const qtd = g.itens.filter((x) => x.parcelasRestantes > 0).length;
+                return (
+                  <button
+                    key={g.chave}
+                    type="button"
+                    role="radio"
+                    aria-checked={ativo}
+                    onClick={() => setFiltro(g.chave)}
+                    className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+                      ativo
+                        ? "border-brand bg-brand-soft text-brand"
+                        : "border-line text-text-muted hover:text-text"
+                    }`}
+                  >
+                    {g.titulo}
+                    <span className={`tabular-nums ${ativo ? "text-brand" : "text-text-faint"}`}>{qtd}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {gruposVisiveis.map((g) => (
+            <GrupoParcelas
+              key={g.chave}
+              titulo={g.titulo}
+              cartao={g.cartao}
+              itens={g.itens}
+              mes={mes}
+              onEditar={editar}
+              onRemover={remover}
+              onMarcarPaga={marcarPaga}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -349,6 +390,7 @@ interface DadosEdicaoParcela {
 
 function GrupoParcelas({
   titulo,
+  cartao,
   itens,
   mes,
   onEditar,
@@ -356,6 +398,7 @@ function GrupoParcelas({
   onMarcarPaga,
 }: {
   titulo: string;
+  cartao: boolean;
   itens: Parcela[];
   mes: string;
   onEditar: (id: string, dados: DadosEdicaoParcela) => Promise<boolean>;
@@ -367,16 +410,24 @@ function GrupoParcelas({
   const ativas = itens.filter((p) => p.parcelasRestantes > 0);
   const quitadas = itens.filter((p) => p.parcelasRestantes === 0);
 
-  const subtotal = ativas
-    .filter((p) => !p.naFatura)
-    .reduce((acc, p) => acc + valorMinhaParte(p), 0);
+  // quanto cai no mês olhado, contando também as que já estão na fatura:
+  // é o peso das parcelas nesse cartão
+  const noMes = itens.filter((p) => parcelasRestantesEm(p, mes) > 0);
+  const subtotal = noMes.reduce((acc, p) => acc + valorMinhaParte(p), 0);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2 px-1">
-        <h2 className="text-sm font-medium text-text-muted">{titulo}</h2>
-        <span className="text-xs text-text-faint">
-          {formatarMoeda(subtotal)}
+    <section className="rounded-2xl border border-line-soft bg-surface-2/30 p-3">
+      <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-text">
+          <span aria-hidden="true">{cartao ? "💳" : "🚗"}</span>
+          <span className="truncate">{titulo}</span>
+        </h2>
+        <span className="shrink-0 text-right text-xs text-text-muted">
+          <span className="font-semibold text-gold tabular-nums">{formatarMoeda(subtotal)}</span> em{" "}
+          {formatarMes(mes).split(" ")[0].toLowerCase()}
+          <span className="block text-text-faint">
+            {ativas.length} ativa{ativas.length === 1 ? "" : "s"}
+          </span>
         </span>
       </div>
       {ativas.length > 0 && (
@@ -410,7 +461,7 @@ function GrupoParcelas({
           </ul>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -670,7 +721,6 @@ function ItemParcela({
         <div>
           <p className="text-sm">{parcela.nome}</p>
           <div className="flex flex-wrap gap-x-2 text-xs text-text-faint">
-            {parcela.cartao && <span>💳 {parcela.cartao}</span>}
             {parcela.dividida && (
               <span>
                 total {formatarMoeda(parcela.valorParcela)} · você paga
