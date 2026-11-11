@@ -875,6 +875,12 @@ function ItemGasto({
     return (
       <li className="space-y-2 bg-surface-2/40 p-3">
         <input value={descricao} onChange={(e) => setDescricao(e.target.value)} className="campo" />
+        {gasto.origem === "banco" && (
+          <p className="text-xs text-text-muted">
+            🏦 Veio do banco{gasto.nomeBanco && gasto.nomeBanco !== gasto.descricao ? ` como "${gasto.nomeBanco}"` : ""}.
+            {gasto.contraparte && " O nome e a categoria que você der aqui valem para os próximos pra esse mesmo destinatário."}
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <MoneyInput value={valor} onChange={setValor} className="campo" />
           <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="campo">
@@ -923,6 +929,7 @@ function ItemGasto({
         {noCredito && (
           <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-muted">
             💳 {gasto.cartao || "crédito"}
+            {gasto.pendente ? " · pendente" : ""}
           </span>
         )}
         <span

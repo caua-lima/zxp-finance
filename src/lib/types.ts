@@ -34,6 +34,8 @@ export interface Ganho {
   /** Id da transação no banco (Open Finance), quando veio de lá ou foi ligado a ela. */
   idExterno?: string;
   origem?: "banco";
+  contraparte?: string;
+  nomeBanco?: string;
 }
 
 /** Pausa de um recorrente: não cobra/recebe de `de` até o mês anterior a `ate`. */
@@ -171,6 +173,12 @@ export interface Gasto {
   idExterno?: string;
   /** "banco": criado pela sincronização com o banco. */
   origem?: "banco";
+  /** Quem recebeu (resumo do CPF/CNPJ ou do nome): liga os lançamentos da mesma pessoa/empresa. */
+  contraparte?: string;
+  /** Nome que o banco mandou. Descrição diferente disso = você renomeou (vira apelido). */
+  nomeBanco?: string;
+  /** Compra no cartão ainda pendente no banco. */
+  pendente?: boolean;
 }
 
 /**

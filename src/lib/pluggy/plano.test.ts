@@ -285,3 +285,42 @@ describe("caixinha que você já tinha com o mesmo nome", () => {
     assert.deepEqual([(c[0].dados as { saldo: number }).saldo, (c[0].dados as { porGasto: number }).porGasto], [349.25, 0]);
   });
 });
+
+describe("nome que você deu vale pras próximas vezes (apelido)", async () => {
+  const { contraparteDa } = await import("./plano");
+  const pix = (id: string, valor: number, dia: string, cnpj: string) =>
+    tx(id, -valor, dia, "Pix enviado 52.502.755 Igor Juan da Silva Lopes", {
+      paymentData: { receiver: { documentNumber: { type: "CNPJ", value: cnpj } } },
+    } as Partial<TransacaoPluggy>);
+
+  test("a chave é um resumo do CNPJ, nunca o número", () => {
+    const c = contraparteDa(pix("a", 3, "2026-11-08", "52.502.755/0001-10"), "Igor");
+    assert.match(c, /^[0-9a-f]{24}$/);
+    assert.ok(!c.includes("52502755"));
+  });
+
+  test("renomeou um Pix pra BEER IGOR: o próximo pro mesmo CNPJ já vem assim, na mesma categoria", () => {
+    const primeiro = pix("a", 3, "2026-11-08", "52.502.755/0001-10");
+    const p1 = planejarSincronizacao(vazio(), banco([primeiro]));
+    const criado = escrita(p1, "gastos/")[0].dados as unknown as Gasto;
+    assert.equal(criado.descricao, "Igor Juan da Silva Lopes");
+    assert.equal(criado.nomeBanco, "Igor Juan da Silva Lopes");
+    // você renomeou no app
+    const renomeado = { ...criado, id: "banco_a", descricao: "BEER IGOR", categoria: "Lazer" } as Gasto;
+    const p2 = planejarSincronizacao(
+      vazio({ gastos: [renomeado], processados: new Set(["a"]) }),
+      banco([pix("b", 5, "2026-11-09", "52.502.755/0001-10")])
+    );
+    const novo = escrita(p2, "gastos/")[0].dados as unknown as Gasto;
+    assert.deepEqual([novo.descricao, novo.categoria], ["BEER IGOR", "Lazer"]);
+  });
+
+  test("outro CNPJ não pega o apelido", () => {
+    const renomeado = {
+      id: "banco_a", descricao: "BEER IGOR", categoria: "Lazer", valor: 3, mes: "2026-11", criadoEm: 1, origem: "banco",
+      nomeBanco: "Igor Juan da Silva Lopes", contraparte: contraparteDa(pix("a", 3, "2026-11-08", "52.502.755/0001-10"), "x"),
+    } as Gasto;
+    const p = planejarSincronizacao(vazio({ gastos: [renomeado] }), banco([pix("c", 5, "2026-11-09", "11.111.111/0001-11")]));
+    assert.equal((escrita(p, "gastos/")[0].dados as unknown as Gasto).descricao, "Igor Juan da Silva Lopes");
+  });
+});

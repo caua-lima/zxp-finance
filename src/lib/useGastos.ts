@@ -9,6 +9,7 @@ import {
   increment,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   writeBatch,
   DocumentReference,
 } from "firebase/firestore";
@@ -205,6 +206,27 @@ export function useGastos() {
         });
       }
       await batch.commit();
+      // renomeou um lançamento do banco: os anteriores pra mesma pessoa/empresa
+      // que ainda estão com o nome do banco ganham o mesmo nome (os próximos a
+      // sincronização já traz assim). Mês fechado recusa — fica como estava.
+      if (gasto?.origem === "banco" && gasto.contraparte && dados.descricao !== gasto.descricao) {
+        const irmaos = todos.filter(
+          (g) =>
+            g.id !== id &&
+            g.origem === "banco" &&
+            g.contraparte === gasto.contraparte &&
+            !!g.nomeBanco &&
+            g.descricao === g.nomeBanco
+        );
+        await Promise.allSettled(
+          irmaos.map((g) =>
+            updateDoc(doc(db, "usuarios", user.uid, "gastos", g.id), {
+              descricao: dados.descricao,
+              ...(g.categoria === gasto.categoria ? { categoria: dados.categoria } : {}),
+            })
+          )
+        );
+      }
       setErro(null);
       return true;
     } catch (e) {

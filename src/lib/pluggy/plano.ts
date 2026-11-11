@@ -15,6 +15,7 @@ import { recorrenciaNoMes, valorNoMes } from "@/lib/finance/recorrencia";
 import { sugerirCategoria, sugerirCategoriaReceita } from "@/lib/categorizacao";
 import { normalizarTexto } from "@/lib/categoriasGasto";
 import { baixaAte } from "@/lib/parcelasOperacoes";
+import { createHash } from "node:crypto";
 import type { ContaPluggy, InvestimentoPluggy, TransacaoPluggy } from "./cliente";
 
 /**
@@ -87,6 +88,52 @@ export interface Plano {
 }
 
 const centavos = (v: number) => Math.round(Math.abs(v) * 100);
+
+/**
+ * Quem recebeu (saída) ou quem pagou (entrada): o CPF/CNPJ que o banco
+ * informa, guardado só como resumo (hash) — nunca o número. Sem documento
+ * (compra no cartão), vale o nome limpo.
+ */
+export function contraparteDa(tx: TransacaoPluggy, descricao: string): string {
+  const pd = (tx as TransacaoPluggy & {
+    paymentData?: {
+      receiver?: { documentNumber?: { value?: string | null } | null } | null;
+      payer?: { documentNumber?: { value?: string | null } | null } | null;
+    } | null;
+  }).paymentData;
+  const lado = tx.amount < 0 || tx.type === "DEBIT" ? pd?.receiver : pd?.payer;
+  const digitos = (lado?.documentNumber?.value ?? "").replace(/\D/g, "");
+  const base = digitos.length >= 11 ? `doc:${digitos}` : `nome:${normalizarTexto(descricao).trim()}`;
+  return createHash("sha256").update(base).digest("hex").slice(0, 24);
+}
+
+interface Apelido {
+  descricao: string;
+  categoria?: string;
+  categoriaReceita?: string;
+}
+
+/**
+ * Nomes que você deu: um lançamento do banco que você renomeou (descrição
+ * diferente do nome que o banco mandou) ensina o nome e a categoria pros
+ * próximos da mesma pessoa/empresa. Vale o renomeado mais recente.
+ */
+export function apelidosDe(e: Pick<EstadoApp, "gastos" | "ganhos">): Map<string, Apelido> {
+  const mapa = new Map<string, Apelido & { quando: number }>();
+  const itens = [
+    ...e.gastos.map((g) => ({ ...g, categoriaReceita: undefined as string | undefined })),
+    ...e.ganhos.map((g) => ({ ...g, categoria: undefined as string | undefined })),
+  ] as (Apelido & { contraparte?: string; nomeBanco?: string; origem?: string; criadoEm: number })[];
+  for (const g of itens) {
+    if (g.origem !== "banco" || !g.contraparte || !g.nomeBanco || g.descricao === g.nomeBanco) continue;
+    const atual = mapa.get(g.contraparte);
+    if (atual && atual.quando >= g.criadoEm) continue;
+    mapa.set(g.contraparte, {
+      descricao: g.descricao, categoria: g.categoria, categoriaReceita: g.categoriaReceita, quando: g.criadoEm,
+    });
+  }
+  return mapa;
+}
 
 const PALAVRAS_VAZIAS = new Set([
   "de", "da", "do", "das", "dos", "para", "pra", "com", "por", "pix", "enviado", "enviada", "recebido",
@@ -295,6 +342,7 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
   const parcelasAtualizadas = new Map<string, Parcela>();
   let pendentes = 0;
 
+  const apelidos = apelidosDe(e);
   const ordenadas = [...banco.transacoes].sort((a, b) => a.date.localeCompare(b.date));
   for (const tx of ordenadas) {
     if (e.processados.has(tx.id)) continue;
@@ -353,7 +401,11 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     const cartao = conta.type === "CREDIT";
     // cartão: positivo = compra; conta: negativo = saída
     const saida = cartao ? tx.amount > 0 : tx.amount < 0;
-    const descricao = descricaoLimpa(tx);
+    const nomeBanco = descricaoLimpa(tx);
+    const contraparte = contraparteDa(tx, nomeBanco);
+    const apelido = apelidos.get(contraparte);
+    // o nome que você deu pra essa pessoa/empresa vale nas próximas vezes
+    const descricao = apelido?.descricao ?? nomeBanco;
 
     if (cartao && !saida) {
       registro("interno"); // pagamento da fatura / estorno no cartão
@@ -391,10 +443,10 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
         caminho: `ganhos/${id}`,
         dados: {
           tipo: "pontual", mes, descricao, valor,
-          categoriaReceita: categoriaDaEntrada(tx, descricao, e.ganhos),
+          categoriaReceita: apelido?.categoriaReceita ?? categoriaDaEntrada(tx, descricao, e.ganhos),
           // já caiu líquido na conta
           semImposto: true, recebido: true, recebidoEm: quando, entrouNoSaldo: true, valorRecebido: valor,
-          idExterno: tx.id, origem: "banco", criadoEm: quando,
+          idExterno: tx.id, origem: "banco", contraparte, nomeBanco, criadoEm: quando,
         },
       });
       registro("ganho", `ganhos/${id}`);
@@ -482,14 +534,14 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     }
 
     // ---- gasto novo ----
-    const categoria = categoriaDoGasto(tx, descricao, e.gastos);
+    const categoria = apelido?.categoria ?? categoriaDoGasto(tx, descricao, e.gastos);
     const id = `banco_${tx.id}`;
     escritas.push({
       caminho: `gastos/${id}`,
       dados: {
         descricao, valor, categoria, mes, data: dia, criadoEm: quando,
         ...(cartao ? { pagoCom: "credito", cartao: (conta.marketingName || conta.name).slice(0, 60) } : {}),
-        idExterno: tx.id, origem: "banco", ...(pendente ? { pendente: true } : {}),
+        idExterno: tx.id, origem: "banco", contraparte, nomeBanco, ...(pendente ? { pendente: true } : {}),
       },
     });
     registro(cartao ? "gasto_credito" : "gasto", `gastos/${id}`);
