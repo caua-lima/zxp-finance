@@ -15,6 +15,17 @@ const CONECTOR_MEU_PLUGGY = 200;
 const quando = (ms: number) =>
   new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+const hora = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+/** O Meu Pluggy lê o banco 1x por dia, 24 h depois da última leitura. */
+const DIA_MS = 24 * 3_600_000;
+function proximaLeitura(lidoEm: number | null | undefined): number | null {
+  if (!lidoEm) return null;
+  let proxima = lidoEm + DIA_MS;
+  while (proxima < Date.now() - 3_600_000) proxima += DIA_MS;
+  return proxima;
+}
+
 function resumoEmTexto(s: StatusBanco): string {
   const n = s.resumo?.novos;
   if (!n) return "";
@@ -156,7 +167,15 @@ export function BancoConectado() {
       if (!r?.status) toast.erro("Não consegui falar com o banco agora.");
       else if (r.status.erro) toast.erro(r.status.erro);
       else if (r.aguarde) toast.sucesso("Acabou de sincronizar. Tente de novo em um minuto.");
-      else toast.sucesso(`Banco sincronizado: ${resumoEmTexto(r.status)}.`);
+      else {
+        const texto = resumoEmTexto(r.status);
+        const prox = proximaLeitura(r.status.bancoLidoEm);
+        toast.sucesso(
+          texto === "nada novo" && prox
+            ? `Nada novo ainda: o banco manda dados 1x por dia, a próxima leitura é por volta das ${hora(prox)}.`
+            : `Banco sincronizado: ${texto}.`
+        );
+      }
     } catch {
       toast.erro("Não consegui falar com o banco agora.");
     } finally {
@@ -180,6 +199,13 @@ export function BancoConectado() {
           </p>
           {status?.resumo && !status.erro && (
             <p className="mt-0.5 text-xs text-text-faint">Última vez: {resumoEmTexto(status)}</p>
+          )}
+          {proximaLeitura(status?.bancoLidoEm) && (
+            <p className="mt-0.5 text-xs text-text-faint">
+              O banco manda dados novos 1x por dia: próxima leitura por volta das{" "}
+              {hora(proximaLeitura(status?.bancoLidoEm) as number)}, e o app busca sozinho. Gastou agora? Anote em
+              &quot;Investi em mim&quot;: quando o banco chegar, ele só liga ao que você anotou.
+            </p>
           )}
           {investido > 0 && (
             <p className="mt-0.5 text-xs text-text-faint">
