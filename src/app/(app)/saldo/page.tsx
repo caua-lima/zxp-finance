@@ -28,6 +28,7 @@ import { usePagamentos } from "@/lib/usePagamentos";
 import { Dialogo } from "@/components/Dialogo";
 import { ComoChegamos } from "@/components/ComoChegamos";
 import { BancoConectado } from "@/components/BancoConectado";
+import { DarNome } from "@/components/DarNome";
 import {
   saldoConfirmado,
   dataEfetivaDoGasto,
@@ -519,6 +520,10 @@ export default function SaldoPage() {
                   <ItemGasto
                     key={g.id}
                     gasto={g}
+                    historico={gastos}
+                    mesmoDestinatario={
+                      g.contraparte ? gastos.filter((x) => x.contraparte === g.contraparte).length : 1
+                    }
                     onEditar={editar}
                     onEstornar={estornar}
                     onRemover={remover}
@@ -814,6 +819,8 @@ function Configuracoes({
  */
 function ItemGasto({
   gasto,
+  historico,
+  mesmoDestinatario,
   onEditar,
   onEstornar,
   onRemover,
@@ -822,6 +829,8 @@ function ItemGasto({
   cartoes,
 }: {
   gasto: Gasto;
+  historico: Gasto[];
+  mesmoDestinatario: number;
   cartoes: string[];
   onEditar: (
     id: string,
@@ -844,6 +853,7 @@ function ItemGasto({
   const [editando, setEditando] = useState(false);
   const [confirmandoEstorno, setConfirmandoEstorno] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
+  const [dandoNome, setDandoNome] = useState(false);
   const [descricao, setDescricao] = useState(gasto.descricao);
   const [valor, setValor] = useState(gasto.valor);
   const [categoria, setCategoria] = useState(gasto.categoria);
@@ -878,7 +888,7 @@ function ItemGasto({
         {gasto.origem === "banco" && (
           <p className="text-xs text-text-muted">
             🏦 Veio do banco{gasto.nomeBanco && gasto.nomeBanco !== gasto.descricao ? ` como "${gasto.nomeBanco}"` : ""}.
-            {gasto.contraparte && " O nome e a categoria que você der aqui valem para os próximos pra esse mesmo destinatário."}
+            {gasto.contraparte && " Pra o nome valer também nos próximos, use \"Dar nome\"."}
           </p>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -919,12 +929,17 @@ function ItemGasto({
         <span className="shrink-0 text-base" aria-hidden="true">
           {areaDaVida(gasto.categoria).icone}
         </span>
-        <span
-          className={`min-w-0 flex-1 truncate text-sm ${
-            gasto.estornado ? "text-text-faint line-through" : ehEstorno ? "italic text-text-faint" : ""
-          }`}
-        >
-          {gasto.descricao}
+        <span className="min-w-0 flex-1">
+          <span
+            className={`block truncate text-sm ${
+              gasto.estornado ? "text-text-faint line-through" : ehEstorno ? "italic text-text-faint" : ""
+            }`}
+          >
+            {gasto.descricao}
+          </span>
+          {gasto.origem === "banco" && gasto.nomeBanco && gasto.nomeBanco !== gasto.descricao && (
+            <span className="block truncate text-xs text-text-faint">🏦 {gasto.nomeBanco}</span>
+          )}
         </span>
         {noCredito && (
           <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-muted">
@@ -942,9 +957,14 @@ function ItemGasto({
       </button>
 
       {aberto && (
-        <div className="flex gap-2 px-3.5 pb-3">
+        <div className="flex flex-wrap gap-2 px-3.5 pb-3">
           {!bloqueado && (
             <>
+              {gasto.origem === "banco" && (
+                <Botao onClick={() => setDandoNome(true)} tamanho="pequeno" disabled={mesFechado}>
+                  Dar nome
+                </Botao>
+              )}
               <Botao onClick={() => setEditando(true)} variante="secundario" tamanho="pequeno">
                 Editar
               </Botao>
@@ -967,6 +987,19 @@ function ItemGasto({
             Excluir
           </Botao>
         </div>
+      )}
+
+      {dandoNome && (
+        <DarNome
+          gasto={gasto}
+          historico={historico}
+          mesmoDestinatario={mesmoDestinatario}
+          aberto={dandoNome}
+          onFechar={() => {
+            setDandoNome(false);
+            setAberto(false);
+          }}
+        />
       )}
 
       <ConfirmModal

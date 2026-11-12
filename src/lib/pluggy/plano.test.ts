@@ -299,28 +299,51 @@ describe("nome que você deu vale pras próximas vezes (apelido)", async () => {
     assert.ok(!c.includes("52502755"));
   });
 
-  test("renomeou um Pix pra BEER IGOR: o próximo pro mesmo CNPJ já vem assim, na mesma categoria", () => {
-    const primeiro = pix("a", 3, "2026-11-08", "52.502.755/0001-10");
-    const p1 = planejarSincronizacao(vazio(), banco([primeiro]));
+  const cnpj = "52.502.755/0001-10";
+  const chave = () => contraparteDa(pix("a", 3, "2026-11-08", cnpj), "x");
+  const beer = () => new Map([[chave(), { descricao: "BEER IGOR", categoria: "Lazer", atualizadoEm: 1 }]]);
+
+  test("deu o nome BEER IGOR (este e os próximos): o próximo pro mesmo CNPJ já vem assim, na mesma categoria", () => {
+    const p1 = planejarSincronizacao(vazio(), banco([pix("a", 3, "2026-11-08", cnpj)]));
     const criado = escrita(p1, "gastos/")[0].dados as unknown as Gasto;
-    assert.equal(criado.descricao, "Igor Juan da Silva Lopes");
-    assert.equal(criado.nomeBanco, "Igor Juan da Silva Lopes");
-    // você renomeou no app
-    const renomeado = { ...criado, id: "banco_a", descricao: "BEER IGOR", categoria: "Lazer" } as Gasto;
-    const p2 = planejarSincronizacao(
-      vazio({ gastos: [renomeado], processados: new Set(["a"]) }),
-      banco([pix("b", 5, "2026-11-09", "52.502.755/0001-10")])
-    );
+    assert.deepEqual([criado.descricao, criado.nomeBanco], ["Igor Juan da Silva Lopes", "Igor Juan da Silva Lopes"]);
+    const p2 = planejarSincronizacao(vazio({ apelidos: beer() }), banco([pix("b", 5, "2026-11-09", cnpj)]));
     const novo = escrita(p2, "gastos/")[0].dados as unknown as Gasto;
-    assert.deepEqual([novo.descricao, novo.categoria], ["BEER IGOR", "Lazer"]);
+    assert.deepEqual([novo.descricao, novo.categoria, novo.nomeBanco], ["BEER IGOR", "Lazer", "Igor Juan da Silva Lopes"]);
+  });
+
+  test("renomear só um lançamento (sem apelido salvo) não muda os próximos", () => {
+    const renomeado = {
+      id: "banco_a", descricao: "BEER IGOR", categoria: "Lazer", valor: 3, mes: "2026-11", criadoEm: 1, origem: "banco",
+      nomeBanco: "Igor Juan da Silva Lopes", contraparte: chave(),
+    } as Gasto;
+    const p = planejarSincronizacao(vazio({ gastos: [renomeado] }), banco([pix("b", 5, "2026-11-09", cnpj)]));
+    assert.equal((escrita(p, "gastos/")[0].dados as unknown as Gasto).descricao, "Igor Juan da Silva Lopes");
   });
 
   test("outro CNPJ não pega o apelido", () => {
-    const renomeado = {
-      id: "banco_a", descricao: "BEER IGOR", categoria: "Lazer", valor: 3, mes: "2026-11", criadoEm: 1, origem: "banco",
-      nomeBanco: "Igor Juan da Silva Lopes", contraparte: contraparteDa(pix("a", 3, "2026-11-08", "52.502.755/0001-10"), "x"),
-    } as Gasto;
-    const p = planejarSincronizacao(vazio({ gastos: [renomeado] }), banco([pix("c", 5, "2026-11-09", "11.111.111/0001-11")]));
+    const p = planejarSincronizacao(vazio({ apelidos: beer() }), banco([pix("c", 5, "2026-11-09", "11.111.111/0001-11")]));
     assert.equal((escrita(p, "gastos/")[0].dados as unknown as Gasto).descricao, "Igor Juan da Silva Lopes");
+  });
+});
+
+describe("maquininha (instituição de pagamento)", async () => {
+  const { ehIntermediario } = await import("./apelidos");
+  test("reconhece Cardpay, PagSeguro, Stone e afins; pessoa e loja comum não", () => {
+    assert.equal(ehIntermediario("Cardpay Instituicao De Pagamento"), true);
+    assert.equal(ehIntermediario("PAGUEVELOZ INSTITUICAO DE PAGAMENTO LTDA"), true);
+    assert.equal(ehIntermediario("Stone Pagamentos S.A."), true);
+    assert.equal(ehIntermediario("Carlos Alexandre Dos Santos"), false);
+    assert.equal(ehIntermediario("Pizzaria Donatellis Mogi Guacu"), false);
+  });
+});
+
+describe("loja online não é mercado de comida", () => {
+  test("Mercadolivre e Shopee caem em Compras", () => {
+    const p = planejarSincronizacao(vazio(), banco([
+      tx("m", -34.39, "2026-11-08", "MERCADOLIVRE*MERCADOLI"),
+      tx("s", -20, "2026-11-08", "Pagamento com QR Pix SHPP BRASIL INSTITUICAO DE PAGAMENTO"),
+    ]));
+    assert.deepEqual(escrita(p, "gastos/").map((e) => (e.dados as unknown as Gasto).categoria), ["Compras", "Compras"]);
   });
 });

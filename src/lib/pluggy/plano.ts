@@ -16,6 +16,7 @@ import { sugerirCategoria, sugerirCategoriaReceita } from "@/lib/categorizacao";
 import { normalizarTexto } from "@/lib/categoriasGasto";
 import { baixaAte } from "@/lib/parcelasOperacoes";
 import { createHash } from "node:crypto";
+import type { Apelido } from "./apelidos";
 import type { ContaPluggy, InvestimentoPluggy, TransacaoPluggy } from "./cliente";
 
 /**
@@ -50,6 +51,8 @@ export interface EstadoApp {
   caixinhas: (Caixinha & { idExterno?: string })[];
   /** Ids de transação do banco já tratados. */
   processados: Set<string>;
+  /** Nomes que você deu a destinatários, por contraparte. */
+  apelidos?: Map<string, Apelido>;
 }
 
 /** Caixinha que espelha uma reserva do banco ("Money", "Viagens"...). */
@@ -107,33 +110,7 @@ export function contraparteDa(tx: TransacaoPluggy, descricao: string): string {
   return createHash("sha256").update(base).digest("hex").slice(0, 24);
 }
 
-interface Apelido {
-  descricao: string;
-  categoria?: string;
-  categoriaReceita?: string;
-}
 
-/**
- * Nomes que você deu: um lançamento do banco que você renomeou (descrição
- * diferente do nome que o banco mandou) ensina o nome e a categoria pros
- * próximos da mesma pessoa/empresa. Vale o renomeado mais recente.
- */
-export function apelidosDe(e: Pick<EstadoApp, "gastos" | "ganhos">): Map<string, Apelido> {
-  const mapa = new Map<string, Apelido & { quando: number }>();
-  const itens = [
-    ...e.gastos.map((g) => ({ ...g, categoriaReceita: undefined as string | undefined })),
-    ...e.ganhos.map((g) => ({ ...g, categoria: undefined as string | undefined })),
-  ] as (Apelido & { contraparte?: string; nomeBanco?: string; origem?: string; criadoEm: number })[];
-  for (const g of itens) {
-    if (g.origem !== "banco" || !g.contraparte || !g.nomeBanco || g.descricao === g.nomeBanco) continue;
-    const atual = mapa.get(g.contraparte);
-    if (atual && atual.quando >= g.criadoEm) continue;
-    mapa.set(g.contraparte, {
-      descricao: g.descricao, categoria: g.categoria, categoriaReceita: g.categoriaReceita, quando: g.criadoEm,
-    });
-  }
-  return mapa;
-}
 
 const PALAVRAS_VAZIAS = new Set([
   "de", "da", "do", "das", "dos", "para", "pra", "com", "por", "pix", "enviado", "enviada", "recebido",
@@ -244,8 +221,13 @@ export function categoriaDoBanco(categoria: string | null | undefined): string |
 }
 
 /** Categoria do gasto: o que você já fez → dicionário → categoria do banco. */
+const MARKETPLACE = /mercado ?livre|mercadoli|meli|shopee|shpp|amazon|magalu|magazine luiza|aliexpress|shein|americanas|casas bahia|netshoes/i;
+
 export function categoriaDoGasto(tx: TransacaoPluggy, descricao: string, historico: Gasto[]): string {
   const sugestao = sugerirCategoria(descricao, historico);
+  // o que você já fez manda; depois, loja online é compra (não "mercado" de comida)
+  if (sugestao.origem === "seus registros") return sugestao.categoria;
+  if (MARKETPLACE.test(`${descricao} ${tx.description}`)) return "Compras";
   if (sugestao.categoria !== "Outros") return sugestao.categoria;
   return categoriaDoBanco(tx.category) ?? "Outros";
 }
@@ -342,7 +324,8 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
   const parcelasAtualizadas = new Map<string, Parcela>();
   let pendentes = 0;
 
-  const apelidos = apelidosDe(e);
+  // nomes que você deu ("este e os próximos"), gravados em apelidos/{contraparte}
+  const apelidos = e.apelidos ?? new Map<string, Apelido>();
   const ordenadas = [...banco.transacoes].sort((a, b) => a.date.localeCompare(b.date));
   for (const tx of ordenadas) {
     if (e.processados.has(tx.id)) continue;
@@ -443,7 +426,7 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
         caminho: `ganhos/${id}`,
         dados: {
           tipo: "pontual", mes, descricao, valor,
-          categoriaReceita: apelido?.categoriaReceita ?? categoriaDaEntrada(tx, descricao, e.ganhos),
+          categoriaReceita: (apelido?.categoriaReceita || undefined) ?? categoriaDaEntrada(tx, descricao, e.ganhos),
           // já caiu líquido na conta
           semImposto: true, recebido: true, recebidoEm: quando, entrouNoSaldo: true, valorRecebido: valor,
           idExterno: tx.id, origem: "banco", contraparte, nomeBanco, criadoEm: quando,
@@ -534,7 +517,7 @@ export function planejarSincronizacao(e: EstadoApp, banco: DadosBanco): Plano {
     }
 
     // ---- gasto novo ----
-    const categoria = apelido?.categoria ?? categoriaDoGasto(tx, descricao, e.gastos);
+    const categoria = (apelido?.categoria || undefined) ?? categoriaDoGasto(tx, descricao, e.gastos);
     const id = `banco_${tx.id}`;
     escritas.push({
       caminho: `gastos/${id}`,

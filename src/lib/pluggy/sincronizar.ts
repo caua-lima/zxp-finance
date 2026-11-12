@@ -13,6 +13,7 @@ import {
   obterItem,
 } from "./cliente";
 import { planejarSincronizacao, ResumoSincronizacao } from "./plano";
+import type { Apelido } from "./apelidos";
 
 /**
  * Lê o banco (Pluggy) e o app (Firestore), planeja e grava. Status fica em
@@ -66,7 +67,7 @@ async function executar(cfg: ConfigPluggy, simular: boolean): Promise<Previa> {
     // ---- app ----
     const ler = async <T,>(colecao: string) =>
       (await listarDocumentos<T>(`${base}/${colecao}`)).map((d) => ({ id: d.id, ...d.dados }) as T & { id: string });
-    const [prefs, saldo, gastos, ganhos, pagamentos, contasFixas, assinaturas, parcelas, faturas, caixinhas, tratados] =
+    const [prefs, saldo, gastos, ganhos, pagamentos, contasFixas, assinaturas, parcelas, faturas, caixinhas, tratados, apelidos] =
       await Promise.all([
         obterDocumento<{ inicioUso?: string }>(`${base}/preferencias/app`),
         obterDocumento<{ valor: number; atualizadoEm: number }>(`${base}/saldo/atual`),
@@ -79,6 +80,7 @@ async function executar(cfg: ConfigPluggy, simular: boolean): Promise<Previa> {
         ler<FaturaCartao>("faturasCartao"),
         ler<Caixinha & { idExterno?: string }>("caixinhas"),
         ler<Record<string, unknown>>("bancoTransacoes"),
+        ler<Apelido>("apelidos"),
       ]);
     const inicioUso = typeof prefs?.inicioUso === "string" ? prefs.inicioUso : "";
 
@@ -95,6 +97,7 @@ async function executar(cfg: ConfigPluggy, simular: boolean): Promise<Previa> {
         saldo: saldo && typeof saldo.atualizadoEm === "number" ? saldo : null,
         gastos, ganhos, pagamentos, contas: contasFixas, assinaturas, parcelas, faturas, caixinhas,
         processados: new Set(tratados.map((t) => t.id)),
+        apelidos: new Map(apelidos.map((a) => [a.id, a])),
       },
       { lidoEm, contas, transacoes, investimentos }
     );
